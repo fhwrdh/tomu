@@ -1,0 +1,224 @@
+import type {
+  FilmFormat,
+  FilmType,
+  MeteringMode,
+  NoteType,
+  RollStatus,
+  StorageLocation,
+} from "./constants.js";
+
+// ── Base ──
+
+export interface Timestamps {
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Gear ──
+
+export interface Camera extends Timestamps {
+  id: string;
+  userId: string;
+  make: string;
+  model: string;
+  format: FilmFormat;
+  serialNumber?: string;
+  notes?: string;
+  isActive: boolean;
+}
+
+export interface Lens extends Timestamps {
+  id: string;
+  userId: string;
+  make: string;
+  model: string;
+  focalLengthMm?: number;
+  maxAperture?: string;
+  serialNumber?: string;
+  notes?: string;
+  isActive: boolean;
+}
+
+// ── Film ──
+
+export interface FilmStock extends Timestamps {
+  id: string;
+  userId: string;
+  manufacturer: string;
+  name: string;
+  iso: number;
+  type: FilmType;
+  format: FilmFormat;
+  notes?: string;
+  isActive: boolean;
+}
+
+export interface FilmInventoryItem extends Timestamps {
+  id: string;
+  userId: string;
+  filmStockId: string;
+  quantity: number;
+  expirationDate?: string;
+  storageLocation: StorageLocation;
+  purchaseDate?: string;
+  costPerRoll?: number;
+  notes?: string;
+}
+
+/** FilmStock with aggregated inventory info */
+export interface FilmStockWithInventory extends FilmStock {
+  totalRolls: number;
+  inventoryItems: FilmInventoryItem[];
+}
+
+// ── Rolls ──
+
+export interface Roll extends Timestamps {
+  id: string;
+  userId: string;
+  cameraId?: string;
+  filmStockId: string;
+  rollNumber: number;
+  status: RollStatus;
+  loadedAt?: string;
+  finishedAt?: string;
+  isoShotAt?: number;
+  pushPullStops?: number;
+  frameCount: number;
+  title?: string;
+  description?: string;
+  tags: string[];
+}
+
+export interface Frame extends Timestamps {
+  id: string;
+  rollId: string;
+  frameNumber: number;
+  lensId?: string;
+  shutterSpeed?: string;
+  aperture?: string;
+  compensation?: string;
+  meteringMode?: MeteringMode;
+  subject?: string;
+  notes?: string;
+  latitude?: number;
+  longitude?: number;
+  locationName?: string;
+  shotAt?: string;
+  tags: string[];
+  rating?: number;
+  isPortfolio: boolean;
+}
+
+// ── Development ──
+
+export interface DevelopmentLog extends Timestamps {
+  id: string;
+  rollId: string;
+  developer: string;
+  dilution?: string;
+  devTimeSeconds?: number;
+  temperatureC?: number;
+  agitation?: string;
+  stopBath?: string;
+  fixer?: string;
+  fixerTimeSeconds?: number;
+  washMethod?: string;
+  wettingAgent?: string;
+  notes?: string;
+  developedAt?: string;
+  resultsRating?: number;
+  resultsNotes?: string;
+}
+
+// ── Notes & Scans ──
+
+export interface Note extends Timestamps {
+  id: string;
+  userId: string;
+  rollId?: string;
+  frameId?: string;
+  type: NoteType;
+  content?: string;
+  fileKey?: string;
+  fileUrl?: string;
+  thumbnailUrl?: string;
+  durationSeconds?: number;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface Scan extends Timestamps {
+  id: string;
+  frameId: string;
+  scannerId?: string;
+  fileKey: string;
+  fileUrl: string;
+  thumbnailUrl?: string;
+  originalFilename?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  widthPx?: number;
+  heightPx?: number;
+  dpi?: number;
+  bitDepth?: number;
+  colorSpace?: string;
+  postProcessingNotes?: string;
+  isPrimary: boolean;
+}
+
+export interface Scanner extends Timestamps {
+  id: string;
+  userId: string;
+  make?: string;
+  model?: string;
+  notes?: string;
+  isActive: boolean;
+}
+
+// ── API Input Types ──
+
+export type CreateCamera = Pick<Camera, "make" | "model" | "format"> &
+  Partial<Pick<Camera, "serialNumber" | "notes">>;
+
+export type UpdateCamera = Partial<CreateCamera & Pick<Camera, "isActive">>;
+
+export type CreateLens = Pick<Lens, "make" | "model"> &
+  Partial<Pick<Lens, "focalLengthMm" | "maxAperture" | "serialNumber" | "notes">>;
+
+export type UpdateLens = Partial<CreateLens & Pick<Lens, "isActive">>;
+
+export type CreateFilmStock = Pick<FilmStock, "manufacturer" | "name" | "iso" | "type" | "format"> &
+  Partial<Pick<FilmStock, "notes">>;
+
+export type UpdateFilmStock = Partial<CreateFilmStock & Pick<FilmStock, "isActive">>;
+
+export type CreateFilmInventoryItem = Pick<FilmInventoryItem, "filmStockId" | "quantity"> &
+  Partial<Pick<FilmInventoryItem, "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "notes">>;
+
+export type UpdateFilmInventoryItem = Partial<
+  Pick<FilmInventoryItem, "quantity" | "expirationDate" | "storageLocation" | "costPerRoll" | "notes">
+>;
+
+export type CreateRoll = Pick<Roll, "filmStockId"> &
+  Partial<Pick<Roll, "cameraId" | "title" | "description" | "isoShotAt" | "pushPullStops" | "frameCount" | "tags">>;
+
+export type CreateFrame = Pick<Frame, "frameNumber"> &
+  Partial<
+    Pick<
+      Frame,
+      | "lensId"
+      | "shutterSpeed"
+      | "aperture"
+      | "compensation"
+      | "meteringMode"
+      | "subject"
+      | "notes"
+      | "latitude"
+      | "longitude"
+      | "locationName"
+      | "tags"
+    >
+  >;
