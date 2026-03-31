@@ -18,8 +18,12 @@ async function authPlugin(fastify: FastifyInstance) {
   fastify.decorateRequest("userId", "");
 
   fastify.addHook("onRequest", async (request: FastifyRequest) => {
-    // Skip auth for login/register
-    if (request.url.startsWith("/api/v1/auth/login") || request.url.startsWith("/api/v1/auth/register")) {
+    // Skip auth for public routes
+    if (
+      request.url.startsWith("/api/v1/auth/login") ||
+      request.url.startsWith("/api/v1/auth/register") ||
+      request.url === "/api/health"
+    ) {
       return;
     }
     // Skip non-API routes

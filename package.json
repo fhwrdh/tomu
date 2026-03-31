@@ -15,5 +15,10 @@
     "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client && npm run build -w packages/mcp",
     "build:shared": "npm run build -w packages/shared",
     "lint": "npm run lint -w packages/client"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.20.0"
   }
 }
