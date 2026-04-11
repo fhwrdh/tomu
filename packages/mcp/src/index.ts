@@ -4,8 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const API_BASE = process.env.FILMLOG_API_URL || "http://localhost:3456/api/v1";
-const API_TOKEN = process.env.FILMLOG_API_TOKEN || "";
+const API_BASE = process.env.TOMU_API_URL || "http://localhost:3456/api/v1";
+const API_TOKEN = process.env.TOMU_API_TOKEN || "";
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -43,44 +43,88 @@ function fuzzyMatch(query: string, ...candidates: string[]): boolean {
 // ── Server ──
 
 const server = new McpServer({
-  name: "filmlog",
+  name: "tomu",
   version: "0.1.0",
 });
 
-// ── Tool: filmlog_inventory ──
+// ── Inventory item formatting ──
+
+interface InventoryItem {
+  id: string;
+  filmStockId: string;
+  manufacturer: string;
+  stockName: string;
+  iso: number;
+  filmType: string;
+  format: string;
+  form: "factory_roll" | "bulk_roll" | "sheet";
+  quantity: number;
+  remainingLengthFt?: string | number | null;
+  originalLengthFt?: string | number | null;
+  expirationDate?: string | null;
+  storageLocation: string;
+}
+
+function describeItem(item: InventoryItem): string {
+  if (item.form === "bulk_roll") {
+    const remaining = item.remainingLengthFt ? Number(item.remainingLengthFt) : 0;
+    const original = item.originalLengthFt ? Number(item.originalLengthFt) : 0;
+    return `${remaining}ft / ${original}ft bulk ${item.format}`;
+  }
+  if (item.form === "sheet") {
+    return `${item.quantity} sheets ${item.format}`;
+  }
+  return `${item.quantity} rolls ${item.format}`;
+}
+
+// ── Tool: tomu_inventory ──
 
 server.tool(
-  "filmlog_inventory",
+  "tomu_inventory",
   "Query film inventory. Shows what film you have, quantities, and expiration alerts. " +
-    "Use without query to see everything, or search by film name/manufacturer.",
+    "Use without query to see everything, or search by film name/manufacturer/format.",
   {
-    query: z.string().optional().describe("Optional search query: film name, manufacturer, format, or type (e.g. 'Tri-X', 'Kodak', '120', 'bw')"),
+    query: z.string().optional().describe("Optional search: film name, manufacturer, format, or type (e.g. 'Tri-X', 'Kodak', '120', 'bw')"),
   },
   async ({ query }) => {
-    const { data: summary } = await api<any>("/inventory/summary");
+    const { data } = await api<{ data: { items: InventoryItem[]; expiringSoon: InventoryItem[] } }>("/inventory/summary");
+    const allItems = data.items;
 
-    let results = summary.byStock;
-    if (query) {
-      results = results.filter((s: any) =>
-        fuzzyMatch(query, s.manufacturer, s.stockName, s.format, s.filmType, `ISO ${s.iso}`, `${s.iso}`)
-      );
+    const filtered = query
+      ? allItems.filter((i) =>
+          fuzzyMatch(query, i.manufacturer, i.stockName, i.format, i.filmType, `ISO ${i.iso}`, `${i.iso}`)
+        )
+      : allItems;
+
+    // Group by stock for display
+    const byStock = new Map<string, InventoryItem[]>();
+    for (const item of filtered) {
+      const key = item.filmStockId;
+      if (!byStock.has(key)) byStock.set(key, []);
+      byStock.get(key)!.push(item);
     }
 
     const lines: string[] = [];
-    lines.push(`## Film Inventory (${summary.totalRolls} total rolls)\n`);
+    lines.push(`## Film Inventory (${filtered.length} item${filtered.length === 1 ? "" : "s"} across ${byStock.size} stock${byStock.size === 1 ? "" : "s"})\n`);
 
-    if (results.length === 0) {
+    if (filtered.length === 0) {
       lines.push(query ? `No film matching "${query}" found.` : "Inventory is empty.");
     } else {
-      for (const s of results) {
-        lines.push(`- **${s.manufacturer} ${s.stockName}** (${s.format}, ISO ${s.iso}) — **${s.totalRolls} rolls**`);
+      for (const items of byStock.values()) {
+        const first = items[0];
+        lines.push(`- **${first.manufacturer} ${first.stockName}** (ISO ${first.iso}, ${first.filmType})`);
+        for (const item of items) {
+          const loc = item.storageLocation !== "fridge" ? ` [${item.storageLocation}]` : "";
+          const exp = item.expirationDate ? ` — exp ${item.expirationDate}` : "";
+          lines.push(`    - ${describeItem(item)}${loc}${exp}`);
+        }
       }
     }
 
-    if (summary.expiringSoon.length > 0) {
+    if (data.expiringSoon.length > 0) {
       lines.push(`\n### Expiring Soon`);
-      for (const item of summary.expiringSoon) {
-        lines.push(`- ${item.manufacturer} ${item.stockName} (${item.format}): ${item.quantity} rolls, expires ${item.expirationDate} [${item.storageLocation}]`);
+      for (const item of data.expiringSoon) {
+        lines.push(`- ${item.manufacturer} ${item.stockName}: ${describeItem(item)}, expires ${item.expirationDate}`);
       }
     }
 
@@ -88,78 +132,100 @@ server.tool(
   }
 );
 
-// ── Tool: filmlog_add_inventory ──
+// ── Tool: tomu_add_inventory ──
 
 server.tool(
-  "filmlog_add_inventory",
-  "Add film rolls to inventory. Can reference film stock by name (fuzzy matched) or ID. " +
-    "If the film stock doesn't exist yet, creates it automatically.",
+  "tomu_add_inventory",
+  "Add film to inventory. Can reference film stock by name (fuzzy matched) or ID. " +
+    "If the film stock doesn't exist yet, creates it automatically. " +
+    "Supports factory rolls, bulk rolls (by length in feet), and sheet film.",
   {
-    film: z.string().describe("Film stock name or ID (e.g. 'Tri-X 400', 'Kodak Portra 400', 'HP5+')"),
-    quantity: z.number().int().positive().describe("Number of rolls to add"),
-    format: z.string().optional().describe("Film format if creating new stock: '35mm', '120', '4x5', '8x10'"),
+    film: z.string().describe("Film stock name (e.g. 'Tri-X 400', 'Kodak Portra 400', 'HP5+')"),
+    format: z.string().optional().describe("Film format: '35mm' (default), '120', '4x5', '8x10'"),
+    form: z.string().optional().describe("Form: 'factory_roll' (default), 'bulk_roll', or 'sheet'"),
+    quantity: z.number().int().positive().optional().describe("Number of rolls or sheets (required for factory_roll and sheet)"),
+    lengthFt: z.number().positive().optional().describe("Length in feet for bulk_roll (e.g. 100 for a standard bulk roll)"),
     manufacturer: z.string().optional().describe("Manufacturer if creating new stock (e.g. 'Kodak', 'Ilford')"),
     iso: z.number().int().positive().optional().describe("ISO if creating new stock"),
     type: z.string().optional().describe("Film type if creating new stock: 'bw', 'color_negative', 'color_positive'"),
     expirationDate: z.string().optional().describe("Expiration date (YYYY-MM-DD)"),
-    storageLocation: z.string().optional().describe("Storage location: 'fridge', 'freezer', 'room_temp'"),
-    costPerRoll: z.number().optional().describe("Cost per roll in dollars"),
+    storageLocation: z.string().optional().describe("Storage: 'fridge' (default), 'freezer', 'room_temp'"),
+    costPerRoll: z.number().optional().describe("Cost per roll/sheet in dollars"),
   },
-  async ({ film, quantity, format, manufacturer, iso, type, expirationDate, storageLocation, costPerRoll }) => {
-    // Try to find existing stock by fuzzy match
-    const { data: stocks } = await api<any>("/film-stocks");
-    let stock = stocks.find((s: any) =>
-      fuzzyMatch(film, s.manufacturer + " " + s.name, s.name, s.manufacturer)
+  async ({ film, format, form, quantity, lengthFt, manufacturer, iso, type, expirationDate, storageLocation, costPerRoll }) => {
+    const fmt = format || "35mm";
+    const frm = (form || "factory_roll") as "factory_roll" | "bulk_roll" | "sheet";
+
+    // Validate inputs by form
+    if (frm === "bulk_roll" && !lengthFt) {
+      return { content: [{ type: "text" as const, text: "Bulk rolls require `lengthFt` (e.g. 100)." }] };
+    }
+    if (frm !== "bulk_roll" && !quantity) {
+      return { content: [{ type: "text" as const, text: `${frm === "sheet" ? "Sheets" : "Factory rolls"} require \`quantity\`.` }] };
+    }
+
+    // Find or create stock (stock no longer carries format — it's on the inventory item)
+    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number; type: string }> }>("/film-stocks");
+    let stock = stocks.find((s) =>
+      fuzzyMatch(film, `${s.manufacturer} ${s.name}`, s.name, s.manufacturer)
     );
 
-    // Create stock if not found
     if (!stock) {
       if (!manufacturer || !iso) {
         return {
           content: [{
             type: "text" as const,
-            text: `Film stock "${film}" not found. To create it, also provide: manufacturer, iso, and optionally format and type.`,
+            text: `Film stock "${film}" not found. To create it, also provide: manufacturer, iso, and optionally type.`,
           }],
         };
       }
-      const { data: newStock } = await api<any>("/film-stocks", {
+      const created = await api<{ data: typeof stock }>("/film-stocks", {
         method: "POST",
         body: JSON.stringify({
           manufacturer,
           name: film,
           iso,
           type: type || "bw",
-          format: format || "35mm",
         }),
       });
-      stock = newStock;
+      stock = created.data!;
     }
 
-    // Add inventory
-    const { data: inv } = await api<any>("/inventory", {
-      method: "POST",
-      body: JSON.stringify({
-        filmStockId: stock.id,
-        quantity,
-        expirationDate,
-        storageLocation: storageLocation || "fridge",
-        costPerRoll,
-      }),
-    });
+    // Build inventory body by form
+    const body: Record<string, unknown> = {
+      filmStockId: stock.id,
+      format: fmt,
+      form: frm,
+      storageLocation: storageLocation || "fridge",
+    };
+    if (frm === "bulk_roll") {
+      body.originalLengthFt = lengthFt;
+      body.remainingLengthFt = lengthFt;
+    } else {
+      body.quantity = quantity;
+    }
+    if (expirationDate) body.expirationDate = expirationDate;
+    if (costPerRoll != null) body.costPerRoll = costPerRoll;
 
+    await api("/inventory", { method: "POST", body: JSON.stringify(body) });
+
+    const summary =
+      frm === "bulk_roll"
+        ? `${lengthFt}ft bulk roll`
+        : `${quantity} ${frm === "sheet" ? "sheet(s)" : "roll(s)"}`;
     return {
       content: [{
         type: "text" as const,
-        text: `Added ${quantity} roll(s) of **${stock.manufacturer} ${stock.name}** (${stock.format}, ISO ${stock.iso}) to inventory.${expirationDate ? ` Expires: ${expirationDate}.` : ""}${storageLocation ? ` Stored in: ${storageLocation}.` : ""}`,
+        text: `Added ${summary} of **${stock.manufacturer} ${stock.name}** (${fmt}, ISO ${stock.iso}).${expirationDate ? ` Expires ${expirationDate}.` : ""}`,
       }],
     };
   }
 );
 
-// ── Tool: filmlog_gear ──
+// ── Tool: tomu_gear ──
 
 server.tool(
-  "filmlog_gear",
+  "tomu_gear",
   "List, add, or query cameras and lenses.",
   {
     action: z.enum(["list", "add_camera", "add_lens"]).describe("Action to perform"),
@@ -242,36 +308,42 @@ server.tool(
   }
 );
 
-// ── Tool: filmlog_summary ──
+// ── Tool: tomu_summary ──
 
 server.tool(
-  "filmlog_summary",
-  "Get a dashboard overview: inventory summary, expiring film, active rolls (when available), and gear count.",
+  "tomu_summary",
+  "Get a dashboard overview: inventory totals, expiring film, and gear count.",
   {},
   async () => {
     const [summaryRes, camerasRes, lensesRes] = await Promise.all([
-      api<any>("/inventory/summary"),
-      api<any>("/cameras"),
-      api<any>("/lenses"),
+      api<{ data: { items: InventoryItem[]; expiringSoon: InventoryItem[] } }>("/inventory/summary"),
+      api<{ data: Array<{ id: string }> }>("/cameras"),
+      api<{ data: Array<{ id: string }> }>("/lenses"),
     ]);
 
-    const summary = summaryRes.data;
-    const lines: string[] = [
-      "## FilmLog Dashboard\n",
-      `- **${summary.totalRolls}** rolls in inventory across **${summary.byStock.length}** stocks`,
-      `- **${camerasRes.data.length}** cameras, **${lensesRes.data.length}** lenses`,
-    ];
+    const items = summaryRes.data.items;
+    const stockIds = new Set(items.map((i) => i.filmStockId));
 
-    if (summary.expiringSoon.length > 0) {
-      lines.push(`- **${summary.expiringSoon.length}** inventory items expiring within 6 months`);
+    // Totals broken out by form
+    let factoryRolls = 0;
+    let sheets = 0;
+    let bulkFt = 0;
+    for (const item of items) {
+      if (item.form === "factory_roll") factoryRolls += item.quantity;
+      else if (item.form === "sheet") sheets += item.quantity;
+      else if (item.form === "bulk_roll") bulkFt += Number(item.remainingLengthFt ?? 0);
     }
 
-    if (summary.byStock.length > 0) {
-      lines.push("\n### Top Stocks");
-      const sorted = [...summary.byStock].sort((a: any, b: any) => b.totalRolls - a.totalRolls).slice(0, 5);
-      for (const s of sorted) {
-        lines.push(`- ${s.manufacturer} ${s.stockName}: ${s.totalRolls} rolls`);
-      }
+    const lines: string[] = ["## Tomu Dashboard\n"];
+    const parts: string[] = [];
+    if (factoryRolls > 0) parts.push(`**${factoryRolls}** factory rolls`);
+    if (bulkFt > 0) parts.push(`**${bulkFt}ft** bulk`);
+    if (sheets > 0) parts.push(`**${sheets}** sheets`);
+    lines.push(`- ${parts.length ? parts.join(" + ") : "No inventory"} across **${stockIds.size}** stock${stockIds.size === 1 ? "" : "s"}`);
+    lines.push(`- **${camerasRes.data.length}** cameras, **${lensesRes.data.length}** lenses`);
+
+    if (summaryRes.data.expiringSoon.length > 0) {
+      lines.push(`- **${summaryRes.data.expiringSoon.length}** item(s) expiring within 6 months`);
     }
 
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };

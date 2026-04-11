@@ -1,12 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { FILM_FORMAT_LABELS } from "@filmlog/shared";
-import type { CreateCamera, CreateLens } from "@filmlog/shared";
+import { FILM_FORMAT_LABELS } from "@tomu/shared";
+import type { CreateCamera, CreateLens } from "@tomu/shared";
 import { cameras, lenses } from "../../services/api.js";
 import { Button } from "../ui/button.js";
 import { Badge } from "../ui/badge.js";
-import { Card, CardContent } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from "../ui/dialog.js";
@@ -20,18 +19,20 @@ export function GearPage() {
   const [addLensOpen, setAddLensOpen] = useState(false);
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Gear</h2>
+    <div className="space-y-4">
+      <h2 className="text-base font-semibold">Gear</h2>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-secondary p-1">
+      <div className="flex border-b border-border">
         {(["cameras", "lenses"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              tab === t ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+              "border-b-2 px-3 py-1.5 text-sm font-medium transition-colors",
+              tab === t
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
             )}
           >
             {t === "cameras" ? "Cameras" : "Lenses"}
@@ -44,23 +45,30 @@ export function GearPage() {
         <>
           <div className="flex justify-end">
             <Button size="sm" onClick={() => setAddCameraOpen(true)}>
-              <Plus className="h-4 w-4" /> Add Camera
+              <Plus className="h-3.5 w-3.5" /> Add Camera
             </Button>
           </div>
-          {camerasQuery.data?.data.map((camera) => (
-            <Card key={camera.id}>
-              <CardContent className="pt-4">
-                <p className="font-semibold">{camera.make} {camera.model}</p>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  <Badge variant="blue">{FILM_FORMAT_LABELS[camera.format as keyof typeof FILM_FORMAT_LABELS]}</Badge>
-                  {camera.serialNumber && <Badge variant="secondary">S/N: {camera.serialNumber}</Badge>}
-                </div>
-                {camera.notes && <p className="mt-2 text-sm text-muted-foreground">{camera.notes}</p>}
-              </CardContent>
-            </Card>
-          ))}
-          {camerasQuery.data?.data.length === 0 && (
-            <p className="py-12 text-center text-muted-foreground">No cameras yet. Add your first camera.</p>
+          {camerasQuery.data?.data && camerasQuery.data.data.length > 0 ? (
+            <div className="overflow-hidden rounded-md border border-border">
+              <div className="divide-y divide-border">
+                {camerasQuery.data.data.map((camera) => (
+                  <div key={camera.id} className="px-3 py-2.5 hover:bg-card">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{camera.make} {camera.model}</span>
+                      <div className="flex gap-1.5">
+                        <Badge variant="blue">{FILM_FORMAT_LABELS[camera.format as keyof typeof FILM_FORMAT_LABELS]}</Badge>
+                        {camera.serialNumber && <Badge variant="secondary">S/N: {camera.serialNumber}</Badge>}
+                      </div>
+                    </div>
+                    {camera.notes && <p className="mt-1 text-xs text-muted-foreground">{camera.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              No cameras yet. Add your first camera.
+            </div>
           )}
         </>
       )}
@@ -70,24 +78,31 @@ export function GearPage() {
         <>
           <div className="flex justify-end">
             <Button size="sm" onClick={() => setAddLensOpen(true)}>
-              <Plus className="h-4 w-4" /> Add Lens
+              <Plus className="h-3.5 w-3.5" /> Add Lens
             </Button>
           </div>
-          {lensesQuery.data?.data.map((lens) => (
-            <Card key={lens.id}>
-              <CardContent className="pt-4">
-                <p className="font-semibold">{lens.make} {lens.model}</p>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {lens.focalLengthMm && <Badge variant="blue">{lens.focalLengthMm}mm</Badge>}
-                  {lens.maxAperture && <Badge variant="purple">f/{lens.maxAperture}</Badge>}
-                  {lens.serialNumber && <Badge variant="secondary">S/N: {lens.serialNumber}</Badge>}
-                </div>
-                {lens.notes && <p className="mt-2 text-sm text-muted-foreground">{lens.notes}</p>}
-              </CardContent>
-            </Card>
-          ))}
-          {lensesQuery.data?.data.length === 0 && (
-            <p className="py-12 text-center text-muted-foreground">No lenses yet. Add your first lens.</p>
+          {lensesQuery.data?.data && lensesQuery.data.data.length > 0 ? (
+            <div className="overflow-hidden rounded-md border border-border">
+              <div className="divide-y divide-border">
+                {lensesQuery.data.data.map((lens) => (
+                  <div key={lens.id} className="px-3 py-2.5 hover:bg-card">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{lens.make} {lens.model}</span>
+                      <div className="flex gap-1.5">
+                        {lens.focalLengthMm && <Badge variant="blue">{lens.focalLengthMm}mm</Badge>}
+                        {lens.maxAperture && <Badge variant="purple">f/{lens.maxAperture}</Badge>}
+                        {lens.serialNumber && <Badge variant="secondary">S/N: {lens.serialNumber}</Badge>}
+                      </div>
+                    </div>
+                    {lens.notes && <p className="mt-1 text-xs text-muted-foreground">{lens.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+              No lenses yet. Add your first lens.
+            </div>
           )}
         </>
       )}
@@ -101,8 +116,8 @@ export function GearPage() {
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium">
-        {label}{required && <span className="text-red-400"> *</span>}
+      <label className="mb-1.5 block text-xs font-medium">
+        {label}{required && <span className="text-danger"> *</span>}
       </label>
       {children}
     </div>
@@ -125,7 +140,7 @@ function AddCameraDialog({ open, onClose }: { open: boolean; onClose: () => void
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogHeader><DialogTitle>Add Camera</DialogTitle></DialogHeader>
-      <DialogContent className="space-y-4">
+      <DialogContent className="space-y-3">
         <Field label="Make" required>
           <Input placeholder="e.g. Nikon, Hasselblad, Leica" value={form.make} onChange={(e) => setForm({ ...form, make: e.target.value })} />
         </Field>
@@ -145,7 +160,7 @@ function AddCameraDialog({ open, onClose }: { open: boolean; onClose: () => void
         </Field>
       </DialogContent>
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button onClick={() => mutation.mutate(form)} disabled={!form.make || !form.model || mutation.isPending}>
           {mutation.isPending ? "Adding..." : "Add Camera"}
         </Button>
@@ -170,7 +185,7 @@ function AddLensDialog({ open, onClose }: { open: boolean; onClose: () => void }
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogHeader><DialogTitle>Add Lens</DialogTitle></DialogHeader>
-      <DialogContent className="space-y-4">
+      <DialogContent className="space-y-3">
         <Field label="Make" required>
           <Input placeholder="e.g. Nikon, Zeiss, Canon" value={form.make} onChange={(e) => setForm({ ...form, make: e.target.value })} />
         </Field>
@@ -185,7 +200,7 @@ function AddLensDialog({ open, onClose }: { open: boolean; onClose: () => void }
         </Field>
       </DialogContent>
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button onClick={() => mutation.mutate(form)} disabled={!form.make || !form.model || mutation.isPending}>
           {mutation.isPending ? "Adding..." : "Add Lens"}
         </Button>

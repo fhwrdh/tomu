@@ -1,13 +1,13 @@
 const API_BASE = "/api/v1";
 
-let authToken: string | null = localStorage.getItem("filmlog_token");
+let authToken: string | null = localStorage.getItem("tomu_token");
 
 export function setToken(token: string | null) {
   authToken = token;
   if (token) {
-    localStorage.setItem("filmlog_token", token);
+    localStorage.setItem("tomu_token", token);
   } else {
-    localStorage.removeItem("filmlog_token");
+    localStorage.removeItem("tomu_token");
   }
 }
 
@@ -88,35 +88,26 @@ import type {
   Lens, CreateLens, UpdateLens,
   FilmStock, CreateFilmStock, UpdateFilmStock,
   FilmInventoryItem, CreateFilmInventoryItem, UpdateFilmInventoryItem,
-} from "@filmlog/shared";
+} from "@tomu/shared";
 
 export const cameras = crudApi<Camera, CreateCamera, UpdateCamera>("/cameras");
 export const lenses = crudApi<Lens, CreateLens, UpdateLens>("/lenses");
-export const filmStocks = crudApi<FilmStock & { totalRolls: number }, CreateFilmStock, UpdateFilmStock>("/film-stocks");
+export const filmStocks = crudApi<FilmStock, CreateFilmStock, UpdateFilmStock>("/film-stocks");
+
+export type InventoryItemWithStock = FilmInventoryItem & {
+  manufacturer: string;
+  stockName: string;
+  iso: number;
+  filmType: string;
+};
+
 export const inventory = {
-  ...crudApi<FilmInventoryItem & { manufacturer: string; stockName: string; iso: number; filmType: string; format: string }, CreateFilmInventoryItem, UpdateFilmInventoryItem>("/inventory"),
+  ...crudApi<InventoryItemWithStock, CreateFilmInventoryItem, UpdateFilmInventoryItem>("/inventory"),
   summary: () =>
     request<{
       data: {
-        totalRolls: number;
-        byStock: Array<{
-          filmStockId: string;
-          manufacturer: string;
-          stockName: string;
-          iso: number;
-          filmType: string;
-          format: string;
-          totalRolls: number;
-        }>;
-        expiringSoon: Array<{
-          id: string;
-          manufacturer: string;
-          stockName: string;
-          format: string;
-          quantity: number;
-          expirationDate: string;
-          storageLocation: string;
-        }>;
+        items: InventoryItemWithStock[];
+        expiringSoon: InventoryItemWithStock[];
       };
     }>("/inventory/summary"),
 };

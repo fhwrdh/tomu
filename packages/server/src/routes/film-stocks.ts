@@ -1,31 +1,16 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { createFilmStockSchema, updateFilmStockSchema } from "@filmlog/shared";
+import { createFilmStockSchema, updateFilmStockSchema } from "@tomu/shared";
 import { db } from "../db/client.js";
 import { filmInventory, filmStocks } from "../db/schema.js";
 
 export async function filmStocksRoutes(fastify: FastifyInstance) {
-  // List film stocks with inventory totals
+  // List film stocks
   fastify.get("/", async (request) => {
     const rows = await db
-      .select({
-        id: filmStocks.id,
-        userId: filmStocks.userId,
-        manufacturer: filmStocks.manufacturer,
-        name: filmStocks.name,
-        iso: filmStocks.iso,
-        type: filmStocks.type,
-        format: filmStocks.format,
-        notes: filmStocks.notes,
-        isActive: filmStocks.isActive,
-        createdAt: filmStocks.createdAt,
-        updatedAt: filmStocks.updatedAt,
-        totalRolls: sql<number>`coalesce(sum(${filmInventory.quantity}), 0)::int`,
-      })
+      .select()
       .from(filmStocks)
-      .leftJoin(filmInventory, eq(filmStocks.id, filmInventory.filmStockId))
       .where(eq(filmStocks.userId, request.userId))
-      .groupBy(filmStocks.id)
       .orderBy(filmStocks.manufacturer, filmStocks.name);
 
     return { data: rows };

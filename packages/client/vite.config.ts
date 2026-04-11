@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icons/film-roll.svg"],
       manifest: {
-        name: "FilmLog",
-        short_name: "FilmLog",
+        name: "Tomu",
+        short_name: "Tomu",
         description: "Film photography management",
         theme_color: "#0a0a0f",
         background_color: "#0a0a0f",

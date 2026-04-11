@@ -1,4 +1,4 @@
-# CLAUDE.md — FilmLog
+# CLAUDE.md — Tomu
 
 Film photography management app. Tracks gear, film inventory, rolls, frames, development, and scans.
 
@@ -39,16 +39,16 @@ npm run db:migrate                   # Run migrations
 npm run db:studio                    # Open Drizzle Studio
 ```
 
-Connection string: `DATABASE_URL` env var (default: `postgres://filmlog:filmlog@localhost:5432/filmlog`)
+Connection string: `DATABASE_URL` env var (default: `postgres://tomu:tomu@localhost:5432/tomu`)
 
 ## MCP Server
 
-Exposes FilmLog tools to Claude sessions. Configured via environment:
+Exposes Tomu tools to Claude sessions. Configured via environment:
 
-- `FILMLOG_API_URL` — API base URL (default: `http://localhost:3456/api/v1`)
-- `FILMLOG_API_TOKEN` — JWT token for auth
+- `TOMU_API_URL` — API base URL (default: `http://localhost:3456/api/v1`)
+- `TOMU_API_TOKEN` — JWT token for auth
 
-Tools: `filmlog_inventory`, `filmlog_add_inventory`, `filmlog_gear`, `filmlog_summary`
+Tools: `tomu_inventory`, `tomu_add_inventory`, `tomu_gear`, `tomu_summary`
 
 ## Deployment
 
@@ -61,6 +61,6 @@ Tools: `filmlog_inventory`, `filmlog_add_inventory`, `filmlog_gear`, `filmlog_su
 
 - All entity IDs are UUIDs (client-generated for offline support)
 - API responses wrapped in `{ data: ... }`
-- Shared types imported from `@filmlog/shared`
+- Shared types imported from `@tomu/shared`
 - UI components in `packages/client/src/components/ui/` (shadcn/ui pattern)
 - Feature components in `packages/client/src/components/{feature}/`

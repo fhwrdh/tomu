@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   FILM_FORMATS,
   FILM_TYPES,
+  INVENTORY_FORMS,
   METERING_MODES,
   NOTE_TYPES,
   ROLL_STATUSES,
@@ -42,7 +43,6 @@ export const createFilmStockSchema = z.object({
   name: z.string().min(1).max(100),
   iso: z.number().int().positive(),
   type: z.enum(FILM_TYPES),
-  format: z.enum(FILM_FORMATS),
   notes: z.string().max(2000).optional(),
 });
 
@@ -52,7 +52,11 @@ export const updateFilmStockSchema = createFilmStockSchema
 
 export const createFilmInventorySchema = z.object({
   filmStockId: z.string().uuid(),
-  quantity: z.number().int().positive(),
+  format: z.enum(FILM_FORMATS),
+  form: z.enum(INVENTORY_FORMS),
+  quantity: z.number().int().min(0).optional(),
+  remainingLengthFt: z.number().positive().optional(),
+  originalLengthFt: z.number().positive().optional(),
   expirationDate: z.string().optional(),
   storageLocation: z.enum(STORAGE_LOCATIONS).default("fridge"),
   purchaseDate: z.string().optional(),
@@ -62,6 +66,7 @@ export const createFilmInventorySchema = z.object({
 
 export const updateFilmInventorySchema = z.object({
   quantity: z.number().int().min(0).optional(),
+  remainingLengthFt: z.number().min(0).optional(),
   expirationDate: z.string().optional(),
   storageLocation: z.enum(STORAGE_LOCATIONS).optional(),
   costPerRoll: z.number().positive().optional(),

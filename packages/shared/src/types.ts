@@ -1,6 +1,7 @@
 import type {
   FilmFormat,
   FilmType,
+  InventoryForm,
   MeteringMode,
   NoteType,
   RollStatus,
@@ -48,7 +49,6 @@ export interface FilmStock extends Timestamps {
   name: string;
   iso: number;
   type: FilmType;
-  format: FilmFormat;
   notes?: string;
   isActive: boolean;
 }
@@ -57,7 +57,14 @@ export interface FilmInventoryItem extends Timestamps {
   id: string;
   userId: string;
   filmStockId: string;
+  format: FilmFormat;
+  form: InventoryForm;
+  /** Number of rolls (factory_roll) or sheets (sheet) */
   quantity: number;
+  /** Remaining length in feet for bulk_roll */
+  remainingLengthFt?: number;
+  /** Original length in feet for bulk_roll */
+  originalLengthFt?: number;
   expirationDate?: string;
   storageLocation: StorageLocation;
   purchaseDate?: string;
@@ -67,7 +74,6 @@ export interface FilmInventoryItem extends Timestamps {
 
 /** FilmStock with aggregated inventory info */
 export interface FilmStockWithInventory extends FilmStock {
-  totalRolls: number;
   inventoryItems: FilmInventoryItem[];
 }
 
@@ -190,16 +196,16 @@ export type CreateLens = Pick<Lens, "make" | "model"> &
 
 export type UpdateLens = Partial<CreateLens & Pick<Lens, "isActive">>;
 
-export type CreateFilmStock = Pick<FilmStock, "manufacturer" | "name" | "iso" | "type" | "format"> &
+export type CreateFilmStock = Pick<FilmStock, "manufacturer" | "name" | "iso" | "type"> &
   Partial<Pick<FilmStock, "notes">>;
 
 export type UpdateFilmStock = Partial<CreateFilmStock & Pick<FilmStock, "isActive">>;
 
-export type CreateFilmInventoryItem = Pick<FilmInventoryItem, "filmStockId" | "quantity"> &
-  Partial<Pick<FilmInventoryItem, "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "notes">>;
+export type CreateFilmInventoryItem = Pick<FilmInventoryItem, "filmStockId" | "format" | "form"> &
+  Partial<Pick<FilmInventoryItem, "quantity" | "remainingLengthFt" | "originalLengthFt" | "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "notes">>;
 
 export type UpdateFilmInventoryItem = Partial<
-  Pick<FilmInventoryItem, "quantity" | "expirationDate" | "storageLocation" | "costPerRoll" | "notes">
+  Pick<FilmInventoryItem, "quantity" | "remainingLengthFt" | "expirationDate" | "storageLocation" | "costPerRoll" | "notes">
 >;
 
 export type CreateRoll = Pick<Roll, "filmStockId"> &

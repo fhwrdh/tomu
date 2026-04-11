@@ -32,7 +32,7 @@ export function LoginPage() {
   return (
     <div className="dark flex min-h-dvh items-center justify-center bg-background text-foreground">
       <div className="w-full max-w-sm px-6">
-        <h1 className="mb-8 text-center text-3xl font-bold tracking-tight">FilmLog</h1>
+        <h1 className="mb-8 text-center text-3xl font-bold tracking-tight">Tomu</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegistering && (
             <div>

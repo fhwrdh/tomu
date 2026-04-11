@@ -25,6 +25,15 @@ export type MeteringMode = (typeof METERING_MODES)[number];
 export const STORAGE_LOCATIONS = ["fridge", "freezer", "room_temp", "other"] as const;
 export type StorageLocation = (typeof STORAGE_LOCATIONS)[number];
 
+export const INVENTORY_FORMS = ["factory_roll", "bulk_roll", "sheet"] as const;
+export type InventoryForm = (typeof INVENTORY_FORMS)[number];
+
+export const INVENTORY_FORM_LABELS: Record<InventoryForm, string> = {
+  factory_roll: "Factory Rolls",
+  bulk_roll: "Bulk Roll",
+  sheet: "Sheet Film",
+};
+
 /** Valid status transitions for rolls */
 export const ROLL_STATUS_TRANSITIONS: Record<RollStatus, RollStatus[]> = {
   loaded: ["shooting"],

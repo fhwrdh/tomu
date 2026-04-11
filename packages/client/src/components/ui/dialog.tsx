@@ -24,10 +24,10 @@ export function Dialog({ open, onClose, children }: DialogProps) {
     <dialog
       ref={ref}
       onClose={onClose}
-      className="fixed inset-0 z-50 m-0 h-full w-full max-h-full max-w-full bg-transparent p-0 backdrop:bg-black/50"
+      className="fixed inset-0 z-50 m-0 h-full w-full max-h-full max-w-full border-none bg-transparent p-0 backdrop:bg-black/70"
     >
-      <div className="flex h-full w-full items-end sm:items-center justify-center">
-        <div className="w-full max-w-lg rounded-t-xl sm:rounded-xl border bg-card text-card-foreground shadow-lg max-h-[90vh] overflow-y-auto">
+      <div className="flex h-full w-full items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="w-full max-w-lg rounded-t-lg sm:rounded-lg border border-border bg-card shadow-2xl max-h-[90vh] overflow-y-auto">
           {children}
         </div>
       </div>
@@ -36,17 +36,17 @@ export function Dialog({ open, onClose, children }: DialogProps) {
 }
 
 export function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-1.5 p-6 pb-4", className)} {...props} />;
+  return <div className={cn("border-b border-border px-4 py-3", className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />;
+  return <h2 className={cn("text-sm font-semibold", className)} {...props} />;
 }
 
 export function DialogContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-6 pb-4", className)} {...props} />;
+  return <div className={cn("px-4 py-4", className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex justify-end gap-2 p-6 pt-4", className)} {...props} />;
+  return <div className={cn("flex justify-end gap-2 border-t border-border px-4 py-3", className)} {...props} />;
 }

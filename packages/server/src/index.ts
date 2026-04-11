@@ -33,7 +33,7 @@ fastify.get("/api/health", async () => ({ status: "ok" }));
 // Start
 try {
   await fastify.listen({ port: config.PORT, host: config.HOST });
-  fastify.log.info(`FilmLog API running on ${config.HOST}:${config.PORT}`);
+  fastify.log.info(`Tomu API running on ${config.HOST}:${config.PORT}`);
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

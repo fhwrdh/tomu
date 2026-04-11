@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { createLensSchema, updateLensSchema } from "@filmlog/shared";
+import { createLensSchema, updateLensSchema } from "@tomu/shared";
 import { db } from "../db/client.js";
 import { lenses } from "../db/schema.js";
 

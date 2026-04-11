@@ -1,15 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus, AlertTriangle } from "lucide-react";
-import { FILM_FORMAT_LABELS, FILM_TYPE_LABELS, STORAGE_LOCATIONS } from "@filmlog/shared";
-import type { CreateFilmInventoryItem, CreateFilmStock } from "@filmlog/shared";
-import { filmStocks, inventory } from "../../services/api.js";
+import { FILM_FORMAT_LABELS, FILM_TYPE_LABELS, INVENTORY_FORM_LABELS, STORAGE_LOCATIONS } from "@tomu/shared";
+import type { CreateFilmInventoryItem, CreateFilmStock, InventoryForm } from "@tomu/shared";
+import { filmStocks, inventory, type InventoryItemWithStock } from "../../services/api.js";
 import { Button } from "../ui/button.js";
 import { Badge } from "../ui/badge.js";
-import { Card, CardContent } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from "../ui/dialog.js";
+
+function formatInventoryItem(item: { form: string; quantity: number; remainingLengthFt?: string | number | null; originalLengthFt?: string | number | null; format: string }) {
+  if (item.form === "bulk_roll") {
+    const remaining = item.remainingLengthFt ? Number(item.remainingLengthFt) : 0;
+    const original = item.originalLengthFt ? Number(item.originalLengthFt) : 0;
+    return `${remaining}' / ${original}' bulk (${item.format})`;
+  }
+  if (item.form === "sheet") {
+    return `${item.quantity} sheets (${item.format})`;
+  }
+  return `${item.quantity} rolls (${item.format})`;
+}
 
 export function InventoryPage() {
   const queryClient = useQueryClient();
@@ -29,99 +40,126 @@ export function InventoryPage() {
   const summary = summaryQuery.data?.data;
   const stocks = stocksQuery.data?.data ?? [];
 
+  // Group inventory items by stock
+  const itemsByStock = new Map<string, InventoryItemWithStock[]>();
+  if (summary) {
+    for (const item of summary.items) {
+      const key = item.filmStockId;
+      if (!itemsByStock.has(key)) itemsByStock.set(key, []);
+      itemsByStock.get(key)!.push(item);
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Film Inventory</h2>
+        <h2 className="text-base font-semibold">Film Inventory</h2>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setAddStockOpen(true)}>
-            <Plus className="h-4 w-4" /> New Stock
+            <Plus className="h-3.5 w-3.5" /> New Stock
           </Button>
           <Button size="sm" onClick={() => setAddInventoryOpen(true)}>
-            <Plus className="h-4 w-4" /> Add Rolls
+            <Plus className="h-3.5 w-3.5" /> Add Inventory
           </Button>
         </div>
       </div>
 
-      {/* Summary stats */}
-      {summary && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Total Rolls</p>
-            <p className="text-3xl font-bold">{summary.totalRolls}</p>
-          </div>
-          <div className="rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">Film Stocks</p>
-            <p className="text-3xl font-bold">{summary.byStock.length}</p>
-          </div>
-          {summary.expiringSoon.length > 0 && (
-            <div className="rounded-lg border border-orange-500/30 p-4">
-              <p className="flex items-center gap-1 text-sm text-orange-400">
-                <AlertTriangle className="h-3.5 w-3.5" /> Expiring Soon
-              </p>
-              <p className="text-3xl font-bold text-orange-400">{summary.expiringSoon.length}</p>
-            </div>
-          )}
+      {/* Inventory by stock */}
+      {stocks.length > 0 && (
+        <div className="overflow-hidden rounded-md border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-card text-left text-xs text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Stock</th>
+                <th className="px-3 py-2 font-medium">On Hand</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {stocks.map((stock) => {
+                const items = itemsByStock.get(stock.id) || [];
+                return (
+                  <tr key={stock.id} className="hover:bg-card/50">
+                    <td className="px-3 py-2.5">
+                      <span className="font-medium">{stock.manufacturer} {stock.name}</span>
+                      <div className="mt-1 flex gap-1.5">
+                        <Badge variant="blue">ISO {stock.iso}</Badge>
+                        <Badge variant="secondary">
+                          {FILM_TYPE_LABELS[stock.type as keyof typeof FILM_TYPE_LABELS]}
+                        </Badge>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {items.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {items.map((item) => (
+                            <div key={item.id} className="text-sm">
+                              <span className={item.form === "bulk_roll"
+                                ? (Number(item.remainingLengthFt) <= 10 ? "text-warning font-medium" : "text-success font-medium")
+                                : (item.quantity <= 2 ? "text-warning font-medium" : "text-success font-medium")
+                              }>
+                                {formatInventoryItem(item)}
+                              </span>
+                              {item.storageLocation !== "fridge" && (
+                                <span className="ml-1.5 text-xs text-muted-foreground">
+                                  ({item.storageLocation.replace("_", " ")})
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">--</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Inventory by stock */}
-      {summary?.byStock.map((stock) => (
-        <Card key={stock.filmStockId}>
-          <CardContent className="flex items-start justify-between pt-4">
-            <div>
-              <p className="font-semibold">
-                {stock.manufacturer} {stock.stockName}
-              </p>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                <Badge variant="blue">{stock.format}</Badge>
-                <Badge variant="purple">ISO {stock.iso}</Badge>
-                <Badge variant="secondary">
-                  {FILM_TYPE_LABELS[stock.filmType as keyof typeof FILM_TYPE_LABELS]}
-                </Badge>
-              </div>
-            </div>
-            <span
-              className={`text-2xl font-bold ${stock.totalRolls <= 2 ? "text-orange-400" : "text-green-400"}`}
-            >
-              {stock.totalRolls}
-            </span>
-          </CardContent>
-        </Card>
-      ))}
-
       {stocks.length === 0 && !stocksQuery.isLoading && (
-        <p className="py-12 text-center text-muted-foreground">
+        <div className="rounded-md border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
           No film stocks yet. Add your first stock to get started.
-        </p>
+        </div>
       )}
 
       {/* Expiring soon */}
       {summary && summary.expiringSoon.length > 0 && (
-        <>
-          <h3 className="flex items-center gap-2 text-lg font-semibold text-orange-400">
-            <AlertTriangle className="h-5 w-5" /> Expiring Soon
-          </h3>
-          {summary.expiringSoon.map((item) => (
-            <Card key={item.id} className="border-orange-500/30">
-              <CardContent className="flex items-center justify-between pt-4">
+        <div className="overflow-hidden rounded-md border border-warning/30">
+          <div className="flex items-center gap-2 border-b border-warning/30 bg-warning/5 px-3 py-2 text-sm font-medium text-warning">
+            <AlertTriangle className="h-4 w-4" /> Expiring Soon
+          </div>
+          <div className="divide-y divide-border">
+            {summary.expiringSoon.map((item) => (
+              <div key={item.id} className="flex items-center justify-between px-3 py-2.5 text-sm">
                 <div>
-                  <p className="font-semibold">
-                    {item.manufacturer} {item.stockName}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {item.format} &middot; {item.storageLocation} &middot; {item.quantity} rolls
-                  </p>
+                  <span className="font-medium">{item.manufacturer} {item.stockName}</span>
+                  <span className="ml-2 text-muted-foreground">
+                    {formatInventoryItem(item as any)}
+                  </span>
                 </div>
-                <span className="text-sm text-orange-400">Exp: {item.expirationDate}</span>
-              </CardContent>
-            </Card>
-          ))}
-        </>
+                <span className="text-xs text-warning">exp {item.expirationDate}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <AddFilmStockDialog open={addStockOpen} onClose={() => setAddStockOpen(false)} />
       <AddInventoryDialog open={addInventoryOpen} onClose={() => setAddInventoryOpen(false)} stocks={stocks} />
+    </div>
+  );
+}
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-foreground">
+        {label}{required && <span className="text-danger"> *</span>}
+      </label>
+      {children}
     </div>
   );
 }
@@ -133,7 +171,6 @@ function AddFilmStockDialog({ open, onClose }: { open: boolean; onClose: () => v
     name: "",
     iso: 400,
     type: "bw",
-    format: "35mm",
   });
 
   const mutation = useMutation({
@@ -142,7 +179,7 @@ function AddFilmStockDialog({ open, onClose }: { open: boolean; onClose: () => v
       queryClient.invalidateQueries({ queryKey: ["film-stocks"] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       onClose();
-      setForm({ manufacturer: "", name: "", iso: 400, type: "bw", format: "35mm" });
+      setForm({ manufacturer: "", name: "", iso: 400, type: "bw" });
     },
   });
 
@@ -151,7 +188,7 @@ function AddFilmStockDialog({ open, onClose }: { open: boolean; onClose: () => v
       <DialogHeader>
         <DialogTitle>Add Film Stock</DialogTitle>
       </DialogHeader>
-      <DialogContent className="space-y-4">
+      <DialogContent className="space-y-3">
         <Field label="Manufacturer" required>
           <Input placeholder="e.g. Kodak, Ilford, Fuji" value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} />
         </Field>
@@ -166,14 +203,9 @@ function AddFilmStockDialog({ open, onClose }: { open: boolean; onClose: () => v
             {Object.entries(FILM_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </Select>
         </Field>
-        <Field label="Format" required>
-          <Select value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as typeof form.format })}>
-            {Object.entries(FILM_FORMAT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </Select>
-        </Field>
       </DialogContent>
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button onClick={() => mutation.mutate(form)} disabled={!form.manufacturer || !form.name || mutation.isPending}>
           {mutation.isPending ? "Adding..." : "Add Stock"}
         </Button>
@@ -189,16 +221,22 @@ function AddInventoryDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  stocks: Array<{ id: string; manufacturer: string; name: string; format: string }>;
+  stocks: Array<{ id: string; manufacturer: string; name: string }>;
 }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
     filmStockId: "",
+    format: "35mm" as const,
+    form: "factory_roll" as InventoryForm,
     quantity: 1,
+    remainingLengthFt: undefined as number | undefined,
+    originalLengthFt: undefined as number | undefined,
     expirationDate: "",
     storageLocation: "fridge" as const,
     costPerRoll: undefined as number | undefined,
   });
+
+  const isBulk = form.form === "bulk_roll";
 
   const mutation = useMutation({
     mutationFn: (body: CreateFilmInventoryItem) => inventory.create(body),
@@ -206,56 +244,73 @@ function AddInventoryDialog({
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       queryClient.invalidateQueries({ queryKey: ["film-stocks"] });
       onClose();
-      setForm({ filmStockId: "", quantity: 1, expirationDate: "", storageLocation: "fridge", costPerRoll: undefined });
+      setForm({ filmStockId: "", format: "35mm", form: "factory_roll", quantity: 1, remainingLengthFt: undefined, originalLengthFt: undefined, expirationDate: "", storageLocation: "fridge", costPerRoll: undefined });
     },
   });
 
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogHeader>
-        <DialogTitle>Add Film Rolls</DialogTitle>
+        <DialogTitle>Add Inventory</DialogTitle>
       </DialogHeader>
-      <DialogContent className="space-y-4">
+      <DialogContent className="space-y-3">
         <Field label="Film Stock" required>
           <Select value={form.filmStockId} onChange={(e) => setForm({ ...form, filmStockId: e.target.value })}>
             <option value="">Select film stock</option>
             {stocks.map((s) => (
-              <option key={s.id} value={s.id}>{s.manufacturer} {s.name} ({s.format})</option>
+              <option key={s.id} value={s.id}>{s.manufacturer} {s.name}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Quantity" required>
-          <Input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })} min={1} max={100} />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Format" required>
+            <Select value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as typeof form.format })}>
+              {Object.entries(FILM_FORMAT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          </Field>
+          <Field label="Form" required>
+            <Select value={form.form} onChange={(e) => setForm({ ...form, form: e.target.value as InventoryForm })}>
+              {Object.entries(INVENTORY_FORM_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          </Field>
+        </div>
+        {isBulk ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Total Length (ft)" required>
+              <Input type="number" value={form.originalLengthFt ?? ""} onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : undefined;
+                setForm({ ...form, originalLengthFt: val, remainingLengthFt: val });
+              }} min={1} />
+            </Field>
+            <Field label="Remaining (ft)">
+              <Input type="number" value={form.remainingLengthFt ?? ""} onChange={(e) => setForm({ ...form, remainingLengthFt: e.target.value ? Number(e.target.value) : undefined })} min={0} />
+            </Field>
+          </div>
+        ) : (
+          <Field label={form.form === "sheet" ? "Sheets" : "Rolls"} required>
+            <Input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })} min={1} max={500} />
+          </Field>
+        )}
         <Field label="Expiration Date">
           <Input type="date" value={form.expirationDate} onChange={(e) => setForm({ ...form, expirationDate: e.target.value })} />
         </Field>
-        <Field label="Storage Location">
-          <Select value={form.storageLocation} onChange={(e) => setForm({ ...form, storageLocation: e.target.value as typeof form.storageLocation })}>
-            {STORAGE_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc.replace("_", " ")}</option>)}
-          </Select>
-        </Field>
-        <Field label="Cost per Roll ($)">
-          <Input type="number" value={form.costPerRoll ?? ""} onChange={(e) => setForm({ ...form, costPerRoll: e.target.value ? Number(e.target.value) : undefined })} min={0} step="0.01" />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Storage">
+            <Select value={form.storageLocation} onChange={(e) => setForm({ ...form, storageLocation: e.target.value as typeof form.storageLocation })}>
+              {STORAGE_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc.replace("_", " ")}</option>)}
+            </Select>
+          </Field>
+          <Field label="Cost ($)">
+            <Input type="number" value={form.costPerRoll ?? ""} onChange={(e) => setForm({ ...form, costPerRoll: e.target.value ? Number(e.target.value) : undefined })} min={0} step="0.01" />
+          </Field>
+        </div>
       </DialogContent>
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button onClick={() => mutation.mutate(form)} disabled={!form.filmStockId || mutation.isPending}>
-          {mutation.isPending ? "Adding..." : "Add to Inventory"}
+          {mutation.isPending ? "Adding..." : "Add"}
         </Button>
       </DialogFooter>
     </Dialog>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium">
-        {label}{required && <span className="text-destructive"> *</span>}
-      </label>
-      {children}
-    </div>
   );
 }

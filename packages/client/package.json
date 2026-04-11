@@ -1,5 +1,5 @@
 {
-  "name": "@filmlog/client",
+  "name": "@tomu/client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@filmlog/shared": "*",
+    "@tomu/shared": "*",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-query": "^5.64.0",
     "class-variance-authority": "^0.7.1",
