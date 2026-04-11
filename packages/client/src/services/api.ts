@@ -88,6 +88,9 @@ import type {
   Lens, CreateLens, UpdateLens,
   FilmStock, CreateFilmStock, UpdateFilmStock,
   FilmInventoryItem, CreateFilmInventoryItem, UpdateFilmInventoryItem,
+  Roll, CreateRoll,
+  Frame, CreateFrame,
+  Note, CreateNote,
 } from "@tomu/shared";
 
 export const cameras = crudApi<Camera, CreateCamera, UpdateCamera>("/cameras");
@@ -110,4 +113,51 @@ export const inventory = {
         expiringSoon: InventoryItemWithStock[];
       };
     }>("/inventory/summary"),
+};
+
+// ── Rolls ──
+
+/** A roll row as returned by GET /rolls with joined stock+camera fields and a computed frames-shot count. */
+export type RollListItem = Roll & {
+  manufacturer: string;
+  stockName: string;
+  iso: number;
+  filmType: string;
+  cameraMake: string | null;
+  cameraModel: string | null;
+  framesShot: number;
+};
+
+export type RollDetail = RollListItem & {
+  frames: Frame[];
+  notes: Note[];
+  frameNotes: Note[];
+};
+
+export const rolls = {
+  list: (status?: string) =>
+    request<{ data: RollListItem[] }>(`/rolls${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  get: (id: string) => request<{ data: RollDetail }>(`/rolls/${id}`),
+  load: (body: CreateRoll) =>
+    request<{ data: Roll }>("/rolls", { method: "POST", body: JSON.stringify(body) }),
+  unload: (id: string, body?: { localDate?: string; note?: string }) =>
+    request<{ data: Roll }>(`/rolls/${id}/unload`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+  addFrame: (id: string, body: CreateFrame) =>
+    request<{ data: Frame }>(`/rolls/${id}/frames`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  addNote: (id: string, body: CreateNote) =>
+    request<{ data: Note }>(`/rolls/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  addFrameNote: (id: string, frameNumber: number, body: CreateNote) =>
+    request<{ data: Note }>(`/rolls/${id}/frames/${frameNumber}/notes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

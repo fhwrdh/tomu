@@ -350,6 +350,267 @@ server.tool(
   }
 );
 
+// ── Rolls: shared helpers ─────────────────────────────────────────────
+
+interface ActiveRoll {
+  id: string;
+  cameraId: string | null;
+  filmStockId: string;
+  format: string;
+  form: string;
+  status: string;
+  loadedAt: string | null;
+  frameCount: number;
+  framesShot: number;
+  manufacturer: string;
+  stockName: string;
+  iso: number;
+  cameraMake: string | null;
+  cameraModel: string | null;
+}
+
+async function listActiveRolls(): Promise<ActiveRoll[]> {
+  const { data } = await api<{ data: ActiveRoll[] }>("/rolls?status=active");
+  return data;
+}
+
+/** Find a single active roll, optionally filtered by a fuzzy camera hint. Returns {roll} or {error}. */
+async function pickActiveRoll(cameraHint?: string): Promise<{ roll?: ActiveRoll; error?: string }> {
+  const rolls = await listActiveRolls();
+  if (rolls.length === 0) return { error: "No active rolls. Load one first with tomu_load." };
+
+  const candidates = cameraHint
+    ? rolls.filter((r) =>
+        fuzzyMatch(cameraHint, r.cameraMake ?? "", r.cameraModel ?? "", `${r.cameraMake ?? ""} ${r.cameraModel ?? ""}`),
+      )
+    : rolls;
+
+  if (candidates.length === 0) {
+    return { error: `No active roll matching camera "${cameraHint}". Active: ${rolls.map((r) => `${r.cameraMake} ${r.cameraModel}`).join(", ")}` };
+  }
+  if (candidates.length > 1) {
+    return {
+      error: `Multiple active rolls — specify a camera. Active: ${candidates.map((r) => `${r.cameraMake} ${r.cameraModel} (${r.manufacturer} ${r.stockName})`).join(", ")}`,
+    };
+  }
+  return { roll: candidates[0] };
+}
+
+function describeRoll(r: ActiveRoll): string {
+  const cam = r.cameraMake ? `${r.cameraMake} ${r.cameraModel}` : "no camera";
+  return `${r.manufacturer} ${r.stockName} (${r.format}) in ${cam} — ${r.framesShot}/${r.frameCount} frames`;
+}
+
+// ── Tool: tomu_load ───────────────────────────────────────────────────
+
+server.tool(
+  "tomu_load",
+  "Load a roll of film into a camera. Fuzzy-matches film stock and camera by name. " +
+    "Decrements inventory automatically. If both factory and bulk inventory of the same stock exist, " +
+    "factory rolls are used first unless the user specifies otherwise.",
+  {
+    film: z.string().describe("Film stock name (e.g. 'HP5+', 'Tri-X 400', 'Portra 400')"),
+    camera: z.string().describe("Camera name (e.g. 'M6', 'Mamiya 7', 'Leica')"),
+    format: z.string().optional().describe("Film format: '35mm' (default), '120', '4x5', '8x10'"),
+    form: z.string().optional().describe("Override which form to use: 'factory_roll', 'bulk_roll', or 'sheet'"),
+    frameCount: z.number().int().positive().optional().describe("Override default frame count (e.g. 24 for a short 35mm cassette)"),
+    note: z.string().optional().describe("Optional note to attach to the roll at load time"),
+  },
+  async ({ film, camera, format, form, frameCount, note }) => {
+    const fmt = format || "35mm";
+
+    // Resolve stock
+    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
+    const stock = stocks.find((s) => fuzzyMatch(film, `${s.manufacturer} ${s.name}`, s.name, s.manufacturer));
+    if (!stock) {
+      return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. Known stocks: ${stocks.map((s) => `${s.manufacturer} ${s.name}`).join(", ") || "none"}.` }] };
+    }
+
+    // Resolve camera
+    const { data: cams } = await api<{ data: Array<{ id: string; make: string; model: string; format: string }> }>("/cameras");
+    const matches = cams.filter((c) => fuzzyMatch(camera, `${c.make} ${c.model}`, c.model, c.make));
+    if (matches.length === 0) {
+      return { content: [{ type: "text" as const, text: `Camera "${camera}" not found. Known cameras: ${cams.map((c) => `${c.make} ${c.model}`).join(", ") || "none"}.` }] };
+    }
+    if (matches.length > 1) {
+      return { content: [{ type: "text" as const, text: `Camera "${camera}" is ambiguous. Matches: ${matches.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
+    }
+    const cam = matches[0];
+
+    // Load
+    const loadBody: Record<string, unknown> = {
+      filmStockId: stock.id,
+      format: fmt,
+      cameraId: cam.id,
+    };
+    if (form) loadBody.form = form;
+    if (frameCount != null) loadBody.frameCount = frameCount;
+
+    const loaded = await api<{ data: { id: string; format: string; form: string; frameCount: number; isoShotAt: number } }>("/rolls", {
+      method: "POST",
+      body: JSON.stringify(loadBody),
+    });
+
+    // Optional load-time note
+    if (note) {
+      await api(`/rolls/${loaded.data.id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ content: note }),
+      });
+    }
+
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Loaded **${stock.manufacturer} ${stock.name}** (${loaded.data.format}, ${loaded.data.form.replace("_", " ")}, ISO ${loaded.data.isoShotAt}) into **${cam.make} ${cam.model}** — ${loaded.data.frameCount} frames.${note ? ` Note saved.` : ""}`,
+      }],
+    };
+  }
+);
+
+// ── Tool: tomu_shoot ──────────────────────────────────────────────────
+
+server.tool(
+  "tomu_shoot",
+  "Log a frame on an active roll. Frame number is auto-incremented if omitted. " +
+    "All settings fields are optional — pass what you dictated, dump anything unstructured into `notes`. " +
+    "If multiple rolls are loaded in different cameras, specify `camera` to disambiguate.",
+  {
+    camera: z.string().optional().describe("Camera hint to pick the active roll (e.g. 'M6', 'Mamiya')"),
+    frameNumber: z.number().int().positive().optional().describe("Explicit frame number. Omit to auto-assign the next frame."),
+    shutterSpeed: z.string().optional().describe("Shutter speed (e.g. '1/250', '2s')"),
+    aperture: z.string().optional().describe("Aperture (e.g. 'f/8', '5.6')"),
+    compensation: z.string().optional().describe("Exposure compensation (e.g. '+1', '-1/3')"),
+    meteringMode: z.string().optional().describe("Metering mode: 'incident', 'spot', 'matrix', 'center_weighted', 'sunny_16', 'guess'"),
+    subject: z.string().optional().describe("Short subject description"),
+    locationName: z.string().optional().describe("Place name"),
+    notes: z.string().optional().describe("Free-form notes. Put anything unstructured here."),
+    lens: z.string().optional().describe("Lens hint for fuzzy match"),
+  },
+  async ({ camera, frameNumber, shutterSpeed, aperture, compensation, meteringMode, subject, locationName, notes, lens }) => {
+    const { roll, error } = await pickActiveRoll(camera);
+    if (error || !roll) return { content: [{ type: "text" as const, text: error! }] };
+
+    // Optional fuzzy lens resolution
+    let lensId: string | undefined;
+    if (lens) {
+      const { data: lenses } = await api<{ data: Array<{ id: string; make: string; model: string; focalLengthMm: number | null }> }>("/lenses");
+      const match = lenses.find((l) => fuzzyMatch(lens, `${l.make} ${l.model}`, l.model, String(l.focalLengthMm ?? "")));
+      if (match) lensId = match.id;
+    }
+
+    const body: Record<string, unknown> = {};
+    if (frameNumber != null) body.frameNumber = frameNumber;
+    if (lensId) body.lensId = lensId;
+    if (shutterSpeed) body.shutterSpeed = shutterSpeed;
+    if (aperture) body.aperture = aperture;
+    if (compensation) body.compensation = compensation;
+    if (meteringMode) body.meteringMode = meteringMode;
+    if (subject) body.subject = subject;
+    if (locationName) body.locationName = locationName;
+    if (notes) body.notes = notes;
+
+    const frame = await api<{ data: { frameNumber: number; shutterSpeed: string | null; aperture: string | null } }>(`/rolls/${roll.id}/frames`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    const f = frame.data;
+    const settings = [f.shutterSpeed, f.aperture].filter(Boolean).join(" ");
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Frame ${f.frameNumber}/${roll.frameCount} logged on ${roll.manufacturer} ${roll.stockName} in ${roll.cameraMake} ${roll.cameraModel}${settings ? ` — ${settings}` : ""}${subject ? ` — ${subject}` : ""}.`,
+      }],
+    };
+  }
+);
+
+// ── Tool: tomu_unload ─────────────────────────────────────────────────
+
+server.tool(
+  "tomu_unload",
+  "Unload a roll from a camera. Assigns a display ID (YYYYMMDD.N) based on your local date. " +
+    "If you have multiple active rolls, specify `camera`.",
+  {
+    camera: z.string().optional().describe("Camera hint to pick the roll to unload"),
+    note: z.string().optional().describe("Optional note attached to the roll at unload time"),
+  },
+  async ({ camera, note }) => {
+    const { roll, error } = await pickActiveRoll(camera);
+    if (error || !roll) return { content: [{ type: "text" as const, text: error! }] };
+
+    // Local date based on MCP host (which is the user's machine)
+    const now = new Date();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    const { data } = await api<{ data: { displayId: string; unloadedAt: string } }>(`/rolls/${roll.id}/unload`, {
+      method: "POST",
+      body: JSON.stringify({ localDate, note }),
+    });
+
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Unloaded **${roll.manufacturer} ${roll.stockName}** from ${roll.cameraMake} ${roll.cameraModel}. ID: **${data.displayId}** (${roll.framesShot} frames logged).${note ? " Note saved." : ""}`,
+      }],
+    };
+  }
+);
+
+// ── Tool: tomu_note ───────────────────────────────────────────────────
+
+server.tool(
+  "tomu_note",
+  "Add a timestamped note to the active roll, or to a specific frame on it. " +
+    "Use this for any context that doesn't fit structured frame fields.",
+  {
+    content: z.string().describe("The note content"),
+    frameNumber: z.number().int().positive().optional().describe("If set, attach to this frame instead of the roll itself"),
+    camera: z.string().optional().describe("Camera hint if multiple rolls are active"),
+  },
+  async ({ content, frameNumber, camera }) => {
+    const { roll, error } = await pickActiveRoll(camera);
+    if (error || !roll) return { content: [{ type: "text" as const, text: error! }] };
+
+    const path = frameNumber
+      ? `/rolls/${roll.id}/frames/${frameNumber}/notes`
+      : `/rolls/${roll.id}/notes`;
+    await api(path, { method: "POST", body: JSON.stringify({ content }) });
+
+    const target = frameNumber
+      ? `frame ${frameNumber} of ${roll.manufacturer} ${roll.stockName}`
+      : `${roll.manufacturer} ${roll.stockName} in ${roll.cameraMake} ${roll.cameraModel}`;
+    return { content: [{ type: "text" as const, text: `Note added to ${target}.` }] };
+  }
+);
+
+// ── Tool: tomu_rolls ──────────────────────────────────────────────────
+
+server.tool(
+  "tomu_rolls",
+  "List rolls. Defaults to active (loaded or shooting) rolls; pass status='all' or 'unloaded' to see others.",
+  {
+    status: z.string().optional().describe("'active' (default), 'all', 'loaded', 'shooting', 'unloaded'"),
+  },
+  async ({ status }) => {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    const { data } = await api<{ data: Array<ActiveRoll & { displayId: string | null; unloadedAt: string | null }> }>(`/rolls${q}`);
+
+    if (data.length === 0) {
+      return { content: [{ type: "text" as const, text: `No rolls found for status "${status || "active"}".` }] };
+    }
+
+    const lines: string[] = [`## Rolls (${status || "active"})\n`];
+    for (const r of data) {
+      const id = r.displayId ?? "unassigned";
+      const cam = r.cameraMake ? `${r.cameraMake} ${r.cameraModel}` : "—";
+      lines.push(`- **${id}** — ${r.manufacturer} ${r.stockName} (${r.format}) in ${cam} [${r.status}] — ${r.framesShot}/${r.frameCount}`);
+    }
+    return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+  }
+);
+
 // ── Start ──
 
 const transport = new StdioServerTransport();

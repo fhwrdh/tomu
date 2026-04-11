@@ -4,6 +4,7 @@ import { Header } from "./components/layout/Header.js";
 import { LoginPage } from "./components/layout/LoginPage.js";
 import { InventoryPage } from "./components/inventory/InventoryPage.js";
 import { GearPage } from "./components/gear/GearPage.js";
+import { RollsPage } from "./components/rolls/RollsPage.js";
 import { useAuth } from "./hooks/useAuth.js";
 
 export function App() {
@@ -22,6 +23,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/inventory" replace />} />
           <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/rolls" element={<RollsPage />} />
           <Route path="/gear" element={<GearPage />} />
         </Routes>
       </main>

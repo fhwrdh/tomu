@@ -23,6 +23,8 @@ export interface Camera extends Timestamps {
   make: string;
   model: string;
   format: FilmFormat;
+  /** Default frame count for rolls loaded into this camera (36 for 35mm, 10 for 6x7, 1 for sheet, etc.) */
+  frameCount?: number;
   serialNumber?: string;
   notes?: string;
   isActive: boolean;
@@ -84,10 +86,13 @@ export interface Roll extends Timestamps {
   userId: string;
   cameraId?: string;
   filmStockId: string;
-  rollNumber: number;
+  format: FilmFormat;
+  form: InventoryForm;
   status: RollStatus;
   loadedAt?: string;
-  finishedAt?: string;
+  unloadedAt?: string;
+  /** Human-readable ID assigned at unload: YYYYMMDD.N (local date, N = Nth roll unloaded that day) */
+  displayId?: string;
   isoShotAt?: number;
   pushPullStops?: number;
   frameCount: number;
@@ -144,7 +149,7 @@ export interface Note extends Timestamps {
   userId: string;
   rollId?: string;
   frameId?: string;
-  type: NoteType;
+  type?: NoteType;
   content?: string;
   fileKey?: string;
   fileUrl?: string;
@@ -187,7 +192,7 @@ export interface Scanner extends Timestamps {
 // ── API Input Types ──
 
 export type CreateCamera = Pick<Camera, "make" | "model" | "format"> &
-  Partial<Pick<Camera, "serialNumber" | "notes">>;
+  Partial<Pick<Camera, "frameCount" | "serialNumber" | "notes">>;
 
 export type UpdateCamera = Partial<CreateCamera & Pick<Camera, "isActive">>;
 
@@ -208,23 +213,40 @@ export type UpdateFilmInventoryItem = Partial<
   Pick<FilmInventoryItem, "quantity" | "remainingLengthFt" | "expirationDate" | "storageLocation" | "costPerRoll" | "notes">
 >;
 
-export type CreateRoll = Pick<Roll, "filmStockId"> &
-  Partial<Pick<Roll, "cameraId" | "title" | "description" | "isoShotAt" | "pushPullStops" | "frameCount" | "tags">>;
-
-export type CreateFrame = Pick<Frame, "frameNumber"> &
+/** Input for loading a roll into a camera. Server records loadedAt and decrements inventory. */
+export type CreateRoll = Pick<Roll, "filmStockId" | "format"> &
   Partial<
     Pick<
-      Frame,
-      | "lensId"
-      | "shutterSpeed"
-      | "aperture"
-      | "compensation"
-      | "meteringMode"
-      | "subject"
-      | "notes"
-      | "latitude"
-      | "longitude"
-      | "locationName"
+      Roll,
+      | "cameraId"
+      | "form"
+      | "frameCount"
+      | "isoShotAt"
+      | "pushPullStops"
+      | "title"
+      | "description"
       | "tags"
     >
   >;
+
+export type CreateFrame = Partial<
+  Pick<
+    Frame,
+    | "frameNumber"
+    | "lensId"
+    | "shutterSpeed"
+    | "aperture"
+    | "compensation"
+    | "meteringMode"
+    | "subject"
+    | "notes"
+    | "latitude"
+    | "longitude"
+    | "locationName"
+    | "tags"
+  >
+>;
+
+/** Input for a note attached to a roll or a frame. Exactly one parent is set by the route. */
+export type CreateNote = Pick<Note, "content"> &
+  Partial<Pick<Note, "type" | "latitude" | "longitude">>;
