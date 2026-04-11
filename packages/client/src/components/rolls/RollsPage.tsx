@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Disc, Camera as CameraIcon, StickyNote, Square, ChevronRight } from "lucide-react";
+import { Plus, Disc, Camera as CameraIcon, StickyNote, Square, ChevronRight, Undo2 } from "lucide-react";
 import { FILM_FORMATS, FILM_FORMAT_LABELS } from "@tomu/shared";
 import type { CreateRoll, CreateFrame, CreateNote } from "@tomu/shared";
 import { cameras, filmStocks, rolls, type RollListItem, type RollDetail } from "../../services/api.js";
@@ -136,6 +136,7 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
   const [frameOpen, setFrameOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [unloadOpen, setUnloadOpen] = useState(false);
+  const [undoOpen, setUndoOpen] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: ["rolls", rollId, "detail"],
@@ -162,6 +163,9 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
           </Button>
           <Button size="sm" onClick={() => setUnloadOpen(true)}>
             Unload
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setUndoOpen(true)}>
+            <Undo2 className="h-3.5 w-3.5" /> Undo Load
           </Button>
         </div>
       )}
@@ -198,6 +202,12 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
       <AddFrameDialog open={frameOpen} onClose={() => setFrameOpen(false)} rollId={rollId} nextFrameNumber={detail.frames.length + 1} />
       <AddNoteDialog open={noteOpen} onClose={() => setNoteOpen(false)} rollId={rollId} />
       <UnloadDialog open={unloadOpen} onClose={() => setUnloadOpen(false)} rollId={rollId} />
+      <UndoLoadDialog
+        open={undoOpen}
+        onClose={() => setUndoOpen(false)}
+        rollId={rollId}
+        framesLogged={detail.frames.length}
+      />
     </div>
   );
 }
@@ -479,6 +489,57 @@ function AddNoteDialog({ open, onClose, rollId }: { open: boolean; onClose: () =
         </Button>
         <Button onClick={() => mutation.mutate({ content })} disabled={!content || mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save"}
+        </Button>
+      </DialogFooter>
+    </Dialog>
+  );
+}
+
+function UndoLoadDialog({
+  open,
+  onClose,
+  rollId,
+  framesLogged,
+}: {
+  open: boolean;
+  onClose: () => void;
+  rollId: string;
+  framesLogged: number;
+}) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: () => rolls.undoLoad(rollId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rolls"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      onClose();
+    },
+  });
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogHeader>
+        <DialogTitle>Undo Load</DialogTitle>
+      </DialogHeader>
+      <DialogContent className="space-y-3">
+        <div className="text-xs text-muted-foreground">
+          This treats the load as a mistake: the roll is deleted and its film is credited back
+          to inventory. Use <span className="font-medium text-foreground">Unload</span> instead
+          if you actually finished shooting this roll.
+        </div>
+        {framesLogged > 0 && (
+          <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+            Warning: {framesLogged} frame{framesLogged === 1 ? "" : "s"} already logged on this
+            roll. They will be permanently deleted along with the roll.
+          </div>
+        )}
+      </DialogContent>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+          {mutation.isPending ? "Undoing…" : "Undo Load"}
         </Button>
       </DialogFooter>
     </Dialog>

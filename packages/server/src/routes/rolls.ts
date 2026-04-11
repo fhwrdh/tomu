@@ -432,6 +432,77 @@ export async function rollsRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ data: row });
   });
 
+  // ── Undo load (cancel a roll before unload) ──────────────────────────
+  // Distinct from unload: this treats the load as a mistake, deletes the
+  // roll entirely (cascading frames/notes), and credits inventory back.
+  fastify.delete<{ Params: { id: string } }>("/:id", async (request, reply) => {
+    const [existing] = await db
+      .select()
+      .from(rolls)
+      .where(and(eq(rolls.id, request.params.id), eq(rolls.userId, request.userId)))
+      .limit(1);
+    if (!existing) return reply.status(404).send({ error: "Roll not found" });
+    if (existing.unloadedAt) {
+      return reply
+        .status(409)
+        .send({ error: "Roll is already unloaded. Undo is only available before unload." });
+    }
+
+    // Restore inventory: try exact stock+format+form first, then fall back to stock+format.
+    const exact = await db
+      .select()
+      .from(filmInventory)
+      .where(
+        and(
+          eq(filmInventory.userId, request.userId),
+          eq(filmInventory.filmStockId, existing.filmStockId),
+          eq(filmInventory.format, existing.format),
+          eq(filmInventory.form, existing.form),
+        ),
+      )
+      .limit(1);
+    let target = exact[0];
+    if (!target) {
+      const loose = await db
+        .select()
+        .from(filmInventory)
+        .where(
+          and(
+            eq(filmInventory.userId, request.userId),
+            eq(filmInventory.filmStockId, existing.filmStockId),
+            eq(filmInventory.format, existing.format),
+          ),
+        )
+        .limit(1);
+      target = loose[0];
+    }
+
+    if (target) {
+      if (target.form === "bulk_roll") {
+        const restored = Number(target.remainingLengthFt ?? 0) + BULK_CASSETTE_FT;
+        await db
+          .update(filmInventory)
+          .set({ remainingLengthFt: String(restored), updatedAt: new Date() })
+          .where(eq(filmInventory.id, target.id));
+      } else {
+        await db
+          .update(filmInventory)
+          .set({ quantity: target.quantity + 1, updatedAt: new Date() })
+          .where(eq(filmInventory.id, target.id));
+      }
+    } else {
+      fastify.log.warn(
+        { rollId: existing.id, filmStockId: existing.filmStockId },
+        "Undo load: no matching inventory item to credit; inventory will be off by 1.",
+      );
+    }
+
+    // Hard delete; FK cascade drops frames and roll-scoped notes.
+    await db.delete(rolls).where(eq(rolls.id, existing.id));
+
+    return reply.status(204).send();
+  });
+
   // ── Add note to a specific frame (by frame number) ───────────────────
   fastify.post<{ Params: { id: string; frameNumber: string } }>(
     "/:id/frames/:frameNumber/notes",

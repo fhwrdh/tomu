@@ -585,6 +585,35 @@ server.tool(
   }
 );
 
+// ── Tool: tomu_undo_load ──────────────────────────────────────────────
+
+server.tool(
+  "tomu_undo_load",
+  "Undo a load — use when a roll was loaded by mistake. Deletes the roll entirely and " +
+    "credits inventory back. Distinct from unload: this treats the load as if it never " +
+    "happened. Frames and notes on the roll are also deleted. Only works before unload.",
+  {
+    camera: z.string().optional().describe("Camera hint to pick which active roll to undo"),
+  },
+  async ({ camera }) => {
+    const { roll, error } = await pickActiveRoll(camera);
+    if (error || !roll) return { content: [{ type: "text" as const, text: error! }] };
+
+    await api(`/rolls/${roll.id}`, { method: "DELETE" });
+
+    const warn =
+      roll.framesShot > 0
+        ? ` **Deleted ${roll.framesShot} logged frame(s)** along with the roll.`
+        : "";
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Undid load of ${roll.manufacturer} ${roll.stockName} in ${roll.cameraMake} ${roll.cameraModel}. Inventory restored.${warn}`,
+      }],
+    };
+  }
+);
+
 // ── Tool: tomu_rolls ──────────────────────────────────────────────────
 
 server.tool(

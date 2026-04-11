@@ -145,6 +145,7 @@ export const rolls = {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
+  undoLoad: (id: string) => request<void>(`/rolls/${id}`, { method: "DELETE" }),
   addFrame: (id: string, body: CreateFrame) =>
     request<{ data: Frame }>(`/rolls/${id}/frames`, {
       method: "POST",
