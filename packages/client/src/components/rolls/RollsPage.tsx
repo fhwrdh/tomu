@@ -117,6 +117,12 @@ function RollCard({
           <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Badge variant="secondary">{FILM_FORMAT_LABELS[roll.format as keyof typeof FILM_FORMAT_LABELS] ?? roll.format}</Badge>
             <span>·</span>
+            <span>
+              {roll.isoShotAt != null && roll.isoShotAt !== roll.iso
+                ? <>box {roll.iso} · <span className="text-warning font-medium">rated {roll.isoShotAt}</span></>
+                : `ISO ${roll.iso}`}
+            </span>
+            <span>·</span>
             <span className="truncate">{cam}</span>
             <span>·</span>
             <span>{roll.framesShot}/{roll.frameCount}</span>
@@ -283,11 +289,12 @@ function LoadRollDialog({ open, onClose }: { open: boolean; onClose: () => void 
   const stocksQuery = useQuery({ queryKey: ["film-stocks"], queryFn: () => filmStocks.list() });
   const camerasQuery = useQuery({ queryKey: ["cameras"], queryFn: () => cameras.list() });
 
-  const [form, setForm] = useState({
-    filmStockId: "",
-    cameraId: "",
-    format: "35mm" as (typeof FILM_FORMATS)[number],
-  });
+  const [form, setForm] = useState<{
+    filmStockId: string;
+    cameraId: string;
+    format: (typeof FILM_FORMATS)[number];
+    ratedIso: string;
+  }>({ filmStockId: "", cameraId: "", format: "35mm", ratedIso: "" });
 
   const mutation = useMutation({
     mutationFn: (body: CreateRoll) => rolls.load(body),
@@ -295,12 +302,13 @@ function LoadRollDialog({ open, onClose }: { open: boolean; onClose: () => void 
       queryClient.invalidateQueries({ queryKey: ["rolls"] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       onClose();
-      setForm({ filmStockId: "", cameraId: "", format: "35mm" });
+      setForm({ filmStockId: "", cameraId: "", format: "35mm", ratedIso: "" });
     },
   });
 
   const stocks = stocksQuery.data?.data ?? [];
   const cams = camerasQuery.data?.data ?? [];
+  const selectedStock = stocks.find((s) => s.id === form.filmStockId);
 
   return (
     <Dialog open={open} onClose={onClose}>
@@ -328,15 +336,26 @@ function LoadRollDialog({ open, onClose }: { open: boolean; onClose: () => void 
             ))}
           </Select>
         </Field>
-        <Field label="Format" required>
-          <Select value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as typeof form.format })}>
-            {FILM_FORMATS.map((f) => (
-              <option key={f} value={f}>
-                {FILM_FORMAT_LABELS[f]}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Format" required>
+            <Select value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as typeof form.format })}>
+              {FILM_FORMATS.map((f) => (
+                <option key={f} value={f}>
+                  {FILM_FORMAT_LABELS[f]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={selectedStock ? `Rated ISO (box ${selectedStock.iso})` : "Rated ISO"}>
+            <Input
+              type="number"
+              placeholder={selectedStock ? String(selectedStock.iso) : "ISO"}
+              value={form.ratedIso}
+              onChange={(e) => setForm({ ...form, ratedIso: e.target.value })}
+              min={1}
+            />
+          </Field>
+        </div>
         {mutation.isError && (
           <div className="text-xs text-danger">{(mutation.error as Error).message}</div>
         )}
@@ -346,7 +365,15 @@ function LoadRollDialog({ open, onClose }: { open: boolean; onClose: () => void 
           Cancel
         </Button>
         <Button
-          onClick={() => mutation.mutate(form)}
+          onClick={() => {
+            const body: CreateRoll = {
+              filmStockId: form.filmStockId,
+              cameraId: form.cameraId,
+              format: form.format,
+            };
+            if (form.ratedIso) body.isoShotAt = Number(form.ratedIso);
+            mutation.mutate(body);
+          }}
           disabled={!form.filmStockId || !form.cameraId || mutation.isPending}
         >
           {mutation.isPending ? "Loading…" : "Load"}

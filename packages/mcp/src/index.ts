@@ -414,9 +414,10 @@ server.tool(
     format: z.string().optional().describe("Film format: '35mm' (default), '120', '4x5', '8x10'"),
     form: z.string().optional().describe("Override which form to use: 'factory_roll', 'bulk_roll', or 'sheet'"),
     frameCount: z.number().int().positive().optional().describe("Override default frame count (e.g. 24 for a short 35mm cassette)"),
+    ratedIso: z.number().int().positive().optional().describe("ISO to shoot at (defaults to stock's box ISO). Use for expired film or intentional push/pull rating."),
     note: z.string().optional().describe("Optional note to attach to the roll at load time"),
   },
-  async ({ film, camera, format, form, frameCount, note }) => {
+  async ({ film, camera, format, form, frameCount, ratedIso, note }) => {
     const fmt = format || "35mm";
 
     // Resolve stock
@@ -445,6 +446,7 @@ server.tool(
     };
     if (form) loadBody.form = form;
     if (frameCount != null) loadBody.frameCount = frameCount;
+    if (ratedIso != null) loadBody.isoShotAt = ratedIso;
 
     const loaded = await api<{ data: { id: string; format: string; form: string; frameCount: number; isoShotAt: number } }>("/rolls", {
       method: "POST",
@@ -459,10 +461,14 @@ server.tool(
       });
     }
 
+    const isoText =
+      loaded.data.isoShotAt !== stock.iso
+        ? `box ${stock.iso}, rated ${loaded.data.isoShotAt}`
+        : `ISO ${stock.iso}`;
     return {
       content: [{
         type: "text" as const,
-        text: `Loaded **${stock.manufacturer} ${stock.name}** (${loaded.data.format}, ${loaded.data.form.replace("_", " ")}, ISO ${loaded.data.isoShotAt}) into **${cam.make} ${cam.model}** — ${loaded.data.frameCount} frames.${note ? ` Note saved.` : ""}`,
+        text: `Loaded **${stock.manufacturer} ${stock.name}** (${loaded.data.format}, ${loaded.data.form.replace("_", " ")}, ${isoText}) into **${cam.make} ${cam.model}** — ${loaded.data.frameCount} frames.${note ? ` Note saved.` : ""}`,
       }],
     };
   }
