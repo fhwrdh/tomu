@@ -118,8 +118,8 @@ function RollCard({
             <Badge variant="secondary">{FILM_FORMAT_LABELS[roll.format as keyof typeof FILM_FORMAT_LABELS] ?? roll.format}</Badge>
             <span>·</span>
             <span>
-              {roll.isoShotAt != null && roll.isoShotAt !== roll.iso
-                ? <>box {roll.iso} · <span className="text-warning font-medium">rated {roll.isoShotAt}</span></>
+              {roll.ratedIso != null && roll.ratedIso !== roll.iso
+                ? <>box {roll.iso} · <span className="text-warning font-medium">rated {roll.ratedIso}</span></>
                 : `ISO ${roll.iso}`}
             </span>
             <span>·</span>
@@ -371,7 +371,7 @@ function LoadRollDialog({ open, onClose }: { open: boolean; onClose: () => void 
               cameraId: form.cameraId,
               format: form.format,
             };
-            if (form.ratedIso) body.isoShotAt = Number(form.ratedIso);
+            if (form.ratedIso) body.ratedIso = Number(form.ratedIso);
             mutation.mutate(body);
           }}
           disabled={!form.filmStockId || !form.cameraId || mutation.isPending}

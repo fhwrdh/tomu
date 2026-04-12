@@ -46,6 +46,7 @@ export const createFilmStockSchema = z.object({
   name: z.string().min(1).max(100),
   iso: z.number().int().positive(),
   type: z.enum(FILM_TYPES),
+  frameCount: z.number().int().positive().optional(),
   notes: z.string().max(2000).optional(),
 });
 
@@ -58,6 +59,8 @@ export const createFilmInventorySchema = z.object({
   format: z.enum(FILM_FORMATS),
   form: z.enum(INVENTORY_FORMS),
   quantity: z.number().int().min(0).optional(),
+  frameCount: z.number().int().positive().optional(),
+  ratedIso: z.number().int().positive().optional(),
   remainingLengthFt: z.number().positive().optional(),
   originalLengthFt: z.number().positive().optional(),
   expirationDate: z.string().optional(),
@@ -69,6 +72,8 @@ export const createFilmInventorySchema = z.object({
 
 export const updateFilmInventorySchema = z.object({
   quantity: z.number().int().min(0).optional(),
+  frameCount: z.number().int().positive().optional(),
+  ratedIso: z.number().int().positive().optional(),
   remainingLengthFt: z.number().min(0).optional(),
   expirationDate: z.string().optional(),
   storageLocation: z.enum(STORAGE_LOCATIONS).optional(),
@@ -85,7 +90,7 @@ export const createRollSchema = z.object({
   form: z.enum(INVENTORY_FORMS).optional(),
   cameraId: uuid.optional(),
   frameCount: z.number().int().positive().optional(),
-  isoShotAt: z.number().int().positive().optional(),
+  ratedIso: z.number().int().positive().optional(),
   pushPullStops: z.number().optional(),
   title: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
@@ -95,7 +100,7 @@ export const createRollSchema = z.object({
 export const updateRollSchema = z.object({
   cameraId: uuid.optional(),
   frameCount: z.number().int().positive().optional(),
-  isoShotAt: z.number().int().positive().optional(),
+  ratedIso: z.number().int().positive().optional(),
   pushPullStops: z.number().optional(),
   title: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),

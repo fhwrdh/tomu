@@ -446,9 +446,9 @@ server.tool(
     };
     if (form) loadBody.form = form;
     if (frameCount != null) loadBody.frameCount = frameCount;
-    if (ratedIso != null) loadBody.isoShotAt = ratedIso;
+    if (ratedIso != null) loadBody.ratedIso = ratedIso;
 
-    const loaded = await api<{ data: { id: string; format: string; form: string; frameCount: number; isoShotAt: number } }>("/rolls", {
+    const loaded = await api<{ data: { id: string; format: string; form: string; frameCount: number; ratedIso: number } }>("/rolls", {
       method: "POST",
       body: JSON.stringify(loadBody),
     });
@@ -462,8 +462,8 @@ server.tool(
     }
 
     const isoText =
-      loaded.data.isoShotAt !== stock.iso
-        ? `box ${stock.iso}, rated ${loaded.data.isoShotAt}`
+      loaded.data.ratedIso !== stock.iso
+        ? `box ${stock.iso}, rated ${loaded.data.ratedIso}`
         : `ISO ${stock.iso}`;
     return {
       content: [{

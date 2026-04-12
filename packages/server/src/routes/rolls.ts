@@ -116,7 +116,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         unloadedAt: rolls.unloadedAt,
         displayId: rolls.displayId,
         frameCount: rolls.frameCount,
-        isoShotAt: rolls.isoShotAt,
+        ratedIso: rolls.ratedIso,
         title: rolls.title,
         description: rolls.description,
         tags: rolls.tags,
@@ -168,7 +168,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         unloadedAt: rolls.unloadedAt,
         displayId: rolls.displayId,
         frameCount: rolls.frameCount,
-        isoShotAt: rolls.isoShotAt,
+        ratedIso: rolls.ratedIso,
         title: rolls.title,
         description: rolls.description,
         tags: rolls.tags,
@@ -268,9 +268,12 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         .where(eq(filmInventory.id, inv.id));
     }
 
-    // Resolve frameCount: explicit > camera default > format fallback.
+    // Resolve frameCount: explicit > inv override > stock default (factory/sheet only) > camera default > format fallback.
+    // Bulk-loaded rolls ignore stock.frameCount since you decide the count when spooling; inv.frameCount
+    // covers the pre-spooled-cassette case where specific cassettes have known frame counts.
     const fallback = body.format === "35mm" ? 36 : body.format === "120" ? 10 : 1;
-    const frameCount = body.frameCount ?? cameraDefault ?? fallback;
+    const stockDefault = inv.form !== "bulk_roll" ? stock.frameCount : null;
+    const frameCount = body.frameCount ?? inv.frameCount ?? stockDefault ?? cameraDefault ?? fallback;
 
     const [row] = await db
       .insert(rolls)
@@ -283,9 +286,10 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         status: "loaded",
         loadedAt: new Date(),
         frameCount,
-        isoShotAt: body.isoShotAt ?? stock.iso,
+        ratedIso: body.ratedIso ?? inv.ratedIso ?? stock.iso,
         pushPullStops: body.pushPullStops != null ? String(body.pushPullStops) : null,
-        title: body.title ?? null,
+        // Carry the inventory display ID (e.g. R001) over as the roll's title for traceability.
+        title: body.title ?? inv.displayId ?? null,
         description: body.description ?? null,
         tags: body.tags ?? [],
       })

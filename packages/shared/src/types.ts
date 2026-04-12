@@ -51,6 +51,8 @@ export interface FilmStock extends Timestamps {
   name: string;
   iso: number;
   type: FilmType;
+  /** Frame count when this stock is factory-loaded. Null for bulk-only stocks or when the format default is fine. */
+  frameCount?: number;
   notes?: string;
   isActive: boolean;
 }
@@ -63,6 +65,12 @@ export interface FilmInventoryItem extends Timestamps {
   form: InventoryForm;
   /** Number of rolls (factory_roll) or sheets (sheet) */
   quantity: number;
+  /** Per-item frame count override (for bulk-spooled cassettes of varying length). */
+  frameCount?: number;
+  /** Per-item rated ISO — target shooting speed. Carried to roll.ratedIso at load. */
+  ratedIso?: number;
+  /** Auto-assigned stable ID like "R001" for tracked singletons. Null for fungible batch items. Carried over to roll.title at load. */
+  displayId?: string;
   /** Remaining length in feet for bulk_roll */
   remainingLengthFt?: number;
   /** Original length in feet for bulk_roll */
@@ -93,7 +101,8 @@ export interface Roll extends Timestamps {
   unloadedAt?: string;
   /** Human-readable ID assigned at unload: YYYYMMDD.N (local date, N = Nth roll unloaded that day) */
   displayId?: string;
-  isoShotAt?: number;
+  /** Rated ISO — the speed the film is being shot at (prescription, not history). */
+  ratedIso?: number;
   pushPullStops?: number;
   frameCount: number;
   title?: string;
@@ -202,15 +211,15 @@ export type CreateLens = Pick<Lens, "make" | "model"> &
 export type UpdateLens = Partial<CreateLens & Pick<Lens, "isActive">>;
 
 export type CreateFilmStock = Pick<FilmStock, "manufacturer" | "name" | "iso" | "type"> &
-  Partial<Pick<FilmStock, "notes">>;
+  Partial<Pick<FilmStock, "frameCount" | "notes">>;
 
 export type UpdateFilmStock = Partial<CreateFilmStock & Pick<FilmStock, "isActive">>;
 
 export type CreateFilmInventoryItem = Pick<FilmInventoryItem, "filmStockId" | "format" | "form"> &
-  Partial<Pick<FilmInventoryItem, "quantity" | "remainingLengthFt" | "originalLengthFt" | "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "notes">>;
+  Partial<Pick<FilmInventoryItem, "quantity" | "frameCount" | "ratedIso" | "remainingLengthFt" | "originalLengthFt" | "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "notes">>;
 
 export type UpdateFilmInventoryItem = Partial<
-  Pick<FilmInventoryItem, "quantity" | "remainingLengthFt" | "expirationDate" | "storageLocation" | "costPerRoll" | "notes">
+  Pick<FilmInventoryItem, "quantity" | "frameCount" | "ratedIso" | "remainingLengthFt" | "expirationDate" | "storageLocation" | "costPerRoll" | "notes">
 >;
 
 /** Input for loading a roll into a camera. Server records loadedAt and decrements inventory. */
@@ -221,7 +230,7 @@ export type CreateRoll = Pick<Roll, "filmStockId" | "format"> &
       | "cameraId"
       | "form"
       | "frameCount"
-      | "isoShotAt"
+      | "ratedIso"
       | "pushPullStops"
       | "title"
       | "description"

@@ -73,6 +73,8 @@ export const filmStocks = pgTable("film_stocks", {
   name: text("name").notNull(),
   iso: integer("iso").notNull(),
   type: text("type").notNull(),
+  /** Frame count for factory-loaded rolls of this stock (e.g. 29 for NoColorStudio no.5). Null = use format default. */
+  frameCount: integer("frame_count"),
   notes: text("notes"),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps,
@@ -85,6 +87,12 @@ export const filmInventory = pgTable("film_inventory", {
   format: text("format").notNull(),
   form: text("form").notNull().default("factory_roll"),
   quantity: integer("quantity").notNull().default(0),
+  /** Per-item frame count override. Used for bulk-spooled cassettes of varying length. Null falls back to stock/camera/format. */
+  frameCount: integer("frame_count"),
+  /** Per-item rated ISO — the target speed for shooting (e.g. expired stock the user wants to down-rate). Null = use stock box ISO at load. */
+  ratedIso: integer("rated_iso"),
+  /** Auto-assigned stable ID like "R001" for physically-tracked singletons. Unique per user when set. Copied to roll.title at load. */
+  displayId: text("display_id"),
   remainingLengthFt: numeric("remaining_length_ft", { precision: 8, scale: 1 }),
   originalLengthFt: numeric("original_length_ft", { precision: 8, scale: 1 }),
   expirationDate: text("expiration_date"),
@@ -109,7 +117,7 @@ export const rolls = pgTable("rolls", {
   unloadedAt: timestamp("unloaded_at", { withTimezone: true }),
   /** Human-readable ID assigned at unload time, format: YYYYMMDD.N (local date, N = Nth roll unloaded that day). */
   displayId: text("display_id"),
-  isoShotAt: integer("iso_shot_at"),
+  ratedIso: integer("rated_iso"),
   pushPullStops: numeric("push_pull_stops", { precision: 3, scale: 1 }),
   frameCount: integer("frame_count").notNull().default(36),
   title: text("title"),
