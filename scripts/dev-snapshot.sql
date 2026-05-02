@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict llMEOhLBw8ZmFXE8WKTTXiykqOm2EqSYFeFdPNZp1Jb4lzNH3K5McXT8dRAc9vN
+\restrict iDgM2clfdu0Aq4BHhdUq2eFDovvTA11tEOcxNlOm8DJMOF0UhCbYXYWd8PjJNu4
 
 -- Dumped from database version 16.13 (Homebrew)
 -- Dumped by pg_dump version 16.13 (Homebrew)
@@ -23,6 +23,7 @@ ALTER TABLE IF EXISTS ONLY public.scans DROP CONSTRAINT IF EXISTS scans_frame_id
 ALTER TABLE IF EXISTS ONLY public.scanners DROP CONSTRAINT IF EXISTS scanners_user_id_users_id_fk;
 ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_user_id_users_id_fk;
 ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_film_stock_id_film_stocks_id_fk;
+ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_dev_session_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_camera_id_cameras_id_fk;
 ALTER TABLE IF EXISTS ONLY public.notes DROP CONSTRAINT IF EXISTS notes_user_id_users_id_fk;
 ALTER TABLE IF EXISTS ONLY public.notes DROP CONSTRAINT IF EXISTS notes_roll_id_rolls_id_fk;
@@ -33,7 +34,7 @@ ALTER TABLE IF EXISTS ONLY public.frames DROP CONSTRAINT IF EXISTS frames_lens_i
 ALTER TABLE IF EXISTS ONLY public.film_stocks DROP CONSTRAINT IF EXISTS film_stocks_user_id_users_id_fk;
 ALTER TABLE IF EXISTS ONLY public.film_inventory DROP CONSTRAINT IF EXISTS film_inventory_user_id_users_id_fk;
 ALTER TABLE IF EXISTS ONLY public.film_inventory DROP CONSTRAINT IF EXISTS film_inventory_film_stock_id_film_stocks_id_fk;
-ALTER TABLE IF EXISTS ONLY public.development_logs DROP CONSTRAINT IF EXISTS development_logs_roll_id_rolls_id_fk;
+ALTER TABLE IF EXISTS ONLY public.dev_sessions DROP CONSTRAINT IF EXISTS dev_sessions_user_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.cameras DROP CONSTRAINT IF EXISTS cameras_user_id_users_id_fk;
 ALTER TABLE IF EXISTS ONLY public.camera_lenses DROP CONSTRAINT IF EXISTS camera_lenses_lens_id_lenses_id_fk;
 ALTER TABLE IF EXISTS ONLY public.camera_lenses DROP CONSTRAINT IF EXISTS camera_lenses_camera_id_cameras_id_fk;
@@ -49,8 +50,7 @@ ALTER TABLE IF EXISTS ONLY public.frames DROP CONSTRAINT IF EXISTS frames_roll_i
 ALTER TABLE IF EXISTS ONLY public.frames DROP CONSTRAINT IF EXISTS frames_pkey;
 ALTER TABLE IF EXISTS ONLY public.film_stocks DROP CONSTRAINT IF EXISTS film_stocks_pkey;
 ALTER TABLE IF EXISTS ONLY public.film_inventory DROP CONSTRAINT IF EXISTS film_inventory_pkey;
-ALTER TABLE IF EXISTS ONLY public.development_logs DROP CONSTRAINT IF EXISTS development_logs_roll_id_unique;
-ALTER TABLE IF EXISTS ONLY public.development_logs DROP CONSTRAINT IF EXISTS development_logs_pkey;
+ALTER TABLE IF EXISTS ONLY public.dev_sessions DROP CONSTRAINT IF EXISTS dev_sessions_pkey;
 ALTER TABLE IF EXISTS ONLY public.cameras DROP CONSTRAINT IF EXISTS cameras_pkey;
 ALTER TABLE IF EXISTS ONLY public.camera_lenses DROP CONSTRAINT IF EXISTS camera_lenses_camera_id_lens_id_unique;
 DROP TABLE IF EXISTS public.users;
@@ -62,7 +62,7 @@ DROP TABLE IF EXISTS public.lenses;
 DROP TABLE IF EXISTS public.frames;
 DROP TABLE IF EXISTS public.film_stocks;
 DROP TABLE IF EXISTS public.film_inventory;
-DROP TABLE IF EXISTS public.development_logs;
+DROP TABLE IF EXISTS public.dev_sessions;
 DROP TABLE IF EXISTS public.cameras;
 DROP TABLE IF EXISTS public.camera_lenses;
 SET default_tablespace = '';
@@ -99,17 +99,20 @@ CREATE TABLE public.cameras (
 
 
 --
--- Name: development_logs; Type: TABLE; Schema: public; Owner: -
+-- Name: dev_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.development_logs (
+CREATE TABLE public.dev_sessions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    roll_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    display_id text,
     developer text NOT NULL,
     dilution text,
+    dilution_raw text,
     dev_time_seconds integer,
     temperature_c numeric(4,1),
     agitation text,
+    tank text,
     stop_bath text,
     fixer text,
     fixer_time_seconds integer,
@@ -117,6 +120,7 @@ CREATE TABLE public.development_logs (
     wetting_agent text,
     notes text,
     developed_at timestamp with time zone,
+    completed_at timestamp with time zone,
     results_rating integer,
     results_notes text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -262,7 +266,12 @@ CREATE TABLE public.rolls (
     format text DEFAULT '35mm'::text NOT NULL,
     form text DEFAULT 'factory_roll'::text NOT NULL,
     unloaded_at timestamp with time zone,
-    display_id text
+    display_id text,
+    dev_session_id uuid,
+    intended_developer text,
+    intended_dilution text,
+    intended_dilution_raw text,
+    intended_dev_time_seconds integer
 );
 
 
@@ -341,14 +350,18 @@ ecf85b27-a4e7-4233-b94e-06321e569c7f	d43eded1-69f1-427d-a695-70dbe56b69ef	Leica	
 10424cc8-84ad-492a-a8e1-1171d3bd6c80	d43eded1-69f1-427d-a695-70dbe56b69ef	Graflex	Crown Graphic 4x5	4x5	\N	\N	t	2026-04-11 15:41:57.267044-07	2026-04-11 15:41:57.267044-07	1
 40a57744-5a31-4dd3-b322-97f283f2dc64	d43eded1-69f1-427d-a695-70dbe56b69ef	Intrepid	4x5	4x5	\N	\N	t	2026-04-11 15:41:57.267044-07	2026-04-11 15:41:57.267044-07	1
 8e9e496e-283e-481a-8822-d19f64eef741	d43eded1-69f1-427d-a695-70dbe56b69ef	Nikon	F3	35mm	\N	\N	t	2026-04-11 15:41:57.267044-07	2026-04-11 15:41:57.267044-07	36
+b2993b04-6997-47f7-bd0c-29c25158a829	d43eded1-69f1-427d-a695-70dbe56b69ef	Olympus	XA	35mm	\N	\N	t	2026-05-02 14:48:46.640524-07	2026-05-02 14:48:46.640524-07	36
+9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	d43eded1-69f1-427d-a695-70dbe56b69ef	Olympus	Pen FT	35mm	\N	Half-frame, 72 exposures per 36-exp cassette.	t	2026-05-02 14:48:46.674688-07	2026-05-02 14:48:46.674688-07	72
+79861fa3-9cbf-4181-9562-99492f069e80	d43eded1-69f1-427d-a695-70dbe56b69ef	Nikon	Nikonos V	35mm	\N	Underwater 35mm rangefinder.	t	2026-05-02 15:37:33.930861-07	2026-05-02 15:37:33.930861-07	36
+38f2fbd8-5e3c-4f06-bf1b-09e407fc6f21	d43eded1-69f1-427d-a695-70dbe56b69ef	Pentax	67	120	\N	6×7 medium format SLR. 10 exposures per 120 roll.	t	2026-05-02 16:11:46.72879-07	2026-05-02 16:11:46.72879-07	10
 \.
 
 
 --
--- Data for Name: development_logs; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: dev_sessions; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.development_logs (id, roll_id, developer, dilution, dev_time_seconds, temperature_c, agitation, stop_bath, fixer, fixer_time_seconds, wash_method, wetting_agent, notes, developed_at, results_rating, results_notes, created_at, updated_at) FROM stdin;
+COPY public.dev_sessions (id, user_id, display_id, developer, dilution, dilution_raw, dev_time_seconds, temperature_c, agitation, tank, stop_bath, fixer, fixer_time_seconds, wash_method, wetting_agent, notes, developed_at, completed_at, results_rating, results_notes, created_at, updated_at) FROM stdin;
 \.
 
 
@@ -491,6 +504,11 @@ badc259c-4762-45b3-9017-cfeabffdd00d	d43eded1-69f1-427d-a695-70dbe56b69ef	Arista
 3b66f352-2912-4921-a189-300b8a6bc8cc	d43eded1-69f1-427d-a695-70dbe56b69ef	Fujifilm	Acros II 100	100	bw	\N	t	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07	36
 77625610-a311-4e12-a30d-499f0b853130	d43eded1-69f1-427d-a695-70dbe56b69ef	Shanghai	GP3 100	100	bw	\N	t	2026-05-01 21:40:32.574486-07	2026-05-01 21:40:32.574486-07	36
 81cf5142-c23e-4f7e-b7ff-3754e0f344ed	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	T-Max 400	400	bw	\N	t	2026-05-01 21:47:52.704463-07	2026-05-01 21:47:52.704463-07	36
+7b7f1a95-29d3-496f-b154-7bddfc8afcea	d43eded1-69f1-427d-a695-70dbe56b69ef	NoColorStudio	no.25 Gamma	25	bw	Panchromatic B&W. Medium-high contrast, very fine grain, high resolution. Originally for technical drawings. Narrow exposure latitude. 20 exposures/roll. Pushable ISO 6–80.	t	2026-05-02 14:31:09.943272-07	2026-05-02 14:31:44.555-07	20
+e61b27e1-58d6-4647-a738-476e7fe04445	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	T-Max P3200	3200	bw	High-speed B&W. Pushable to 12500, pullable to 800–1600.	t	2026-05-02 15:46:33.58309-07	2026-05-02 15:46:33.58309-07	\N
+7689c7e4-e975-4709-b48a-f6a6a7e149ce	d43eded1-69f1-427d-a695-70dbe56b69ef	Film Washi	F	100	bw	Hand-coated panchromatic B&W. Aerial-photography heritage.	t	2026-05-02 15:53:25.095261-07	2026-05-02 15:53:25.095261-07	\N
+a7059048-69e1-473b-8eff-85eff3e99560	d43eded1-69f1-427d-a695-70dbe56b69ef	Rollei	RPX 25	25	bw	Slow B&W. Fine grain, high resolution, high acutance.	t	2026-05-02 15:55:29.478445-07	2026-05-02 15:55:29.478445-07	\N
+80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	d43eded1-69f1-427d-a695-70dbe56b69ef	Foma	Fomapan 400	400	bw	Panchromatic B&W. Pushable.	t	2026-05-02 16:07:40.172545-07	2026-05-02 16:07:40.172545-07	\N
 \.
 
 
@@ -912,6 +930,59 @@ f76e1f39-3d7d-4638-9ebb-92d7af2d5290	d43eded1-69f1-427d-a695-70dbe56b69ef	Mamiya
 --
 
 COPY public.notes (id, user_id, roll_id, frame_id, type, content, file_key, file_url, thumbnail_url, duration_seconds, mime_type, file_size_bytes, latitude, longitude, created_at, updated_at) FROM stdin;
+f5050099-8e14-4117-8940-97ae3d27638b	d43eded1-69f1-427d-a695-70dbe56b69ef	75d7392f-160b-438f-a3ac-906279481685	\N	text	Bloedel Barn — f/32 1/20. Date approximate.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:12:44.526003-07	2026-05-02 14:12:44.526003-07
+e1489091-d7e5-431b-a8c5-1118727e7936	d43eded1-69f1-427d-a695-70dbe56b69ef	28a42f0f-4735-44c1-a64c-fb2e2fe8ac26	\N	text	Manor house (Bloedel) — f/11 1/25. Date approximate.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:12:44.561401-07	2026-05-02 14:12:44.561401-07
+a92af577-0826-416c-b213-4dc2a1b19796	d43eded1-69f1-427d-a695-70dbe56b69ef	a2225c3a-ae5d-4fd5-ae52-9c15015fc75c	\N	text	CR Gorge — f/16 1/30. Field ID 20250506.7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:19:47.795835-07	2026-05-02 14:19:47.795835-07
+f1282a5b-33cc-4c34-bda0-6ef43ff13bfb	d43eded1-69f1-427d-a695-70dbe56b69ef	57720c28-12ce-4e01-91ad-d648b6c8937a	\N	text	Bus (graffiti bus, eastern WA / ID border area). Field ID 20250506.8 (unmarked sheet, second in holder with the CR Gorge sheet).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:19:53.596721-07	2026-05-02 14:19:53.596721-07
+98c7399c-3b01-4424-b539-bf410bc8e0af	d43eded1-69f1-427d-a695-70dbe56b69ef	a8e03609-8617-44f7-85f7-ae4d74b02e82	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:38.825945-07	2026-05-02 14:29:38.825945-07
+8b174b75-9eb4-4ffd-84b8-96c601716caa	d43eded1-69f1-427d-a695-70dbe56b69ef	fcce6f89-0a70-4587-a3b6-ec7d297b8025	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:42.43863-07	2026-05-02 14:29:42.43863-07
+cd0cd151-a08e-432d-a57c-7cc50e23f2bf	d43eded1-69f1-427d-a695-70dbe56b69ef	25bcbe4b-8ec0-48a3-8f6b-274556c39650	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:46.185471-07	2026-05-02 14:29:46.185471-07
+ee9b68dc-39f0-40ad-8a34-f3007861b7bd	d43eded1-69f1-427d-a695-70dbe56b69ef	19845053-ae70-4283-a001-7bae89048432	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:49.621481-07	2026-05-02 14:29:49.621481-07
+a305665d-d7a7-485c-8788-9a2125e764e8	d43eded1-69f1-427d-a695-70dbe56b69ef	da9b566f-5686-47f3-8ea4-52c867980f2e	\N	text	Stickered "R" for Rodinal in fridge bag. Old roll.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:31:14.102022-07	2026-05-02 14:31:14.102022-07
+b112fa94-e5bd-4926-8257-bad964f21d79	d43eded1-69f1-427d-a695-70dbe56b69ef	3c3b1e42-84e1-4bc6-8277-a4c770e58ebd	\N	text	Mystery roll — no sticker, no date, no camera. Assumed box speed 400.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:33:03.629769-07	2026-05-02 14:33:03.629769-07
+0c3c6faf-87f5-49bf-827a-61cb43763cae	d43eded1-69f1-427d-a695-70dbe56b69ef	c4b36c60-ac0a-42a3-8410-905a0b4ed7ed	\N	text	Mystery roll — no sticker, no date, no camera. Assumed box speed 200.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:33:07.099768-07	2026-05-02 14:33:07.099768-07
+89540fde-2c46-4271-ba3a-59330a749f08	d43eded1-69f1-427d-a695-70dbe56b69ef	abfd9c68-931e-4dfb-b457-9c2674031c9a	\N	text	Cheyenne, WY. Banded with 20250501.01.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:01.949379-07	2026-05-02 14:38:01.949379-07
+60f7432d-84f2-4479-9feb-171f599fde87	d43eded1-69f1-427d-a695-70dbe56b69ef	b72945e9-f198-4d6d-bb34-59b51ff62e70	\N	text	Banded with 20250502.02.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:05.442242-07	2026-05-02 14:38:05.442242-07
+7e73d2e5-dd0e-4075-8215-f76a91eaf668	d43eded1-69f1-427d-a695-70dbe56b69ef	3a096e05-2791-4f92-93f6-2cc4987e8680	\N	text	Banded with 20250426.01.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:09.125858-07	2026-05-02 14:38:09.125858-07
+2fd69e14-1ae7-474a-8c34-6a8d30a846c5	d43eded1-69f1-427d-a695-70dbe56b69ef	50e58948-1b92-4d17-8b23-c953dabab882	\N	text	Rated at ISO 800 (pulled 2 stops from 3200). Banded with 20250426.03.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:13.294619-07	2026-05-02 14:38:13.294619-07
+3e07e9a1-17a9-4b74-a9ab-a20f06dba052	d43eded1-69f1-427d-a695-70dbe56b69ef	1d39b928-b43a-42f4-ad68-4408dc551127	\N	text	Dev shorthand from label: HC110 E10.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:48:55.747689-07	2026-05-02 14:48:55.747689-07
+6ccfcc30-8b7a-4c05-af61-ae9d5dd78fda	d43eded1-69f1-427d-a695-70dbe56b69ef	954a6c5d-0a00-4bcb-ae32-a79ee09227df	\N	text	Dev shorthand from label: HC110 E8. Bend → SLC, Colorado trip.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:49:01.896383-07	2026-05-02 14:49:01.896383-07
+eba42012-fa75-46f6-a21b-4e1e23152ffb	d43eded1-69f1-427d-a695-70dbe56b69ef	1c40b068-55af-48f1-af00-a5ccd9e46acb	\N	text	Physical label: xxxx.0503.01 (year unknown, May 3). Dev shorthand from label: HC110 E5.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:30:45.97166-07	2026-05-02 15:30:45.97166-07
+e1e094b2-fa8f-4806-9b0a-aa3e601579fa	d43eded1-69f1-427d-a695-70dbe56b69ef	d9d16c4c-7f8b-4335-9d3e-210210263df0	\N	text	Dev shorthand from label: HC110 E7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:31:54.201346-07	2026-05-02 15:31:54.201346-07
+69d1e7b6-d187-45cc-8380-d49c602153a5	d43eded1-69f1-427d-a695-70dbe56b69ef	33d7009b-257d-4f0a-aa5e-a79170ec309d	\N	text	Dev shorthand from bag: HC110 E7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:34:22.400955-07	2026-05-02 15:34:22.400955-07
+8151c4d9-387c-4710-a382-c657da8341c2	d43eded1-69f1-427d-a695-70dbe56b69ef	eecad1f2-7960-4fd3-b906-5db2f70b3072	\N	text	Dev shorthand from bag: HC110 E7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:34:25.916448-07	2026-05-02 15:34:25.916448-07
+20b2b223-dc0e-4898-83e0-76e4ff00ffb5	d43eded1-69f1-427d-a695-70dbe56b69ef	3d199f8f-1412-48c5-9c6a-3a73a3c2e4bb	\N	text	Dev shorthand from bag: HC110 E7. Rated at box 400.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:34:29.646681-07	2026-05-02 15:34:29.646681-07
+3d502385-88ee-4810-adb6-c93290055658	d43eded1-69f1-427d-a695-70dbe56b69ef	8f7bbbca-a9ea-4053-81c5-9d55aecb17fb	\N	text	Astoria, OR. Dev shorthand from bag: HC110 E7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:35:01.313303-07	2026-05-02 15:35:01.313303-07
+2650f1c8-b619-4261-8a59-c161ec382998	d43eded1-69f1-427d-a695-70dbe56b69ef	78aa8889-4c2f-4788-9e0b-129af33998c8	\N	text	Physical label: 2025xxxx.xx (date unknown within 2025). Camera uncertain (m6?). Rated 800 — Hector's recommendation, well above box 250. Dev shorthand from label: HC110 B12.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:36:18.52959-07	2026-05-02 15:36:18.52959-07
+0e088253-09b6-4e24-94bd-fc4b7d491380	d43eded1-69f1-427d-a695-70dbe56b69ef	42583cc3-b9c1-47ab-be00-918464eb54b2	\N	text	24-exposure short roll. Dev shorthand from label: HC110 B6.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:37:56.924788-07	2026-05-02 15:37:56.924788-07
+27c36701-301a-47e6-8aa0-25b94cf8b04f	d43eded1-69f1-427d-a695-70dbe56b69ef	e5bda611-34e2-410f-b470-18391d89f9eb	\N	text	Physical label: xxxx.0923.3 (year unknown, Sept 23). 24-exp short cassette. Yellow filter used. Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:41:18.163214-07	2026-05-02 15:41:18.163214-07
+aec673cd-8a3a-4416-bf41-f8684f3948fd	d43eded1-69f1-427d-a695-70dbe56b69ef	3bb9a6a3-242e-4bfd-be4d-2c79a1bdd3d2	\N	text	Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:41:49.707042-07	2026-05-02 15:41:49.707042-07
+cb16a255-711c-4fa2-9529-36a64a0ef1f7	d43eded1-69f1-427d-a695-70dbe56b69ef	37495718-7bb3-4403-b9a7-84b872c393b8	\N	text	Physical label: xxxx.0503.2 (year unknown, May 3, seq 2). No camera or other details on label. Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:42:15.916261-07	2026-05-02 15:42:15.916261-07
+770f76f9-aaab-4ed0-8018-a8af66a394a4	d43eded1-69f1-427d-a695-70dbe56b69ef	27ae8905-1407-4f79-b3e3-584833071ac0	\N	text	Physical label: xxxx.0727.1 (year unknown, Jul 27). Expired 1995 (~30+ years), rated at ISO 50 (down ~1.3 stops from box 125). Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:43:37.715881-07	2026-05-02 15:43:37.715881-07
+d088c481-25af-4760-abe2-8a43cfc16d22	d43eded1-69f1-427d-a695-70dbe56b69ef	0a0e69b5-1750-4cb8-bfb0-6e42b294856e	\N	text	24-exp short cassette. Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:44:23.84108-07	2026-05-02 15:44:23.84108-07
+d739c2ee-e18f-42a8-abcc-e7788eba0029	d43eded1-69f1-427d-a695-70dbe56b69ef	978b46fe-c138-4bed-bb76-c73253cc38e0	\N	text	Pulled 2 stops from box 3200. Dev shorthand from label: HC110 B8.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:46:39.46389-07	2026-05-02 15:46:39.46389-07
+48ddb925-7954-4efe-9d24-042dd2bb51b2	d43eded1-69f1-427d-a695-70dbe56b69ef	c2a84735-351b-46fd-b036-f997cff49b88	\N	text	Dev shorthand from label: HC110 B9.25.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:48:05.173397-07	2026-05-02 15:48:05.173397-07
+008a16e9-b3ab-4338-a26f-2687a7acb898	d43eded1-69f1-427d-a695-70dbe56b69ef	d5185e98-d5ca-4dc4-b529-bcf27eb89628	\N	text	Pushed 2 stops from box 400. Dev shorthand from label: HC110 B11.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:48:49.014258-07	2026-05-02 15:48:49.014258-07
+f241b04f-b8f5-4e0d-bb92-e46f39952fd4	d43eded1-69f1-427d-a695-70dbe56b69ef	30f94527-fba6-456d-a1d8-fd34b0184b0d	\N	text	Dev shorthand from label: HC110 B14.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:50:16.615203-07	2026-05-02 15:50:16.615203-07
+22a2be44-619e-4dbd-bdc4-c87074a71cbb	d43eded1-69f1-427d-a695-70dbe56b69ef	8b14fc65-7168-4173-81e6-a74b9a324a4b	\N	text	Physical label: xxxxxxxx.xx (date completely unknown). Camera uncertain (m6?). Dev shorthand from label: HC110 A4.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:53:29.895654-07	2026-05-02 15:53:29.895654-07
+eb470db5-15eb-4199-bac9-90f39c985b03	d43eded1-69f1-427d-a695-70dbe56b69ef	23cd91b1-497e-4289-b488-8166e4b4bc60	\N	text	Pushed ~1 stop from box 320. Dev shorthand from label: HC110 H14 (note: H = 1+63 dilution).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:54:15.762628-07	2026-05-02 15:54:15.762628-07
+5765bf36-4b73-406c-a648-3e8b6e26cbe6	d43eded1-69f1-427d-a695-70dbe56b69ef	5e451701-dc49-42ad-b9f3-0376f18a4ac9	\N	text	Dev shorthand from label: HC110 H8.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:55:33.240226-07	2026-05-02 15:55:33.240226-07
+86538f9b-c7af-4beb-96d0-6f95ae19e7ce	d43eded1-69f1-427d-a695-70dbe56b69ef	dd062fa4-6445-494c-80da-869b1f3eca7f	\N	text	SFO. Pushed 2 stops from box 400. Dev shorthand from label: HC110 A7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:56:28.454516-07	2026-05-02 15:56:28.454516-07
+396457d8-7044-42ed-bd65-7c908d357595	d43eded1-69f1-427d-a695-70dbe56b69ef	5bc2a5e6-80a8-48e0-94a5-6acae194fa5f	\N	text	Pushed 3 stops from box 400. Dev shorthand from bag: HC110 A9.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:59:26.659649-07	2026-05-02 15:59:26.659649-07
+9371a60a-a6e7-415b-b4af-5c904e58d249	d43eded1-69f1-427d-a695-70dbe56b69ef	812ebcaf-b866-4a17-a303-c803c46402b8	\N	text	Physical label: xxxx.0721.2 (year unknown, Jul 21 seq 2). Pushed 3 stops from box 400. Dev shorthand from bag: HC110 A9.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:59:31.260187-07	2026-05-02 15:59:31.260187-07
+572567e8-eeaa-4c8e-b646-dbaf62338cae	d43eded1-69f1-427d-a695-70dbe56b69ef	43fe1928-54ef-4789-a4af-2ddb78317cf1	\N	text	Pushed 3 stops from box 400. Dev shorthand from bag: HC110 A9.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:59:35.244641-07	2026-05-02 15:59:35.244641-07
+75df624a-0ae7-4da6-8733-67c94ce5d02e	d43eded1-69f1-427d-a695-70dbe56b69ef	5bc2a5e6-80a8-48e0-94a5-6acae194fa5f	\N	text	Plan: dev at HC110 A 13min (MDC Delta 400 @3200 time). Bag was labeled A9.5 but that is too short for Delta 400 @3200 per MDC.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:02:26.202033-07	2026-05-02 16:02:26.202033-07
+332f561a-2685-4022-82a4-862fa8a5108d	d43eded1-69f1-427d-a695-70dbe56b69ef	812ebcaf-b866-4a17-a303-c803c46402b8	\N	text	Plan: dev at HC110 A 13min (MDC Delta 400 @3200 time). Bag was labeled A9.5 but that is too short for Delta 400 @3200 per MDC.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:02:26.211387-07	2026-05-02 16:02:26.211387-07
+9e8a55be-2626-44e5-aa8d-4c5b7ec85b27	d43eded1-69f1-427d-a695-70dbe56b69ef	43fe1928-54ef-4789-a4af-2ddb78317cf1	\N	text	Plan: dev at HC110 A 13min (MDC Delta 400 @3200 time). Bag was labeled A9.5 but that is too short for Delta 400 @3200 per MDC.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:02:26.218158-07	2026-05-02 16:02:26.218158-07
+6f3bc12e-ac46-4cae-8065-0e8b2202e4ea	d43eded1-69f1-427d-a695-70dbe56b69ef	b482ed53-e950-40d2-b07b-6824d58f0d48	\N	text	No camera or other markings on label.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:14.792956-07	2026-05-02 16:07:14.792956-07
+688ef0c2-c617-46d4-97a4-1f9514d835ea	d43eded1-69f1-427d-a695-70dbe56b69ef	075f5008-6b26-476d-aec4-e145ea9ef5de	\N	text	Physical label: XXXX.1118.1 (year unknown, Nov 18, seq 1). No camera markings.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:19.184991-07	2026-05-02 16:07:19.184991-07
+b1545060-a1f6-4fd2-806c-e84e82d3e8d1	d43eded1-69f1-427d-a695-70dbe56b69ef	f2ddde28-88ba-479a-98ca-b930559aa1c9	\N	text	Physical label: xxxx.0226.1 (year unknown, Feb 26, seq 1). No camera markings.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:22.809384-07	2026-05-02 16:07:22.809384-07
+b2995006-927d-4c77-8ffe-fc007adc5321	d43eded1-69f1-427d-a695-70dbe56b69ef	e8a5e1fc-70af-4f41-913a-19a84d0b37eb	\N	text	From Thomas. Physical label: 20230916.THOMAS2 (no numeric seq).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:44.850754-07	2026-05-02 16:07:44.850754-07
+1e3eec47-5b2b-42e4-9f90-9037de8f5ef2	d43eded1-69f1-427d-a695-70dbe56b69ef	d117fe45-7e2a-4e21-a0b1-c4e6a21a7a5d	\N	text	Physical label: xxxx.1102.3 (year unknown, Nov 2, seq 3). No camera markings.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:08:41.989828-07	2026-05-02 16:08:41.989828-07
+0239f50a-7142-4ee2-b160-711c6907a669	d43eded1-69f1-427d-a695-70dbe56b69ef	020c63b2-1c96-49a6-9f9f-925029eaca2e	\N	text	Ferry. "Fat rolled" / "Unrolled at?" — physical wind irregular. Dev shorthand from old sheet: HC110 F9.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:10:10.755638-07	2026-05-02 16:10:10.755638-07
+c6128ea9-043d-400e-9430-4b8475e1f4f7	d43eded1-69f1-427d-a695-70dbe56b69ef	94dd2e01-81a5-4ec1-a11f-db6cb1e3be3a	\N	text	C&C/FoF/B&C. Dev shorthand from old sheet: Rodinal 1:100 / 60 min (stand).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:10:39.837313-07	2026-05-02 16:10:39.837313-07
+50875bca-7db3-4acb-b308-f0ce91f7a3d2	d43eded1-69f1-427d-a695-70dbe56b69ef	b1467792-f5e2-4e99-bdac-fa4f777404ad	\N	text	Ferry. Dev shorthand from old sheet: HC110 B5.75.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:11:12.681115-07	2026-05-02 16:11:12.681115-07
+8006a364-db51-47a2-8a54-ea304333bb10	d43eded1-69f1-427d-a695-70dbe56b69ef	9270dbe9-bc20-4f48-b8db-4cfee2a63521	\N	text	From Thomas. Physical label: 20230916.THOMAS1 (no numeric seq). Dev shorthand from old sheet: HC110 B5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:12:15.007146-07	2026-05-02 16:12:15.007146-07
 \.
 
 
@@ -919,41 +990,93 @@ COPY public.notes (id, user_id, roll_id, frame_id, type, content, file_key, file
 -- Data for Name: rolls; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.rolls (id, user_id, camera_id, film_stock_id, status, loaded_at, rated_iso, push_pull_stops, frame_count, title, description, tags, created_at, updated_at, format, form, unloaded_at, display_id) FROM stdin;
-5341c4e9-6e96-4f54-820e-f140c2f2b343	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	unloaded	2026-04-16 10:25:00-07	50	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07	35mm	factory_roll	2026-04-16 10:28:00-07	20260416.02
-5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	unloaded	2026-04-20 09:00:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	2026-04-20 11:09:00-07	20260420.02
-7726accb-e76d-40a5-a785-08d1334d40dc	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	unloaded	2026-04-20 09:00:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	2026-04-20 11:09:00-07	20260420.03
-1cc2fad1-060f-487c-9886-4f83bb82e07a	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-20 11:09:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	\N	\N
-399a2c05-8c32-477c-8b7c-64b2eb6e27bf	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	3b66f352-2912-4921-a189-300b8a6bc8cc	unloaded	2026-04-15 09:46:00-07	100	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 21:02:03.646349-07	35mm	factory_roll	2026-04-16 10:25:00-07	20260416.01
-5ca74b64-05a1-45a7-b243-dc297e4a22d9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	42f44ce0-b4a1-45f4-835d-7845d983bb2b	unloaded	\N	3200	\N	36	\N	found exposed; camera/load/unload dates unknown — develop blind	{}	2026-05-01 21:13:37.65157-07	2026-05-01 21:13:37.65157-07	35mm	factory_roll	\N	20260501.05
-b51caa5b-f511-4594-bef6-3dc01d5d8778	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-04-12 19:16:54.149-07	100	\N	1	\N	\N	{}	2026-04-12 19:16:54.149393-07	2026-04-12 19:16:54.149393-07	4x5	sheet	\N	\N
-0aac1606-5a2d-4347-8e04-5820ffcf4986	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-04-12 19:16:54.168-07	100	\N	1	\N	\N	{}	2026-04-12 19:16:54.168696-07	2026-04-12 19:16:54.168696-07	4x5	sheet	\N	\N
-c3f00efa-4224-4776-8be7-96f220497e39	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-12 19:16:54.188-07	400	\N	1	\N	\N	{}	2026-04-12 19:16:54.188955-07	2026-04-12 19:16:54.188955-07	4x5	sheet	\N	\N
-40416e6b-f769-4b38-8976-1db2856db869	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-12 19:16:54.21-07	400	\N	1	\N	\N	{}	2026-04-12 19:16:54.210708-07	2026-04-12 19:16:54.210708-07	4x5	sheet	\N	\N
-4cfe53b2-cfbc-4dfa-a458-ac99b09dd3e6	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N
-379caf8e-32bd-418c-8035-5c47fc292fc4	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N
-88ee7100-bed6-45b4-bffa-7c5b133d04f5	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N
-70292ad2-1a0c-4d23-864e-db4f5788ef3b	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N
-d9a2f1b2-7012-4928-a279-e1156cf3c1e9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N
-b20f7bb4-7531-4a50-abfc-0155f7232f0d	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N
-05038e1b-9aa2-4a83-96e2-657fb318654a	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N
-f49bef4e-800f-44f8-87c4-bb0873e71a30	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	badc259c-4762-45b3-9017-cfeabffdd00d	unloaded	2026-03-28 14:32:00-07	400	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 21:18:04.381586-07	35mm	factory_roll	2026-04-15 09:46:00-07	20260415.01
-d228c9da-af9e-4260-9046-1e850955d026	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	loaded	2026-05-01 20:31:06.312896-07	5	\N	29	\N	\N	{}	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07	35mm	factory_roll	\N	\N
-167302f3-f2ff-4a66-b015-ae2c4f39a0d7	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	unloaded	2026-04-12 19:11:15.148-07	100	\N	1	\N	\N	{}	2026-04-12 19:11:15.148541-07	2026-04-12 19:11:15.186-07	4x5	sheet	2026-04-12 19:11:15.186-07	20260412.01
-f3c1eee9-8a7a-485f-9413-c7c170c7b278	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	unloaded	2026-04-12 19:11:15.207-07	100	\N	1	\N	\N	{}	2026-04-12 19:11:15.207969-07	2026-04-12 19:11:15.247-07	4x5	sheet	2026-04-12 19:11:15.247-07	20260412.02
-9a48fe91-34a3-4d71-bf3b-638aad97f3dd	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	unloaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.01
-a69124fc-0b51-46c8-a9e5-a3f12dcd42cf	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	unloaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.02
-f0f11095-d728-4b74-b051-f31cd5aecd20	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	unloaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.03
-4ee18a92-4938-4ee2-b177-5452946c3ac9	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	unloaded	2026-04-20 12:00:00-07	80	\N	36	\N	\N	{}	2026-05-01 20:28:59.936075-07	2026-05-01 20:28:59.936075-07	35mm	factory_roll	2026-05-01 12:47:00-07	20260501.04
-da250e1e-fb73-4263-b6d2-25ed81106fb0	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	f228f76e-d873-4eb5-8bac-cbe79fa0d422	unloaded	2026-04-19 18:09:00-07	100	\N	36	\N	\N	{}	2026-05-01 20:40:37.523105-07	2026-05-01 20:41:34.712355-07	35mm	factory_roll	2026-04-20 13:19:00-07	20260420.01
-7099e680-3cdf-4da0-b790-f6630c94b851	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	unloaded	\N	5	\N	29	\N	load date unknown	{}	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07	35mm	factory_roll	2026-04-19 18:03:00-07	20260419.01
-d84546ed-9e9d-44fa-b7d8-0188940af80b	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	unloaded	2026-03-28 09:00:00-07	5	\N	29	\N	\N	{}	2026-05-01 21:22:13.162861-07	2026-05-01 21:28:46.454428-07	35mm	factory_roll	2026-03-28 13:35:00-07	20260328.01
-6a5f6e24-d68a-47ef-98f0-00f017de7435	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	unloaded	2026-03-28 09:00:00-07	400	1.0	36	\N	physical mapping uncertain — two Kentmere Pan 200 cassettes recovered; subjects/identity cross-check vs 20260501.06 at dev time	{}	2026-05-01 21:24:31.261199-07	2026-05-01 21:28:46.454428-07	35mm	factory_roll	2026-03-28 13:34:00-07	20260328.02
-56751a94-2af4-40c5-838d-8c7b9988a551	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	unloaded	\N	400	1.0	36	\N	second Kentmere Pan 200 cassette of unknown origin — possibly swappable with 20260328.02; will develop as if shot at 400 (+1 push)	{}	2026-05-01 21:28:46.454428-07	2026-05-01 21:29:38.402967-07	35mm	factory_roll	\N	20260501.06
-7f960c4b-3a9c-4f54-8682-612ee1962284	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	3b66f352-2912-4921-a189-300b8a6bc8cc	unloaded	\N	100	\N	36	\N	found exposed, pre-trip; camera/load/unload dates unknown	{}	2026-05-01 21:39:13.184191-07	2026-05-01 21:39:13.184191-07	35mm	factory_roll	\N	20260501.07
-303b7e9d-442d-454b-b7b4-4b3bbf92e889	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	aee798ee-c90b-43dd-a85a-57b795d33dfd	unloaded	\N	400	\N	36	\N	load date unknown	{}	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07	35mm	factory_roll	2026-02-21 16:23:00-08	20260221.01
-8bee5acb-65c4-4306-85b8-b5a519709741	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	unloaded	\N	400	\N	36	\N	lens and subject uncertain	{}	2026-05-01 21:47:52.704463-07	2026-05-01 21:51:55.712688-07	35mm	factory_roll	2026-02-15 11:49:00-08	20260215.01
-c8803073-6f93-4c42-ac5d-d87268742ed6	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	a30739bc-efc7-479f-a250-1f093df8f73b	unloaded	2026-02-22 14:23:00-08	400	\N	36	\N	Portland trip; 2026-02-22 14:23 snap could be load or unload — exact timing unclear; tag aligned with HP5 (.01)	{}	2026-05-01 21:46:48.961918-07	2026-05-01 21:53:25.890364-07	35mm	factory_roll	\N	20260221.02
+COPY public.rolls (id, user_id, camera_id, film_stock_id, status, loaded_at, rated_iso, push_pull_stops, frame_count, title, description, tags, created_at, updated_at, format, form, unloaded_at, display_id, dev_session_id, intended_developer, intended_dilution, intended_dilution_raw, intended_dev_time_seconds) FROM stdin;
+1cc2fad1-060f-487c-9886-4f83bb82e07a	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-20 11:09:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N
+b51caa5b-f511-4594-bef6-3dc01d5d8778	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-04-12 19:16:54.149-07	100	\N	1	\N	\N	{}	2026-04-12 19:16:54.149393-07	2026-04-12 19:16:54.149393-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+0aac1606-5a2d-4347-8e04-5820ffcf4986	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-04-12 19:16:54.168-07	100	\N	1	\N	\N	{}	2026-04-12 19:16:54.168696-07	2026-04-12 19:16:54.168696-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+c3f00efa-4224-4776-8be7-96f220497e39	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-12 19:16:54.188-07	400	\N	1	\N	\N	{}	2026-04-12 19:16:54.188955-07	2026-04-12 19:16:54.188955-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+40416e6b-f769-4b38-8976-1db2856db869	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-12 19:16:54.21-07	400	\N	1	\N	\N	{}	2026-04-12 19:16:54.210708-07	2026-04-12 19:16:54.210708-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+4cfe53b2-cfbc-4dfa-a458-ac99b09dd3e6	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+379caf8e-32bd-418c-8035-5c47fc292fc4	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+88ee7100-bed6-45b4-bffa-7c5b133d04f5	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+70292ad2-1a0c-4d23-864e-db4f5788ef3b	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+d9a2f1b2-7012-4928-a279-e1156cf3c1e9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+b20f7bb4-7531-4a50-abfc-0155f7232f0d	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+05038e1b-9aa2-4a83-96e2-657fb318654a	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N
+d228c9da-af9e-4260-9046-1e850955d026	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	loaded	2026-05-01 20:31:06.312896-07	5	\N	29	\N	\N	{}	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07	35mm	factory_roll	\N	\N	\N	\N	\N	\N	\N
+167302f3-f2ff-4a66-b015-ae2c4f39a0d7	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	shot	2026-04-12 19:11:15.148-07	100	\N	1	\N	\N	{}	2026-04-12 19:11:15.148541-07	2026-05-02 10:36:36.917533-07	4x5	sheet	2026-04-12 19:11:15.186-07	20260412.01	\N	\N	\N	\N	\N
+f3c1eee9-8a7a-485f-9413-c7c170c7b278	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	shot	2026-04-12 19:11:15.207-07	100	\N	1	\N	\N	{}	2026-04-12 19:11:15.207969-07	2026-05-02 10:36:36.917533-07	4x5	sheet	2026-04-12 19:11:15.247-07	20260412.02	\N	\N	\N	\N	\N
+5341c4e9-6e96-4f54-820e-f140c2f2b343	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	shot	2026-04-16 10:25:00-07	50	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07	35mm	factory_roll	2026-04-16 10:28:00-07	20260416.02	\N	\N	\N	\N	\N
+5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	2026-04-20 09:00:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	2026-04-20 11:09:00-07	20260420.02	\N	\N	\N	\N	\N
+7726accb-e76d-40a5-a785-08d1334d40dc	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	2026-04-20 09:00:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	2026-04-20 11:09:00-07	20260420.03	\N	\N	\N	\N	\N
+399a2c05-8c32-477c-8b7c-64b2eb6e27bf	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	2026-04-15 09:46:00-07	100	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 21:02:03.646349-07	35mm	factory_roll	2026-04-16 10:25:00-07	20260416.01	\N	\N	\N	\N	\N
+5ca74b64-05a1-45a7-b243-dc297e4a22d9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	42f44ce0-b4a1-45f4-835d-7845d983bb2b	shot	\N	3200	\N	36	\N	found exposed; camera/load/unload dates unknown — develop blind	{}	2026-05-01 21:13:37.65157-07	2026-05-01 21:13:37.65157-07	35mm	factory_roll	\N	20260501.05	\N	\N	\N	\N	\N
+f49bef4e-800f-44f8-87c4-bb0873e71a30	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	badc259c-4762-45b3-9017-cfeabffdd00d	shot	2026-03-28 14:32:00-07	400	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 21:18:04.381586-07	35mm	factory_roll	2026-04-15 09:46:00-07	20260415.01	\N	\N	\N	\N	\N
+9a48fe91-34a3-4d71-bf3b-638aad97f3dd	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	shot	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.01	\N	\N	\N	\N	\N
+da9b566f-5686-47f3-8ea4-52c867980f2e	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	7b7f1a95-29d3-496f-b154-7bddfc8afcea	shot	\N	25	\N	20	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:31:14.100415-07	2026-05-02 14:31:44.598258-07	35mm	factory_roll	2023-09-16 05:00:00-07	20230916.02	\N	\N	\N	\N	\N
+a69124fc-0b51-46c8-a9e5-a3f12dcd42cf	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	shot	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.02	\N	\N	\N	\N	\N
+f0f11095-d728-4b74-b051-f31cd5aecd20	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	shot	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.03	\N	\N	\N	\N	\N
+4ee18a92-4938-4ee2-b177-5452946c3ac9	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	shot	2026-04-20 12:00:00-07	80	\N	36	\N	\N	{}	2026-05-01 20:28:59.936075-07	2026-05-01 20:28:59.936075-07	35mm	factory_roll	2026-05-01 12:47:00-07	20260501.04	\N	\N	\N	\N	\N
+da250e1e-fb73-4263-b6d2-25ed81106fb0	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	f228f76e-d873-4eb5-8bac-cbe79fa0d422	shot	2026-04-19 18:09:00-07	100	\N	36	\N	\N	{}	2026-05-01 20:40:37.523105-07	2026-05-01 20:41:34.712355-07	35mm	factory_roll	2026-04-20 13:19:00-07	20260420.01	\N	\N	\N	\N	\N
+7099e680-3cdf-4da0-b790-f6630c94b851	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	shot	\N	5	\N	29	\N	load date unknown	{}	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07	35mm	factory_roll	2026-04-19 18:03:00-07	20260419.01	\N	\N	\N	\N	\N
+d84546ed-9e9d-44fa-b7d8-0188940af80b	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	shot	2026-03-28 09:00:00-07	5	\N	29	\N	\N	{}	2026-05-01 21:22:13.162861-07	2026-05-01 21:28:46.454428-07	35mm	factory_roll	2026-03-28 13:35:00-07	20260328.01	\N	\N	\N	\N	\N
+6a5f6e24-d68a-47ef-98f0-00f017de7435	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	shot	2026-03-28 09:00:00-07	400	1.0	36	\N	physical mapping uncertain — two Kentmere Pan 200 cassettes recovered; subjects/identity cross-check vs 20260501.06 at dev time	{}	2026-05-01 21:24:31.261199-07	2026-05-01 21:28:46.454428-07	35mm	factory_roll	2026-03-28 13:34:00-07	20260328.02	\N	\N	\N	\N	\N
+56751a94-2af4-40c5-838d-8c7b9988a551	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	shot	\N	400	1.0	36	\N	second Kentmere Pan 200 cassette of unknown origin — possibly swappable with 20260328.02; will develop as if shot at 400 (+1 push)	{}	2026-05-01 21:28:46.454428-07	2026-05-01 21:29:38.402967-07	35mm	factory_roll	\N	20260501.06	\N	\N	\N	\N	\N
+7f960c4b-3a9c-4f54-8682-612ee1962284	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	\N	100	\N	36	\N	found exposed, pre-trip; camera/load/unload dates unknown	{}	2026-05-01 21:39:13.184191-07	2026-05-01 21:39:13.184191-07	35mm	factory_roll	\N	20260501.07	\N	\N	\N	\N	\N
+303b7e9d-442d-454b-b7b4-4b3bbf92e889	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	36	\N	load date unknown	{}	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07	35mm	factory_roll	2026-02-21 16:23:00-08	20260221.01	\N	\N	\N	\N	\N
+8bee5acb-65c4-4306-85b8-b5a519709741	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	shot	\N	400	\N	36	\N	lens and subject uncertain	{}	2026-05-01 21:47:52.704463-07	2026-05-01 21:51:55.712688-07	35mm	factory_roll	2026-02-15 11:49:00-08	20260215.01	\N	\N	\N	\N	\N
+c8803073-6f93-4c42-ac5d-d87268742ed6	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	a30739bc-efc7-479f-a250-1f093df8f73b	shot	2026-02-22 14:23:00-08	400	\N	36	\N	Portland trip; 2026-02-22 14:23 snap could be load or unload — exact timing unclear; tag aligned with HP5 (.01)	{}	2026-05-01 21:46:48.961918-07	2026-05-01 21:53:25.890364-07	35mm	factory_roll	\N	20260221.02	\N	\N	\N	\N	\N
+75d7392f-160b-438f-a3ac-906279481685	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	shot	\N	100	\N	1	\N	\N	{fridge-backlog,bloedel}	2026-05-02 14:12:44.525026-07	2026-05-02 14:12:44.525026-07	4x5	sheet	2025-06-07 05:00:00-07	20250607.01	\N	\N	\N	\N	\N
+28a42f0f-4735-44c1-a64c-fb2e2fe8ac26	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	shot	\N	100	\N	1	\N	\N	{fridge-backlog,bloedel}	2026-05-02 14:12:44.560876-07	2026-05-02 14:12:44.560876-07	4x5	sheet	2025-06-07 05:00:00-07	20250607.02	\N	\N	\N	\N	\N
+a8e03609-8617-44f7-85f7-ae4d74b02e82	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	shot	\N	5	\N	29	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:38.823349-07	2026-05-02 14:29:38.823349-07	35mm	factory_roll	2025-06-14 05:00:00-07	20250614.05	\N	\N	\N	\N	\N
+fcce6f89-0a70-4587-a3b6-ec7d297b8025	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	shot	\N	5	\N	29	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:42.437734-07	2026-05-02 14:29:42.437734-07	35mm	factory_roll	2025-05-10 05:00:00-07	20250510.01	\N	\N	\N	\N	\N
+25bcbe4b-8ec0-48a3-8f6b-274556c39650	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	shot	\N	50	\N	36	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:46.184406-07	2026-05-02 14:29:46.184406-07	35mm	factory_roll	2024-09-23 05:00:00-07	20240923.02	\N	\N	\N	\N	\N
+19845053-ae70-4283-a001-7bae89048432	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	shot	\N	50	\N	36	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:49.620329-07	2026-05-02 14:29:49.620329-07	35mm	factory_roll	2024-06-29 05:00:00-07	20240629.01	\N	\N	\N	\N	\N
+3c3b1e42-84e1-4bc6-8277-a4c770e58ebd	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	36	\N	\N	{fridge-backlog,mystery}	2026-05-02 14:33:03.627292-07	2026-05-02 14:33:03.627292-07	35mm	factory_roll	\N	\N	\N	\N	\N	\N	\N
+c4b36c60-ac0a-42a3-8410-905a0b4ed7ed	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	shot	\N	200	\N	36	\N	\N	{fridge-backlog,mystery}	2026-05-02 14:33:07.098733-07	2026-05-02 14:33:07.098733-07	35mm	factory_roll	\N	\N	\N	\N	\N	\N	\N
+3a096e05-2791-4f92-93f6-2cc4987e8680	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	10	\N	Freeway Park, Seattle	{fridge-backlog,freeway-park,seattle}	2026-05-02 14:38:09.12429-07	2026-05-02 14:39:49.249-07	120	factory_roll	2025-04-26 05:00:00-07	20250426.03	\N	\N	\N	\N	\N
+50e58948-1b92-4d17-8b23-c953dabab882	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	42f44ce0-b4a1-45f4-835d-7845d983bb2b	shot	\N	800	\N	10	\N	Freeway Park, Seattle	{fridge-backlog,freeway-park,seattle}	2026-05-02 14:38:13.286166-07	2026-05-02 14:39:49.212-07	120	factory_roll	2025-04-26 05:00:00-07	20250426.01	\N	\N	\N	\N	\N
+a2225c3a-ae5d-4fd5-ae52-9c15015fc75c	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	1	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:19:47.792811-07	2026-05-02 14:41:13.278272-07	4x5	sheet	2025-05-06 05:00:00-07	20250506.07	\N	\N	\N	\N	\N
+57720c28-12ce-4e01-91ad-d648b6c8937a	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	1	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:19:53.595592-07	2026-05-02 14:41:13.278272-07	4x5	sheet	2025-05-06 05:00:00-07	20250506.08	\N	\N	\N	\N	\N
+abfd9c68-931e-4dfb-b457-9c2674031c9a	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	f228f76e-d873-4eb5-8bac-cbe79fa0d422	shot	\N	100	\N	10	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:38:01.946368-07	2026-05-02 14:41:13.278272-07	120	factory_roll	2025-05-02 05:00:00-07	20250502.02	\N	\N	\N	\N	\N
+b72945e9-f198-4d6d-bb34-59b51ff62e70	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	b28883e1-0938-4b04-b060-545bc4d21f66	shot	\N	100	\N	10	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:38:05.439834-07	2026-05-02 14:41:13.278272-07	120	factory_roll	2025-05-01 05:00:00-07	20250501.01	\N	\N	\N	\N	\N
+33d7009b-257d-4f0a-aa5e-a79170ec309d	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag}	2026-05-02 15:34:22.399657-07	2026-05-02 16:23:21.515568-07	35mm	factory_roll	2024-08-01 05:00:00-07	20240801.02	\N	HC-110	E	E7	420
+954a6c5d-0a00-4bcb-ae32-a79ee09227df	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	9ab33c20-cbbe-4613-9904-d61ee9d1718a	shot	\N	400	\N	72	\N	\N	{fridge-backlog,hc110-prepicked,colorado-2025}	2026-05-02 14:49:01.895403-07	2026-05-02 16:23:21.514565-07	35mm	factory_roll	2025-04-28 05:00:00-07	20250428.01	\N	HC-110	E	E8	480
+1c40b068-55af-48f1-af00-a5ccd9e46acb	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	shot	\N	50	\N	72	\N	\N	{fridge-backlog,hc110-prepicked,unknown-year}	2026-05-02 15:30:45.966519-07	2026-05-02 16:23:21.515023-07	35mm	factory_roll	\N	\N	\N	HC-110	E	E5.5	330
+d9d16c4c-7f8b-4335-9d3e-210210263df0	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	shot	\N	200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:31:27.702138-07	2026-05-02 16:23:21.515355-07	35mm	factory_roll	2025-06-14 05:00:00-07	20250614.03	\N	HC-110	E	E7.5	450
+eecad1f2-7960-4fd3-b906-5db2f70b3072	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag}	2026-05-02 15:34:25.915581-07	2026-05-02 16:23:21.515741-07	35mm	factory_roll	2024-06-22 05:00:00-07	20240622.01	\N	HC-110	E	E7	420
+27ae8905-1407-4f79-b3e3-584833071ac0	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	shot	\N	50	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag,unknown-year,expired}	2026-05-02 15:43:37.713289-07	2026-05-02 16:23:21.518326-07	35mm	factory_roll	\N	\N	\N	HC-110	B	B7.5	450
+b482ed53-e950-40d2-b07b-6824d58f0d48	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	03ee0cb0-6259-4872-b69a-94ab31532599	shot	\N	100	\N	10	\N	\N	{fridge-backlog}	2026-05-02 16:07:14.789305-07	2026-05-02 16:07:14.789305-07	120	factory_roll	2023-05-29 05:00:00-07	20230529.03	\N	\N	\N	\N	\N
+075f5008-6b26-476d-aec4-e145ea9ef5de	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	10	\N	\N	{fridge-backlog,unknown-year}	2026-05-02 16:07:19.183845-07	2026-05-02 16:07:19.183845-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N
+f2ddde28-88ba-479a-98ca-b930559aa1c9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	400	\N	10	\N	\N	{fridge-backlog,unknown-year}	2026-05-02 16:07:22.808502-07	2026-05-02 16:07:22.808502-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N
+e8a5e1fc-70af-4f41-913a-19a84d0b37eb	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	shot	\N	400	\N	10	\N	\N	{fridge-backlog,thomas}	2026-05-02 16:07:44.848584-07	2026-05-02 16:07:44.848584-07	120	factory_roll	2023-09-16 05:00:00-07	20230916.03	\N	\N	\N	\N	\N
+2e179519-8735-47b7-b9bf-ee786c94fff7	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	b28883e1-0938-4b04-b060-545bc4d21f66	shot	\N	100	\N	10	\N	\N	{fridge-backlog}	2026-05-02 16:08:16.173719-07	2026-05-02 16:08:16.173719-07	120	factory_roll	2024-01-14 04:00:00-08	20240114.01	\N	\N	\N	\N	\N
+d117fe45-7e2a-4e21-a0b1-c4e6a21a7a5d	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	f228f76e-d873-4eb5-8bac-cbe79fa0d422	shot	\N	100	\N	10	\N	\N	{fridge-backlog,unknown-year}	2026-05-02 16:08:41.987934-07	2026-05-02 16:08:41.987934-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N
+7a6922de-4792-4f41-8eec-b2af21d1dad0	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	400	\N	10	\N	\N	{fridge-backlog}	2026-05-02 16:09:06.852253-07	2026-05-02 16:09:06.852253-07	120	factory_roll	2023-11-11 04:00:00-08	20231111.02	\N	\N	\N	\N	\N
+94dd2e01-81a5-4ec1-a11f-db6cb1e3be3a	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	10	\N	\N	{fridge-backlog,rodinal-stand}	2026-05-02 16:10:39.834981-07	2026-05-02 16:10:39.834981-07	120	factory_roll	2024-07-28 05:00:00-07	20240728.02	\N	\N	\N	\N	\N
+1d39b928-b43a-42f4-ad68-4408dc551127	d43eded1-69f1-427d-a695-70dbe56b69ef	b2993b04-6997-47f7-bd0c-29c25158a829	2cf48166-e27e-4d99-8a81-e51279b4e98f	shot	\N	200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 14:48:55.745917-07	2026-05-02 16:23:21.513161-07	35mm	factory_roll	2024-02-25 04:00:00-08	20240225.01	\N	HC-110	E	E10.5	630
+3d199f8f-1412-48c5-9c6a-3a73a3c2e4bb	d43eded1-69f1-427d-a695-70dbe56b69ef	8e9e496e-283e-481a-8822-d19f64eef741	37b8cad4-d2ab-4ae2-a1cc-b8f36d2a99b1	shot	\N	400	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag}	2026-05-02 15:34:29.644742-07	2026-05-02 16:23:21.51593-07	35mm	factory_roll	2023-12-17 04:00:00-08	20231217.03	\N	HC-110	E	E7	420
+8f7bbbca-a9ea-4053-81c5-9d55aecb17fb	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	37b8cad4-d2ab-4ae2-a1cc-b8f36d2a99b1	shot	\N	400	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag,astoria}	2026-05-02 15:35:01.311888-07	2026-05-02 16:23:21.516186-07	35mm	factory_roll	2025-05-17 05:00:00-07	20250517.01	\N	HC-110	E	E7	420
+78aa8889-4c2f-4788-9e0b-129af33998c8	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	9ab33c20-cbbe-4613-9904-d61ee9d1718a	shot	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,unknown-date,uncertain-camera}	2026-05-02 15:36:18.527878-07	2026-05-02 16:23:21.516558-07	35mm	factory_roll	\N	\N	\N	HC-110	B	B12.5	750
+42583cc3-b9c1-47ab-be00-918464eb54b2	d43eded1-69f1-427d-a695-70dbe56b69ef	79861fa3-9cbf-4181-9562-99492f069e80	9ab33c20-cbbe-4613-9904-d61ee9d1718a	shot	\N	400	\N	24	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:37:56.922867-07	2026-05-02 16:23:21.517077-07	35mm	factory_roll	2023-12-21 04:00:00-08	20231221.01	\N	HC-110	B	B6.5	390
+e5bda611-34e2-410f-b470-18391d89f9eb	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	800	\N	24	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag,unknown-year}	2026-05-02 15:41:18.161267-07	2026-05-02 16:23:21.51744-07	35mm	factory_roll	\N	\N	\N	HC-110	B	B7.5	450
+3bb9a6a3-242e-4bfd-be4d-2c79a1bdd3d2	d43eded1-69f1-427d-a695-70dbe56b69ef	8e9e496e-283e-481a-8822-d19f64eef741	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag}	2026-05-02 15:41:49.70533-07	2026-05-02 16:23:21.517746-07	35mm	factory_roll	2024-08-10 05:00:00-07	20240810.01	\N	HC-110	B	B7.5	450
+37495718-7bb3-4403-b9a7-84b872c393b8	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag,unknown-year}	2026-05-02 15:42:15.914206-07	2026-05-02 16:23:21.518063-07	35mm	factory_roll	\N	\N	\N	HC-110	B	B7.5	450
+978b46fe-c138-4bed-bb76-c73253cc38e0	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	e61b27e1-58d6-4647-a738-476e7fe04445	shot	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:46:39.462478-07	2026-05-02 16:23:21.519191-07	35mm	factory_roll	2023-12-17 04:00:00-08	20231217.02	\N	HC-110	B	B8.5	510
+c2a84735-351b-46fd-b036-f997cff49b88	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	e61b27e1-58d6-4647-a738-476e7fe04445	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:48:05.172204-07	2026-05-02 16:23:21.519397-07	35mm	factory_roll	2024-03-22 05:00:00-07	20240322.01	\N	HC-110	B	B9.25	555
+d5185e98-d5ca-4dc4-b529-bcf27eb89628	d43eded1-69f1-427d-a695-70dbe56b69ef	8e9e496e-283e-481a-8822-d19f64eef741	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	1600	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:48:49.01264-07	2026-05-02 16:23:21.519591-07	35mm	factory_roll	2024-02-04 04:00:00-08	20240204.01	\N	HC-110	B	B11	660
+30f94527-fba6-456d-a1d8-fd34b0184b0d	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	42f44ce0-b4a1-45f4-835d-7845d983bb2b	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:50:16.613385-07	2026-05-02 16:23:21.519784-07	35mm	factory_roll	2024-02-24 04:00:00-08	20240224.01	\N	HC-110	B	B14.5	870
+8b14fc65-7168-4173-81e6-a74b9a324a4b	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	7689c7e4-e975-4709-b48a-f6a6a7e149ce	shot	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,unknown-date,uncertain-camera}	2026-05-02 15:53:29.892913-07	2026-05-02 16:23:21.519998-07	35mm	factory_roll	\N	\N	\N	HC-110	A	A4.5	270
+23cd91b1-497e-4289-b488-8166e4b4bc60	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	2cf48166-e27e-4d99-8a81-e51279b4e98f	shot	\N	400	\N	72	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:54:15.761155-07	2026-05-02 16:23:21.520202-07	35mm	factory_roll	2025-02-27 04:00:00-08	20250227.01	\N	HC-110	H	H14	840
+5e451701-dc49-42ad-b9f3-0376f18a4ac9	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	a7059048-69e1-473b-8eff-85eff3e99560	shot	\N	25	\N	72	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:55:33.239039-07	2026-05-02 16:23:21.520396-07	35mm	factory_roll	2024-05-06 05:00:00-07	20240506.01	\N	HC-110	H	H8	480
+dd062fa4-6445-494c-80da-869b1f3eca7f	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	1600	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,sfo}	2026-05-02 15:56:28.452107-07	2026-05-02 16:23:21.520588-07	35mm	factory_roll	2024-05-01 05:00:00-07	20240501.04	\N	HC-110	A	A7.5	450
+5bc2a5e6-80a8-48e0-94a5-6acae194fa5f	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,a9.5-bag}	2026-05-02 15:59:26.656307-07	2026-05-02 16:23:21.520777-07	35mm	factory_roll	2024-12-31 04:00:00-08	20241231.01	\N	HC-110	A	A9.5	570
+812ebcaf-b866-4a17-a303-c803c46402b8	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,a9.5-bag,unknown-year}	2026-05-02 15:59:31.259247-07	2026-05-02 16:23:21.520969-07	35mm	factory_roll	\N	\N	\N	HC-110	A	A9.5	570
+43fe1928-54ef-4789-a4af-2ddb78317cf1	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,a9.5-bag}	2026-05-02 15:59:35.243545-07	2026-05-02 16:23:21.521172-07	35mm	factory_roll	2025-01-14 04:00:00-08	20250114.01	\N	HC-110	A	A9.5	570
+020c63b2-1c96-49a6-9f9f-925029eaca2e	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	shot	\N	50	\N	10	\N	\N	{fridge-backlog,hc110-prepicked,ferry}	2026-05-02 16:10:10.753623-07	2026-05-02 16:23:21.521398-07	120	factory_roll	2023-06-17 05:00:00-07	20230617.01	\N	HC-110	F	F9	540
+b1467792-f5e2-4e99-bdac-fa4f777404ad	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	03ee0cb0-6259-4872-b69a-94ab31532599	shot	\N	100	\N	10	\N	\N	{fridge-backlog,hc110-prepicked,ferry}	2026-05-02 16:11:12.67981-07	2026-05-02 16:23:21.521591-07	120	factory_roll	2023-07-30 05:00:00-07	20230730.07	\N	HC-110	B	B5.75	345
+0a0e69b5-1750-4cb8-bfb0-6e42b294856e	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	800	\N	24	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag}	2026-05-02 15:44:23.839193-07	2026-05-02 16:23:21.518544-07	35mm	factory_roll	2024-03-14 05:00:00-07	20240314.01	\N	HC-110	B	B7.5	450
+9270dbe9-bc20-4f48-b8db-4cfee2a63521	d43eded1-69f1-427d-a695-70dbe56b69ef	38f2fbd8-5e3c-4f06-bf1b-09e407fc6f21	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,thomas}	2026-05-02 16:12:15.004786-07	2026-05-02 16:23:21.521784-07	120	factory_roll	2023-09-16 05:00:00-07	20230916.04	\N	HC-110	B	B5	300
 \.
 
 
@@ -1000,19 +1123,11 @@ ALTER TABLE ONLY public.cameras
 
 
 --
--- Name: development_logs development_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: dev_sessions dev_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.development_logs
-    ADD CONSTRAINT development_logs_pkey PRIMARY KEY (id);
-
-
---
--- Name: development_logs development_logs_roll_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.development_logs
-    ADD CONSTRAINT development_logs_roll_id_unique UNIQUE (roll_id);
+ALTER TABLE ONLY public.dev_sessions
+    ADD CONSTRAINT dev_sessions_pkey PRIMARY KEY (id);
 
 
 --
@@ -1135,11 +1250,11 @@ ALTER TABLE ONLY public.cameras
 
 
 --
--- Name: development_logs development_logs_roll_id_rolls_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: dev_sessions dev_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.development_logs
-    ADD CONSTRAINT development_logs_roll_id_rolls_id_fk FOREIGN KEY (roll_id) REFERENCES public.rolls(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.dev_sessions
+    ADD CONSTRAINT dev_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -1223,6 +1338,14 @@ ALTER TABLE ONLY public.rolls
 
 
 --
+-- Name: rolls rolls_dev_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rolls
+    ADD CONSTRAINT rolls_dev_session_id_fkey FOREIGN KEY (dev_session_id) REFERENCES public.dev_sessions(id) ON DELETE SET NULL;
+
+
+--
 -- Name: rolls rolls_film_stock_id_film_stocks_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1266,5 +1389,5 @@ ALTER TABLE ONLY public.scans
 -- PostgreSQL database dump complete
 --
 
-\unrestrict llMEOhLBw8ZmFXE8WKTTXiykqOm2EqSYFeFdPNZp1Jb4lzNH3K5McXT8dRAc9vN
+\unrestrict iDgM2clfdu0Aq4BHhdUq2eFDovvTA11tEOcxNlOm8DJMOF0UhCbYXYWd8PjJNu4
 
