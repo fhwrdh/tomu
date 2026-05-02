@@ -715,12 +715,13 @@ server.tool(
     camera: z.string().optional().describe("Camera name (fuzzy, optional: 'm6', 'mm7', 'intrepid')"),
     ratedIso: z.number().int().positive().optional().describe("Rated ISO (defaults to box ISO of the stock)"),
     shotDate: z.string().optional().describe("Approx YYYY-MM-DD when shot. Used for displayId. Omit if unknown."),
+    fieldSeq: z.number().int().min(1).max(99).optional().describe("Sequence number to honor an existing physical label (e.g. 7 → '20250506.07'). Server picks next available if omitted. 409 if collides."),
     note: z.string().optional().describe("Free-text note (e.g. 'mystery roll, brandy trade, possible HP5')"),
     tags: z.array(z.string()).optional().describe("Tags (e.g. ['fridge-backlog', '2025-road-trip'])"),
     form: z.string().optional().describe("Override form: 'factory_roll' (default), 'bulk_roll', 'sheet'"),
     frameCount: z.number().int().positive().optional().describe("Override frame count"),
   },
-  async ({ film, format, camera, ratedIso, shotDate, note, tags, form, frameCount }) => {
+  async ({ film, format, camera, ratedIso, shotDate, fieldSeq, note, tags, form, frameCount }) => {
     const fmt = format || "35mm";
 
     const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
@@ -748,6 +749,7 @@ server.tool(
     if (cameraId) body.cameraId = cameraId;
     if (ratedIso != null) body.ratedIso = ratedIso;
     if (shotDate) body.shotDate = shotDate;
+    if (fieldSeq != null) body.fieldSeq = fieldSeq;
     if (note) body.note = note;
     if (tags?.length) body.tags = tags;
     if (form) body.form = form;

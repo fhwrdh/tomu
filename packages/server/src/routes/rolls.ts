@@ -68,13 +68,27 @@ async function pickInventoryItem(
   return available[0];
 }
 
-/** Compute display ID `YYYYMMDD.NN` for a just-unloaded roll. Uses localDate if provided, else server-local today. */
-async function computeDisplayId(userId: string, localDate?: string): Promise<string> {
+/**
+ * Compute display ID `YYYYMMDD.NN` for a roll on a given local date.
+ * If `seq` is provided, returns that exact slot or throws CollisionError if taken.
+ * Otherwise returns max(seq)+1 across existing IDs for the date — handles sparse
+ * sequences (e.g. .07 exists but .01-.06 don't) without recycling numbers.
+ */
+class DisplayIdCollisionError extends Error {
+  constructor(public displayId: string) {
+    super(`Display ID ${displayId} is already in use`);
+  }
+}
+
+async function computeDisplayId(
+  userId: string,
+  localDate?: string,
+  seq?: number,
+): Promise<string> {
   const date = localDate ?? new Date().toISOString().slice(0, 10);
   const ymd = date.replace(/-/g, "");
-
-  // Count rolls already assigned a displayId with this date prefix for this user.
   const prefix = `${ymd}.`;
+
   const existing = await db
     .select({ displayId: rolls.displayId })
     .from(rolls)
@@ -85,8 +99,26 @@ async function computeDisplayId(userId: string, localDate?: string): Promise<str
       ),
     );
 
-  const n = existing.length + 1;
-  return `${ymd}.${String(n).padStart(2, "0")}`;
+  const usedSeqs = new Set<number>();
+  let maxSeq = 0;
+  for (const r of existing) {
+    const m = r.displayId?.match(/\.(\d+)$/);
+    if (m) {
+      const n = Number(m[1]);
+      usedSeqs.add(n);
+      if (n > maxSeq) maxSeq = n;
+    }
+  }
+
+  if (seq != null) {
+    if (usedSeqs.has(seq)) {
+      throw new DisplayIdCollisionError(`${ymd}.${String(seq).padStart(2, "0")}`);
+    }
+    return `${ymd}.${String(seq).padStart(2, "0")}`;
+  }
+
+  const next = maxSeq + 1;
+  return `${ymd}.${String(next).padStart(2, "0")}`;
 }
 
 export async function rollsRoutes(fastify: FastifyInstance) {
@@ -327,9 +359,19 @@ export async function rollsRoutes(fastify: FastifyInstance) {
     const frameCount =
       body.frameCount ?? stock.frameCount ?? cameraDefault ?? fallback;
 
-    const displayId = body.shotDate
-      ? await computeDisplayId(request.userId, body.shotDate)
-      : null;
+    let displayId: string | null = null;
+    if (body.shotDate) {
+      try {
+        displayId = await computeDisplayId(request.userId, body.shotDate, body.fieldSeq);
+      } catch (e) {
+        if (e instanceof DisplayIdCollisionError) {
+          return reply.status(409).send({
+            error: `Display ID ${e.displayId} is already in use. Pick a different fieldSeq or omit it for auto-assignment.`,
+          });
+        }
+        throw e;
+      }
+    }
     const unloadedAt = body.shotDate ? new Date(`${body.shotDate}T12:00:00Z`) : null;
 
     const [row] = await db

@@ -126,6 +126,8 @@ export const logShotRollSchema = z.object({
   frameCount: z.number().int().positive().optional(),
   /** Local YYYY-MM-DD when the roll was actually shot/unloaded. */
   shotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /** Field sequence number to use for displayId (e.g. 7 → "20250506.07"). Server picks the next available if omitted. */
+  fieldSeq: z.number().int().min(1).max(99).optional(),
   title: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
   tags: z.array(z.string()).optional(),
