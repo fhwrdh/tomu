@@ -32,12 +32,69 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function tokens(s: string): string[] {
+  return s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/**
+ * Loose substring check — kept for filters where any partial signal is good enough.
+ * Do NOT use this on a `.find()` over a list of similarly-named entities;
+ * it will return the first candidate whose any token overlaps and silently pick
+ * the wrong one (e.g. "Arista EDU Ultra 100" query → "Arista EDU 400 DX" stock).
+ * For singular resolution, use `bestMatch()` instead.
+ */
 function fuzzyMatch(query: string, ...candidates: string[]): boolean {
   const q = normalize(query);
   return candidates.some((c) => {
     const n = normalize(c);
     return n.includes(q) || q.includes(n);
   });
+}
+
+/**
+ * Score how well `query` matches a candidate's `fields`. Higher is better.
+ * Token-overlap based: every query token that appears as a substring of any
+ * candidate token scores 1; an exact token match scores 2. Ties broken by
+ * fewer extra (unmatched) candidate tokens — preferring more-specific names.
+ */
+function score(query: string, fields: string[]): number {
+  const qTokens = tokens(query);
+  if (qTokens.length === 0) return 0;
+  const cTokens = fields.flatMap(tokens);
+  if (cTokens.length === 0) return 0;
+
+  let matchScore = 0;
+  let matched = 0;
+  for (const qt of qTokens) {
+    let best = 0;
+    for (const ct of cTokens) {
+      if (ct === qt) best = Math.max(best, 2);
+      else if (ct.includes(qt) || qt.includes(ct)) best = Math.max(best, 1);
+    }
+    matchScore += best;
+    if (best > 0) matched++;
+  }
+
+  // Require at least one token match. Penalize unmatched candidate tokens
+  // mildly so "Arista EDU Ultra 100" beats "Arista EDU 400 DX" for a query
+  // of "arista edu ultra 100".
+  if (matched === 0) return 0;
+  const extra = Math.max(0, cTokens.length - matched);
+  return matchScore - extra * 0.1;
+}
+
+/** Pick the single best candidate from a list; null if none score above 0. */
+function bestMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]): T | null {
+  let best: T | null = null;
+  let bestScore = 0;
+  for (const item of items) {
+    const s = score(query, fieldsOf(item));
+    if (s > bestScore) {
+      bestScore = s;
+      best = item;
+    }
+  }
+  return best;
 }
 
 // ── Server ──
@@ -166,9 +223,7 @@ server.tool(
 
     // Find or create stock (stock no longer carries format — it's on the inventory item)
     const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number; type: string }> }>("/film-stocks");
-    let stock = stocks.find((s) =>
-      fuzzyMatch(film, `${s.manufacturer} ${s.name}`, s.name, s.manufacturer)
-    );
+    let stock = bestMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
 
     if (!stock) {
       if (!manufacturer || !iso) {
@@ -422,7 +477,7 @@ server.tool(
 
     // Resolve stock
     const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
-    const stock = stocks.find((s) => fuzzyMatch(film, `${s.manufacturer} ${s.name}`, s.name, s.manufacturer));
+    const stock = bestMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
     if (!stock) {
       return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. Known stocks: ${stocks.map((s) => `${s.manufacturer} ${s.name}`).join(", ") || "none"}.` }] };
     }
@@ -669,7 +724,7 @@ server.tool(
     const fmt = format || "35mm";
 
     const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
-    const stock = stocks.find((s) => fuzzyMatch(film, `${s.manufacturer} ${s.name}`, s.name, s.manufacturer));
+    const stock = bestMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
     if (!stock) {
       return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. Add it first via tomu_add_inventory or check tomu_inventory.` }] };
     }
