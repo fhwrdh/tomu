@@ -111,6 +111,27 @@ export const rollStatusSchema = z.object({
   status: z.enum(ROLL_STATUSES),
 });
 
+/**
+ * Log a roll that's already been shot — for retroactive entry of fridge-pile
+ * canisters and historical inventory. Skips inventory decrement entirely.
+ * If shotDate is provided, computes a YYYYMMDD.NN displayId from it.
+ */
+export const logShotRollSchema = z.object({
+  filmStockId: uuid,
+  format: z.enum(FILM_FORMATS),
+  form: z.enum(INVENTORY_FORMS).optional(),
+  cameraId: uuid.optional(),
+  ratedIso: z.number().int().positive().optional(),
+  pushPullStops: z.number().optional(),
+  frameCount: z.number().int().positive().optional(),
+  /** Local YYYY-MM-DD when the roll was actually shot/unloaded. */
+  shotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  title: z.string().max(200).optional(),
+  description: z.string().max(2000).optional(),
+  tags: z.array(z.string()).optional(),
+  note: z.string().max(5000).optional(),
+});
+
 // ── Frames ──
 
 /** Log a frame. Frame number is optional — server auto-increments if omitted. */

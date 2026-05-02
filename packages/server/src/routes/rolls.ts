@@ -4,6 +4,7 @@ import {
   createFrameSchema,
   createNoteSchema,
   createRollSchema,
+  logShotRollSchema,
   unloadRollSchema,
   updateRollSchema,
 } from "@tomu/shared";
@@ -294,6 +295,72 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         tags: body.tags ?? [],
       })
       .returning();
+
+    return reply.status(201).send({ data: row });
+  });
+
+  // ── Log a shot roll (retroactive entry) ───────────────────────────────
+  // Drops a roll directly into status='shot' with no inventory decrement.
+  // For backlog/fridge-pile entry, not the field-shoot flow.
+  fastify.post("/log-shot", async (request, reply) => {
+    const body = logShotRollSchema.parse(request.body);
+
+    const [stock] = await db
+      .select()
+      .from(filmStocks)
+      .where(and(eq(filmStocks.id, body.filmStockId), eq(filmStocks.userId, request.userId)))
+      .limit(1);
+    if (!stock) return reply.status(404).send({ error: "Film stock not found" });
+
+    let cameraDefault: number | null = null;
+    if (body.cameraId) {
+      const [cam] = await db
+        .select()
+        .from(cameras)
+        .where(and(eq(cameras.id, body.cameraId), eq(cameras.userId, request.userId)))
+        .limit(1);
+      if (!cam) return reply.status(404).send({ error: "Camera not found" });
+      cameraDefault = cam.frameCount;
+    }
+
+    const fallback = body.format === "35mm" ? 36 : body.format === "120" ? 10 : 1;
+    const frameCount =
+      body.frameCount ?? stock.frameCount ?? cameraDefault ?? fallback;
+
+    const displayId = body.shotDate
+      ? await computeDisplayId(request.userId, body.shotDate)
+      : null;
+    const unloadedAt = body.shotDate ? new Date(`${body.shotDate}T12:00:00Z`) : null;
+
+    const [row] = await db
+      .insert(rolls)
+      .values({
+        userId: request.userId,
+        filmStockId: body.filmStockId,
+        cameraId: body.cameraId ?? null,
+        format: body.format,
+        form: body.form ?? "factory_roll",
+        status: "shot",
+        loadedAt: null,
+        unloadedAt,
+        displayId,
+        frameCount,
+        ratedIso: body.ratedIso ?? stock.iso,
+        pushPullStops: body.pushPullStops != null ? String(body.pushPullStops) : null,
+        title: body.title ?? null,
+        description: body.description ?? null,
+        tags: body.tags ?? [],
+      })
+      .returning();
+
+    if (body.note) {
+      await db.insert(notes).values({
+        userId: request.userId,
+        rollId: row.id,
+        type: "text",
+        content: body.note,
+      });
+    }
 
     return reply.status(201).send({ data: row });
   });

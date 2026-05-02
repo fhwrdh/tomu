@@ -646,6 +646,74 @@ server.tool(
   }
 );
 
+// ── Tool: tomu_log_shot_roll ──────────────────────────────────────────
+
+server.tool(
+  "tomu_log_shot_roll",
+  "Retroactively log a roll that's already been shot — for backlog/fridge-pile entry. " +
+    "Drops the roll straight into status='shot' with no inventory decrement. " +
+    "Use this for canisters/sheets you find lying around, not for the field-shoot flow (which is tomu_load → tomu_shoot → tomu_unload). " +
+    "If you don't know the shot date, leave it off — you can patch later.",
+  {
+    film: z.string().describe("Film stock name (fuzzy: 'hp5', 'fp4', 'no.5', 'tri-x')"),
+    format: z.string().optional().describe("Film format: '35mm' (default), '120', '4x5', '8x10'"),
+    camera: z.string().optional().describe("Camera name (fuzzy, optional: 'm6', 'mm7', 'intrepid')"),
+    ratedIso: z.number().int().positive().optional().describe("Rated ISO (defaults to box ISO of the stock)"),
+    shotDate: z.string().optional().describe("Approx YYYY-MM-DD when shot. Used for displayId. Omit if unknown."),
+    note: z.string().optional().describe("Free-text note (e.g. 'mystery roll, brandy trade, possible HP5')"),
+    tags: z.array(z.string()).optional().describe("Tags (e.g. ['fridge-backlog', '2025-road-trip'])"),
+    form: z.string().optional().describe("Override form: 'factory_roll' (default), 'bulk_roll', 'sheet'"),
+    frameCount: z.number().int().positive().optional().describe("Override frame count"),
+  },
+  async ({ film, format, camera, ratedIso, shotDate, note, tags, form, frameCount }) => {
+    const fmt = format || "35mm";
+
+    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
+    const stock = stocks.find((s) => fuzzyMatch(film, `${s.manufacturer} ${s.name}`, s.name, s.manufacturer));
+    if (!stock) {
+      return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. Add it first via tomu_add_inventory or check tomu_inventory.` }] };
+    }
+
+    let cameraId: string | undefined;
+    let cameraLabel = "";
+    if (camera) {
+      const { data: cams } = await api<{ data: Array<{ id: string; make: string; model: string }> }>("/cameras");
+      const matches = cams.filter((c) => fuzzyMatch(camera, `${c.make} ${c.model}`, c.model, c.make));
+      if (matches.length === 0) {
+        return { content: [{ type: "text" as const, text: `Camera "${camera}" not found. Known: ${cams.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
+      }
+      if (matches.length > 1) {
+        return { content: [{ type: "text" as const, text: `Camera "${camera}" is ambiguous. Matches: ${matches.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
+      }
+      cameraId = matches[0].id;
+      cameraLabel = ` in ${matches[0].make} ${matches[0].model}`;
+    }
+
+    const body: Record<string, unknown> = { filmStockId: stock.id, format: fmt };
+    if (cameraId) body.cameraId = cameraId;
+    if (ratedIso != null) body.ratedIso = ratedIso;
+    if (shotDate) body.shotDate = shotDate;
+    if (note) body.note = note;
+    if (tags?.length) body.tags = tags;
+    if (form) body.form = form;
+    if (frameCount != null) body.frameCount = frameCount;
+
+    const { data } = await api<{ data: { id: string; displayId: string | null; ratedIso: number } }>("/rolls/log-shot", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    const isoText = data.ratedIso !== stock.iso ? `box ${stock.iso}, rated ${data.ratedIso}` : `ISO ${stock.iso}`;
+    const idLabel = data.displayId ? `**${data.displayId}**` : `roll ${data.id.slice(0, 8)} (no displayId yet — pass shotDate to assign one)`;
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Logged ${idLabel}: ${stock.manufacturer} ${stock.name} (${fmt}, ${isoText})${cameraLabel}. Status: shot.`,
+      }],
+    };
+  }
+);
+
 // ── Tool: tomu_dev_candidates ─────────────────────────────────────────
 
 interface CandidateRoll {
