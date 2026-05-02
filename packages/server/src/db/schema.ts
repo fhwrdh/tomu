@@ -123,6 +123,7 @@ export const rolls = pgTable("rolls", {
   title: text("title"),
   description: text("description"),
   tags: text("tags").array().notNull().default([]),
+  devSessionId: uuid("dev_session_id").references((): any => devSessions.id, { onDelete: "set null" }),
   ...timestamps,
 });
 
@@ -154,15 +155,25 @@ export const frames = pgTable(
 );
 
 // ── Development ──
+//
+// A dev_session represents one tank's worth of rolls developed together.
+// Multiple rolls can share a session (same developer/dilution/time/temp).
+// Per-session display IDs are assigned at create time, format YYYYMMDD.NN.
 
-export const developmentLogs = pgTable("development_logs", {
+export const devSessions = pgTable("dev_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
-  rollId: uuid("roll_id").notNull().unique().references(() => rolls.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  displayId: text("display_id"),
   developer: text("developer").notNull(),
+  /** Parsed dilution: "B", "1:50", "1:100", etc. */
   dilution: text("dilution"),
+  /** Original shorthand the user entered, preserved for round-tripping: "B7.5", "1:50/8mins". */
+  dilutionRaw: text("dilution_raw"),
   devTimeSeconds: integer("dev_time_seconds"),
   temperatureC: numeric("temperature_c", { precision: 4, scale: 1 }),
   agitation: text("agitation"),
+  /** Free text: "MOD54", "Paterson 2-reel", "Jobo CPP-2". */
+  tank: text("tank"),
   stopBath: text("stop_bath"),
   fixer: text("fixer"),
   fixerTimeSeconds: integer("fixer_time_seconds"),
@@ -170,6 +181,8 @@ export const developmentLogs = pgTable("development_logs", {
   wettingAgent: text("wetting_agent"),
   notes: text("notes"),
   developedAt: timestamp("developed_at", { withTimezone: true }),
+  /** Set when status flips to completed; null while in progress. */
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   resultsRating: integer("results_rating"),
   resultsNotes: text("results_notes"),
   ...timestamps,

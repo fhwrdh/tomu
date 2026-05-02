@@ -624,9 +624,9 @@ server.tool(
 
 server.tool(
   "tomu_rolls",
-  "List rolls. Defaults to active (loaded or shooting) rolls; pass status='all' or 'unloaded' to see others.",
+  "List rolls. Defaults to active (loaded or shooting); pass status='all' or any specific RollStatus (shot, developing, developed, scanning, complete, archived).",
   {
-    status: z.string().optional().describe("'active' (default), 'all', 'loaded', 'shooting', 'unloaded'"),
+    status: z.string().optional().describe("'active' (default), 'all', or RollStatus: loaded | shooting | shot | developing | developed | scanning | complete | archived"),
   },
   async ({ status }) => {
     const q = status ? `?status=${encodeURIComponent(status)}` : "";
@@ -642,6 +642,76 @@ server.tool(
       const cam = r.cameraMake ? `${r.cameraMake} ${r.cameraModel}` : "—";
       lines.push(`- **${id}** — ${r.manufacturer} ${r.stockName} (${r.format}) in ${cam} [${r.status}] — ${r.framesShot}/${r.frameCount}`);
     }
+    return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+  }
+);
+
+// ── Tool: tomu_dev_candidates ─────────────────────────────────────────
+
+interface CandidateRoll {
+  id: string;
+  displayId: string | null;
+  ratedIso: number | null;
+  format: string;
+  manufacturer: string;
+  stockName: string;
+  stockIso: number;
+}
+
+interface CandidateGroup {
+  recipeKey: string;
+  recipe: {
+    developer: string;
+    dilution: string | null;
+    devTimeSeconds: number | null;
+    temperatureC: string | null;
+  } | null;
+  rolls: CandidateRoll[];
+}
+
+function formatTime(seconds: number | null): string {
+  if (seconds == null) return "?";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s === 0 ? `${m}min` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+server.tool(
+  "tomu_dev_candidates",
+  "List rolls awaiting development, grouped by exact-match recipe from past sessions. Use this to plan dev tanks.",
+  {},
+  async () => {
+    const { data: groups } = await api<{ data: CandidateGroup[] }>("/dev-sessions/candidates");
+
+    if (groups.length === 0) {
+      return { content: [{ type: "text" as const, text: "No rolls awaiting development." }] };
+    }
+
+    const lines: string[] = ["## Dev candidates\n"];
+    const named = groups.filter((g) => g.recipe);
+    const ungrouped = groups.find((g) => !g.recipe);
+
+    let i = 0;
+    for (const g of named) {
+      const r = g.recipe!;
+      const recipeStr = `${r.developer} ${r.dilution ?? "—"} ${formatTime(r.devTimeSeconds)}${r.temperatureC ? ` @ ${r.temperatureC}°C` : ""}`;
+      lines.push(`### Group ${String.fromCharCode(65 + i)} — ${recipeStr}  (${g.rolls.length} roll${g.rolls.length === 1 ? "" : "s"})`);
+      for (const roll of g.rolls) {
+        const iso = roll.ratedIso && roll.ratedIso !== roll.stockIso ? `@ ${roll.ratedIso} ` : "";
+        lines.push(`- **${roll.displayId ?? roll.id}** ${roll.manufacturer} ${roll.stockName} ${iso}(${roll.format})`);
+      }
+      lines.push("");
+      i++;
+    }
+
+    if (ungrouped) {
+      lines.push(`### Ungrouped — no prior recipe  (${ungrouped.rolls.length} roll${ungrouped.rolls.length === 1 ? "" : "s"})`);
+      for (const roll of ungrouped.rolls) {
+        const iso = roll.ratedIso && roll.ratedIso !== roll.stockIso ? `@ ${roll.ratedIso} ` : "";
+        lines.push(`- **${roll.displayId ?? roll.id}** ${roll.manufacturer} ${roll.stockName} ${iso}(${roll.format})`);
+      }
+    }
+
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 );

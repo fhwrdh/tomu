@@ -140,12 +140,20 @@ export const updateFrameSchema = createFrameSchema.partial();
 
 // ── Development ──
 
-export const createDevelopmentLogSchema = z.object({
+/**
+ * Create a dev session. Provide either `shorthand` (e.g. "B7.5", "1:50/8mins")
+ * which gets parsed into `dilution` + `devTimeSeconds`, or those fields explicitly.
+ * Explicit values win over the parser when both are provided.
+ */
+export const createDevSessionSchema = z.object({
+  rollIds: z.array(uuid).min(1),
   developer: z.string().min(1).max(100),
+  shorthand: z.string().max(50).optional(),
   dilution: z.string().max(50).optional(),
   devTimeSeconds: z.number().int().positive().optional(),
   temperatureC: z.number().optional(),
   agitation: z.string().max(500).optional(),
+  tank: z.string().max(100).optional(),
   stopBath: z.string().max(100).optional(),
   fixer: z.string().max(100).optional(),
   fixerTimeSeconds: z.number().int().positive().optional(),
@@ -153,6 +161,11 @@ export const createDevelopmentLogSchema = z.object({
   wettingAgent: z.string().max(100).optional(),
   notes: z.string().max(2000).optional(),
   developedAt: z.string().optional(),
+  /** Local YYYY-MM-DD used to compute the session displayId. */
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const completeDevSessionSchema = z.object({
   resultsRating: z.number().int().min(1).max(5).optional(),
   resultsNotes: z.string().max(2000).optional(),
 });

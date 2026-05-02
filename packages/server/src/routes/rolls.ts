@@ -90,7 +90,7 @@ async function computeDisplayId(userId: string, localDate?: string): Promise<str
 
 export async function rollsRoutes(fastify: FastifyInstance) {
   // ── List rolls ─────────────────────────────────────────────────────────
-  // Query: ?status=active (default: loaded+shooting) | all | loaded | shooting | unloaded
+  // Query: ?status=active (default: loaded+shooting) | all | <any RollStatus>
   fastify.get<{ Querystring: { status?: string } }>("/", async (request) => {
     const status = request.query.status ?? "active";
     const statusFilter =
@@ -336,7 +336,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
       .set({
         unloadedAt: new Date(),
         displayId,
-        status: "unloaded",
+        status: "shot",
         updatedAt: new Date(),
       })
       .where(eq(rolls.id, existing.id))

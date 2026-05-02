@@ -8,6 +8,7 @@ import { camerasRoutes } from "./routes/cameras.js";
 import { filmInventoryRoutes } from "./routes/film-inventory.js";
 import { filmStocksRoutes } from "./routes/film-stocks.js";
 import { lensesRoutes } from "./routes/lenses.js";
+import { devSessionsRoutes } from "./routes/dev-sessions.js";
 import { rollsRoutes } from "./routes/rolls.js";
 
 const fastify = Fastify({
@@ -28,6 +29,7 @@ await fastify.register(lensesRoutes, { prefix: "/api/v1/lenses" });
 await fastify.register(filmStocksRoutes, { prefix: "/api/v1/film-stocks" });
 await fastify.register(filmInventoryRoutes, { prefix: "/api/v1/inventory" });
 await fastify.register(rollsRoutes, { prefix: "/api/v1/rolls" });
+await fastify.register(devSessionsRoutes, { prefix: "/api/v1/dev-sessions" });
 
 // Health check
 fastify.get("/api/health", async () => ({ status: "ok" }));
