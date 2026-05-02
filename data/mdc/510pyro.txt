@@ -1,0 +1,108 @@
+Source: https://www.digitaltruth.com/devchart.php?Developer=510-Pyro
+Scraped: 2026-05-02
+Format: tab-separated, columns: Film, Developer, Dilution, ASA/ISO, 35mm, 120, Sheet, Temp, Notes
+
+Adox CHS 100 II	510-Pyro	1+100	100	8	8	8	20C
+Adox CHS 100 II	510-Pyro	1+100	200	13			20C
+Adox CHS 25	510-Pyro	1+100	16	6:30	6:30	6:30	20C
+Adox CHS 25	510-Pyro	1+100	16	5	5	5	21C	[notes]
+Arista EDU Ultra 100	510-Pyro	1+100	80	10:30	10:30	10:30	20C	[notes]
+Arista EDU Ultra 100	510-Pyro	1+100	200	18:30	18:30	18:30	20C	[notes]
+Arista EDU Ultra 200	510-Pyro	1+100	100	11:15	11:15	11:15	20C	[notes]
+Arista EDU Ultra 200	510-Pyro	1+100	200	6	6	6	21C	[notes]
+Arista EDU Ultra 200	510-Pyro	1+100	800	13:30	13:30	13:30	20C
+CatLABS X Film 320	510-Pyro	1+100	320	13:30	13:30		20C
+CatLABS X Film 320	510-Pyro	1+100	800		17:30		20C	[notes]
+CatLABS X Film 80	510-Pyro	1+100	32		13	13	20C
+CatLABS X Film 80	510-Pyro	1+100	32		11	11	20C	[notes]
+CineStill BwXX	510-Pyro	1+100	125	16	16		20C	[notes]
+CineStill BwXX	510-Pyro	1+100	200	7	7		20C
+Eastman Double-X (5222)	510-Pyro	1+100	125	16			20C	[notes]
+Eastman Double-X (5222)	510-Pyro	1+100	200	7			20C
+Efke 100	510-Pyro	1+100	100	7:45	7:45	7:45	20C
+Efke 25	510-Pyro	1+100	16	6:30	6:30	6:30	20C
+Ferrania Orto	510-Pyro	1+500	50	60			21C	[notes]
+Ferrania P30	510-Pyro	1+100	32		15		20C	[notes]
+Ferrania P30	510-Pyro	1+100	80	13:30			20C
+Ferrania P33	510-Pyro	1+100	160	12			20C	[notes]
+Foma Ortho 400	510-Pyro	1+100	400	8:30			20C
+Fomapan 100	510-Pyro	1+100	50	8	8	8	20C	[notes]
+Fomapan 100	510-Pyro	1+100	80	10:30	10:30	10:30	20C	[notes]
+Fomapan 100	510-Pyro	1+100	100	7	7	7	20C
+Fomapan 100	510-Pyro	1+100	200	18:30	18:30	18:30	20C	[notes]
+Fomapan 200	510-Pyro	1+100	100	11:15	11:15	11:15	20C	[notes]
+Fomapan 200	510-Pyro	1+100	160	6:30	6:30	6:30	20C
+Fomapan 200	510-Pyro	1+100	200	7:30	7:30	7:30	20C
+Fomapan 400	510-Pyro	1+100	200	17	17	17	20C	[notes]
+Fomapan 400	510-Pyro	1+100	400	23	23	23	20C	[notes]
+Fomapan 400	510-Pyro	1+100	400	8:15	8:15	8:15	20C
+Fomapan 400	510-Pyro	1+150	400	15	15	15	20C	[notes]
+Fuji Neopan 100 Acros II	510-Pyro	1+100	100	7:45	7:45	7:45	20C	[notes]
+Fuji Neopan 100 Acros II	510-Pyro	1+100	100	15:30	15:30	15:30	20C	[notes]
+Ilford Delta 100 Pro	510-Pyro	1+100	100	11	11	11	20C
+Ilford Delta 100 Pro	510-Pyro	1+100	100	14:30	14:30	14:30	20C	[notes]
+Ilford Delta 3200 Pro	510-Pyro	1+100	800	11	11		20C
+Ilford Delta 3200 Pro	510-Pyro	1+100	1600	13:30	13:30		20C
+Ilford Delta 3200 Pro	510-Pyro	1+100	3200	23	23		20C
+Ilford Delta 400 Pro	510-Pyro	1+100	250	7	7		20C	[notes]
+Ilford Delta 400 Pro	510-Pyro	1+100	400	12:15	12:15		20C
+Ilford Delta 400 Pro	510-Pyro	1+100	400	22	22		20C	[notes]
+Ilford Delta 400 Pro	510-Pyro	1+300	400	27	27		20C	[notes]
+Ilford FP4+	510-Pyro	1+200	64	7	7	7	20C	[notes]
+Ilford FP4+	510-Pyro	1+100	125	10	10	10	20C
+Ilford FP4+	510-Pyro	1+100	125	17:15	17:15	17:15	20C	[notes]
+Ilford FP4+	510-Pyro	1+100	125	7	7	7	21C	[notes]
+Ilford FP4+	510-Pyro	1+100	400	14:30			20C
+Ilford HP5+	510-Pyro	1+100	320			8:45	20C
+Ilford HP5+	510-Pyro	1+100	400	8:15	9	8:15	20C
+Ilford HP5+	510-Pyro	1+100	400	13:45	13:45	13:45	20C	[notes]
+Ilford HP5+	510-Pyro	1+100	500	8:45			20C	[notes]
+Ilford HP5+	510-Pyro	1+100	800	13:30	13:30	13:30	20C
+Ilford HP5+	510-Pyro	1+100	1600	28	28	28	20C
+Ilford Ortho Plus	510-Pyro	1+100	80	9	9	9	20C
+Ilford Pan F+	510-Pyro	1+100	32	11:30	11:30		20C	[notes]
+Ilford Pan F+	510-Pyro	1+100	50	8:30	8:30		20C
+Ilford SFX 200	510-Pyro	1+100	200	12:45	12:45		20C
+Ilford XP2 Super	510-Pyro	1+100	200	10	10		20C	[notes]
+Ilford XP2 Super	510-Pyro	1+100	400	12	12		20C
+JCH StreetPan 400	510-Pyro	1+100	400	22			20C	[notes]
+Kentmere 100	510-Pyro	1+100	100	11:45	11:45		20C
+Kentmere 100	510-Pyro	1+100	100	15	15		20C	[notes]
+Kentmere 200	510-Pyro	1+100	200	7:30			20C
+Kentmere 400	510-Pyro	1+100	400	11	11		20C
+Kentmere 400	510-Pyro	1+100	400	20:30	20:30		20C	[notes]
+Kentmere 400	510-Pyro	1+100	800	15	15		20C
+Kentmere 400	510-Pyro	1+100	1600	25	25		20C
+Kodak Double-X (5222)	510-Pyro	1+100	125	16			20C	[notes]
+Kodak Double-X (5222)	510-Pyro	1+100	200	7			20C
+Kodak Plus-X	510-Pyro	1+100	125	6:30	6:30	6:30	20C
+Kodak TMax 100	510-Pyro	1+100	64	20	20	20	20C	[notes]
+Kodak TMax 100	510-Pyro	1+100	100	11:30	11:30	11:30	20C
+Kodak TMax 100	510-Pyro	1+100	100	7	7	7	21C	[notes]
+Kodak TMax 400	510-Pyro	1+100	400	9	9	9	20C
+Kodak TMax 400	510-Pyro	1+100	400	30:45	30:45	30:45	20C	[notes]
+Kodak TMax P3200	510-Pyro	1+100	3200	17:30			20C
+Kodak Tri-X 400	510-Pyro	1+100	250		6:30		20C	[notes]
+Kodak Tri-X 400	510-Pyro	1+100	400	8	8		20C
+Kodak Tri-X 400	510-Pyro	1+100	400	16:30	16:30		20C	[notes]
+Kodak Tri-X 400	510-Pyro	1+100	400	7:30	7:30		21C	[notes]
+Kodak Tri-X 400	510-Pyro	1+100	800	13	13		20C	[notes]
+Kodak Tri-X 400	510-Pyro	1+100	800	11	11		20C	[notes]
+Kodak Tri-X 400	510-Pyro	1+100	1600	21	21		20C	[notes]
+Rollei Infrared IR400	510-Pyro	1+100	400	22	22	22	20C	[notes]
+Rollei Ortho 25	510-Pyro	1+100	25	8			20C
+Rollei Retro 100	510-Pyro	1+100	100	10:30	10:30	10:30	20C
+Rollei Retro 400	510-Pyro	1+100	320	13	13	13	20C
+Rollei Retro 400S	510-Pyro	1+100	400	22	22		20C	[notes]
+Rollei Retro 80S	510-Pyro	1+150	25	8:45	8:45		20C	[notes]
+Rollei Retro 80S	510-Pyro	1+100	80	9:45	9:45		20C	[notes]
+Rollei RPX 100	510-Pyro	1+100	100	11:45	11:45		20C
+Rollei RPX 100	510-Pyro	1+100	100	15	15		20C	[notes]
+Rollei RPX 25	510-Pyro	1+150	25	8:45	8:45	8:45	20C	[notes]
+Rollei RPX 400	510-Pyro	1+100	400	11	11	11	20C
+Rollei RPX 400	510-Pyro	1+100	400	20:30	20:30	20:30	20C	[notes]
+Rollei RPX 400	510-Pyro	1+100	1600	25	25	25	20C
+Shanghai GP3 Pan 100	510-Pyro	1+100	100	12:30			20C	[notes]
+Shanghai GP3 Pan 100	510-Pyro	1+100	100	6			20C
+Shanghai GP3 Pan 100	510-Pyro	1+100	125	10			20C
+Washi - F	510-Pyro	1+100	100	25	25		20C	[notes]
