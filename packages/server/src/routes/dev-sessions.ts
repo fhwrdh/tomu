@@ -28,8 +28,10 @@ async function computeSessionDisplayId(userId: string, localDate?: string): Prom
 
 export async function devSessionsRoutes(fastify: FastifyInstance) {
   // ── Dev candidates ───────────────────────────────────────────────────
-  // Returns shot-but-not-yet-developed rolls, grouped by exact-match recipe
-  // pulled from the most recent completed session for the same (stock, ratedIso).
+  // Returns shot-but-not-yet-developed rolls, grouped by recipe.
+  // Tier 1: rolls with explicit intended-dev (from bag/canister labels) → exact-match recipe.
+  // Tier 2: rolls without intended-dev → grouped by (stockId, ratedIso) using historical recipe if any.
+  // Tier 3: no history either → bucketed by (stock, ratedIso) so they cluster naturally.
   fastify.get("/candidates", async (request) => {
     const shotRolls = await db
       .select({
@@ -41,6 +43,10 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
         manufacturer: filmStocks.manufacturer,
         stockName: filmStocks.name,
         stockIso: filmStocks.iso,
+        intendedDeveloper: rolls.intendedDeveloper,
+        intendedDilution: rolls.intendedDilution,
+        intendedDilutionRaw: rolls.intendedDilutionRaw,
+        intendedDevTimeSeconds: rolls.intendedDevTimeSeconds,
       })
       .from(rolls)
       .innerJoin(filmStocks, eq(rolls.filmStockId, filmStocks.id))
@@ -68,47 +74,61 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
       )
       .orderBy(desc(devSessions.completedAt));
 
-    // Latest recipe per (stockId, ratedIso). First occurrence wins because we ordered desc.
-    const recipeByKey = new Map<string, typeof history[number]>();
+    const recipeByStockIso = new Map<string, typeof history[number]>();
     for (const h of history) {
       const key = `${h.filmStockId}|${h.ratedIso ?? ""}`;
-      if (!recipeByKey.has(key)) recipeByKey.set(key, h);
+      if (!recipeByStockIso.has(key)) recipeByStockIso.set(key, h);
     }
 
+    type Recipe = {
+      developer: string | null;
+      dilution: string | null;
+      devTimeSeconds: number | null;
+      temperatureC: string | null;
+    };
     type Group = {
       recipeKey: string;
-      recipe: {
-        developer: string;
-        dilution: string | null;
-        devTimeSeconds: number | null;
-        temperatureC: string | null;
-      } | null;
+      tier: "intended" | "history" | "stock-iso";
+      recipe: Recipe | null;
       rolls: typeof shotRolls;
     };
     const groups = new Map<string, Group>();
 
-    for (const r of shotRolls) {
-      const histKey = `${r.filmStockId}|${r.ratedIso ?? ""}`;
-      const recipe = recipeByKey.get(histKey) ?? null;
-      const groupKey = recipe
-        ? `${recipe.developer}|${recipe.dilution ?? ""}|${recipe.devTimeSeconds ?? ""}|${recipe.temperatureC ?? ""}`
-        : "__ungrouped__";
+    function bucket(key: string, tier: Group["tier"], recipe: Recipe | null, roll: typeof shotRolls[number]) {
+      if (!groups.has(key)) groups.set(key, { recipeKey: key, tier, recipe, rolls: [] });
+      groups.get(key)!.rolls.push(roll);
+    }
 
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, {
-          recipeKey: groupKey,
-          recipe: recipe
-            ? {
-                developer: recipe.developer,
-                dilution: recipe.dilution,
-                devTimeSeconds: recipe.devTimeSeconds,
-                temperatureC: recipe.temperatureC,
-              }
-            : null,
-          rolls: [],
-        });
+    for (const r of shotRolls) {
+      // Tier 1: explicit intended dev on the roll
+      if (r.intendedDilution != null || r.intendedDevTimeSeconds != null) {
+        const dev = r.intendedDeveloper ?? "?";
+        const key = `intended|${dev}|${r.intendedDilution ?? ""}|${r.intendedDevTimeSeconds ?? ""}`;
+        bucket(key, "intended", {
+          developer: r.intendedDeveloper,
+          dilution: r.intendedDilution,
+          devTimeSeconds: r.intendedDevTimeSeconds,
+          temperatureC: null,
+        }, r);
+        continue;
       }
-      groups.get(groupKey)!.rolls.push(r);
+
+      // Tier 2: historical recipe for this (stock, ratedIso)
+      const hist = recipeByStockIso.get(`${r.filmStockId}|${r.ratedIso ?? ""}`);
+      if (hist) {
+        const key = `history|${hist.developer}|${hist.dilution ?? ""}|${hist.devTimeSeconds ?? ""}|${hist.temperatureC ?? ""}`;
+        bucket(key, "history", {
+          developer: hist.developer,
+          dilution: hist.dilution,
+          devTimeSeconds: hist.devTimeSeconds,
+          temperatureC: hist.temperatureC,
+        }, r);
+        continue;
+      }
+
+      // Tier 3: cluster by (stock, ratedIso) so similar rolls land together
+      const key = `stock-iso|${r.filmStockId}|${r.ratedIso ?? ""}`;
+      bucket(key, "stock-iso", null, r);
     }
 
     return { data: Array.from(groups.values()) };

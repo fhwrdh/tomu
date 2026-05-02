@@ -124,6 +124,11 @@ export const rolls = pgTable("rolls", {
   description: text("description"),
   tags: text("tags").array().notNull().default([]),
   devSessionId: uuid("dev_session_id").references((): any => devSessions.id, { onDelete: "set null" }),
+  /** Intended dev recipe — captured from physical bag/canister labels or pre-planned ahead of session. */
+  intendedDeveloper: text("intended_developer"),
+  intendedDilution: text("intended_dilution"),
+  intendedDilutionRaw: text("intended_dilution_raw"),
+  intendedDevTimeSeconds: integer("intended_dev_time_seconds"),
   ...timestamps,
 });
 

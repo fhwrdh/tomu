@@ -5,6 +5,7 @@ import {
   createNoteSchema,
   createRollSchema,
   logShotRollSchema,
+  parseDevShorthand,
   unloadRollSchema,
   updateRollSchema,
 } from "@tomu/shared";
@@ -374,6 +375,16 @@ export async function rollsRoutes(fastify: FastifyInstance) {
     }
     const unloadedAt = body.shotDate ? new Date(`${body.shotDate}T12:00:00Z`) : null;
 
+    let intendedDilution = body.intendedDilution ?? null;
+    let intendedDevTimeSeconds = body.intendedDevTimeSeconds ?? null;
+    let intendedDilutionRaw: string | null = null;
+    if (body.devShorthand) {
+      const parsed = parseDevShorthand(body.devShorthand);
+      intendedDilutionRaw = parsed.raw;
+      intendedDilution = body.intendedDilution ?? parsed.dilution;
+      intendedDevTimeSeconds = body.intendedDevTimeSeconds ?? parsed.devTimeSeconds;
+    }
+
     const [row] = await db
       .insert(rolls)
       .values({
@@ -392,6 +403,10 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         title: body.title ?? null,
         description: body.description ?? null,
         tags: body.tags ?? [],
+        intendedDeveloper: body.intendedDeveloper ?? null,
+        intendedDilution,
+        intendedDilutionRaw,
+        intendedDevTimeSeconds,
       })
       .returning();
 
@@ -410,13 +425,29 @@ export async function rollsRoutes(fastify: FastifyInstance) {
   // ── Update roll metadata ──────────────────────────────────────────────
   fastify.patch<{ Params: { id: string } }>("/:id", async (request, reply) => {
     const body = updateRollSchema.parse(request.body);
+    const { devShorthand, ...rest } = body;
+
+    // devShorthand parses into intended dilution + time. Explicit fields override.
+    const updates: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+    if (rest.pushPullStops != null) {
+      updates.pushPullStops = String(rest.pushPullStops);
+    }
+    if (devShorthand !== undefined) {
+      if (devShorthand === null) {
+        updates.intendedDilution = updates.intendedDilution ?? null;
+        updates.intendedDilutionRaw = null;
+        updates.intendedDevTimeSeconds = updates.intendedDevTimeSeconds ?? null;
+      } else {
+        const parsed = parseDevShorthand(devShorthand);
+        updates.intendedDilutionRaw = parsed.raw;
+        if (rest.intendedDilution === undefined) updates.intendedDilution = parsed.dilution;
+        if (rest.intendedDevTimeSeconds === undefined) updates.intendedDevTimeSeconds = parsed.devTimeSeconds;
+      }
+    }
+
     const [row] = await db
       .update(rolls)
-      .set({
-        ...body,
-        pushPullStops: body.pushPullStops != null ? String(body.pushPullStops) : undefined,
-        updatedAt: new Date(),
-      })
+      .set(updates)
       .where(and(eq(rolls.id, request.params.id), eq(rolls.userId, request.userId)))
       .returning();
 

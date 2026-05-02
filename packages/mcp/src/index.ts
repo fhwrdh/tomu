@@ -746,12 +746,14 @@ server.tool(
     ratedIso: z.number().int().positive().optional().describe("Rated ISO (defaults to box ISO of the stock)"),
     shotDate: z.string().optional().describe("Approx YYYY-MM-DD when shot. Used for displayId. Omit if unknown."),
     fieldSeq: z.number().int().min(1).max(99).optional().describe("Sequence number to honor an existing physical label (e.g. 7 → '20250506.07'). Server picks next available if omitted. 409 if collides."),
+    intendedDeveloper: z.string().optional().describe("Intended developer when known: 'HC-110', 'Rodinal', '510 Pyro'. Defaults to HC-110 when devShorthand is a letter code."),
+    devShorthand: z.string().optional().describe("Pre-stamped dev shorthand from bag/canister label: 'B7.5', '1:50/8mins', 'E10:40'. Parsed into intended dilution + time."),
     note: z.string().optional().describe("Free-text note (e.g. 'mystery roll, brandy trade, possible HP5')"),
     tags: z.array(z.string()).optional().describe("Tags (e.g. ['fridge-backlog', '2025-road-trip'])"),
     form: z.string().optional().describe("Override form: 'factory_roll' (default), 'bulk_roll', 'sheet'"),
     frameCount: z.number().int().positive().optional().describe("Override frame count"),
   },
-  async ({ film, format, camera, ratedIso, shotDate, fieldSeq, note, tags, form, frameCount }) => {
+  async ({ film, format, camera, ratedIso, shotDate, fieldSeq, intendedDeveloper, devShorthand, note, tags, form, frameCount }) => {
     const fmt = format || "35mm";
 
     const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
@@ -780,6 +782,14 @@ server.tool(
     if (ratedIso != null) body.ratedIso = ratedIso;
     if (shotDate) body.shotDate = shotDate;
     if (fieldSeq != null) body.fieldSeq = fieldSeq;
+    if (devShorthand) {
+      body.devShorthand = devShorthand;
+      // If shorthand is a single letter+number (HC-110 codes), default the developer.
+      if (/^[A-Ha-h]\d/.test(devShorthand) && !intendedDeveloper) {
+        body.intendedDeveloper = "HC-110";
+      }
+    }
+    if (intendedDeveloper) body.intendedDeveloper = intendedDeveloper;
     if (note) body.note = note;
     if (tags?.length) body.tags = tags;
     if (form) body.form = form;
@@ -815,8 +825,9 @@ interface CandidateRoll {
 
 interface CandidateGroup {
   recipeKey: string;
+  tier: "intended" | "history" | "stock-iso";
   recipe: {
-    developer: string;
+    developer: string | null;
     dilution: string | null;
     devTimeSeconds: number | null;
     temperatureC: string | null;
@@ -833,7 +844,7 @@ function formatTime(seconds: number | null): string {
 
 server.tool(
   "tomu_dev_candidates",
-  "List rolls awaiting development, grouped by exact-match recipe from past sessions. Use this to plan dev tanks.",
+  "List rolls awaiting development, grouped by recipe. Tier 1: explicit intended-dev (from labels). Tier 2: matched against past sessions. Tier 3: clustered by stock+ISO when no recipe is known.",
   {},
   async () => {
     const { data: groups } = await api<{ data: CandidateGroup[] }>("/dev-sessions/candidates");
@@ -842,28 +853,50 @@ server.tool(
       return { content: [{ type: "text" as const, text: "No rolls awaiting development." }] };
     }
 
-    const lines: string[] = ["## Dev candidates\n"];
-    const named = groups.filter((g) => g.recipe);
-    const ungrouped = groups.find((g) => !g.recipe);
-
-    let i = 0;
-    for (const g of named) {
-      const r = g.recipe!;
-      const recipeStr = `${r.developer} ${r.dilution ?? "—"} ${formatTime(r.devTimeSeconds)}${r.temperatureC ? ` @ ${r.temperatureC}°C` : ""}`;
-      lines.push(`### Group ${String.fromCharCode(65 + i)} — ${recipeStr}  (${g.rolls.length} roll${g.rolls.length === 1 ? "" : "s"})`);
-      for (const roll of g.rolls) {
-        const iso = roll.ratedIso && roll.ratedIso !== roll.stockIso ? `@ ${roll.ratedIso} ` : "";
-        lines.push(`- **${roll.displayId ?? roll.id}** ${roll.manufacturer} ${roll.stockName} ${iso}(${roll.format})`);
-      }
-      lines.push("");
-      i++;
+    function rollLine(roll: CandidateRoll): string {
+      const iso = roll.ratedIso && roll.ratedIso !== roll.stockIso ? `@ ${roll.ratedIso} ` : "";
+      return `- **${roll.displayId ?? roll.id.slice(0, 8)}** ${roll.manufacturer} ${roll.stockName} ${iso}(${roll.format})`;
+    }
+    function recipeLabel(r: CandidateGroup["recipe"]): string {
+      if (!r) return "—";
+      const dev = r.developer ?? "?";
+      const dil = r.dilution ?? "—";
+      return `${dev} ${dil} ${formatTime(r.devTimeSeconds)}${r.temperatureC ? ` @ ${r.temperatureC}°C` : ""}`;
     }
 
-    if (ungrouped) {
-      lines.push(`### Ungrouped — no prior recipe  (${ungrouped.rolls.length} roll${ungrouped.rolls.length === 1 ? "" : "s"})`);
-      for (const roll of ungrouped.rolls) {
-        const iso = roll.ratedIso && roll.ratedIso !== roll.stockIso ? `@ ${roll.ratedIso} ` : "";
-        lines.push(`- **${roll.displayId ?? roll.id}** ${roll.manufacturer} ${roll.stockName} ${iso}(${roll.format})`);
+    const intended = groups.filter((g) => g.tier === "intended");
+    const history = groups.filter((g) => g.tier === "history");
+    const stockIso = groups.filter((g) => g.tier === "stock-iso");
+
+    const lines: string[] = ["## Dev candidates\n"];
+    let i = 0;
+
+    if (intended.length) {
+      lines.push(`### Tier 1 — intended (from labels)\n`);
+      for (const g of intended) {
+        lines.push(`**Group ${String.fromCharCode(65 + i++)}** — ${recipeLabel(g.recipe)}  (${g.rolls.length})`);
+        for (const r of g.rolls) lines.push(rollLine(r));
+        lines.push("");
+      }
+    }
+
+    if (history.length) {
+      lines.push(`### Tier 2 — historical recipe match\n`);
+      for (const g of history) {
+        lines.push(`**Group ${String.fromCharCode(65 + i++)}** — ${recipeLabel(g.recipe)}  (${g.rolls.length})`);
+        for (const r of g.rolls) lines.push(rollLine(r));
+        lines.push("");
+      }
+    }
+
+    if (stockIso.length) {
+      lines.push(`### Tier 3 — no recipe yet, clustered by stock+ISO\n`);
+      for (const g of stockIso) {
+        const r0 = g.rolls[0];
+        const iso = r0.ratedIso && r0.ratedIso !== r0.stockIso ? `@ ${r0.ratedIso}` : `@ ${r0.stockIso}`;
+        lines.push(`**Group ${String.fromCharCode(65 + i++)}** — ${r0.manufacturer} ${r0.stockName} ${iso}  (${g.rolls.length})`);
+        for (const r of g.rolls) lines.push(rollLine(r));
+        lines.push("");
       }
     }
 

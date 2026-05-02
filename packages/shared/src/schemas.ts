@@ -105,6 +105,10 @@ export const updateRollSchema = z.object({
   title: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
   tags: z.array(z.string()).optional(),
+  intendedDeveloper: z.string().max(100).nullish(),
+  devShorthand: z.string().max(50).nullish(),
+  intendedDilution: z.string().max(50).nullish(),
+  intendedDevTimeSeconds: z.number().int().positive().nullish(),
 });
 
 export const rollStatusSchema = z.object({
@@ -128,6 +132,13 @@ export const logShotRollSchema = z.object({
   shotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /** Field sequence number to use for displayId (e.g. 7 → "20250506.07"). Server picks the next available if omitted. */
   fieldSeq: z.number().int().min(1).max(99).optional(),
+  /** Intended developer (e.g. "HC-110", "Rodinal"). Used as default when shorthand is letter-only. */
+  intendedDeveloper: z.string().max(100).optional(),
+  /** Pre-stamped dev shorthand from bag/canister label (e.g. "B7.5", "1:50/8mins"). Parsed into structured fields. */
+  devShorthand: z.string().max(50).optional(),
+  /** Explicit override; wins over devShorthand parse. */
+  intendedDilution: z.string().max(50).optional(),
+  intendedDevTimeSeconds: z.number().int().positive().optional(),
   title: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
   tags: z.array(z.string()).optional(),
