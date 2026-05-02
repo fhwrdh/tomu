@@ -67,7 +67,7 @@ async function pickInventoryItem(
   return available[0];
 }
 
-/** Compute display ID `YYYYMMDD.N` for a just-unloaded roll. Uses localDate if provided, else server-local today. */
+/** Compute display ID `YYYYMMDD.NN` for a just-unloaded roll. Uses localDate if provided, else server-local today. */
 async function computeDisplayId(userId: string, localDate?: string): Promise<string> {
   const date = localDate ?? new Date().toISOString().slice(0, 10);
   const ymd = date.replace(/-/g, "");
@@ -85,7 +85,7 @@ async function computeDisplayId(userId: string, localDate?: string): Promise<str
     );
 
   const n = existing.length + 1;
-  return `${ymd}.${n}`;
+  return `${ymd}.${String(n).padStart(2, "0")}`;
 }
 
 export async function rollsRoutes(fastify: FastifyInstance) {
