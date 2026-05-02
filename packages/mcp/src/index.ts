@@ -97,6 +97,36 @@ function bestMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]
   return best;
 }
 
+/**
+ * Like bestMatch but reports ties so callers can refuse to silently pick.
+ * Returns:
+ *   { kind: "none" }      — no candidate scored above 0
+ *   { kind: "single", … } — clear winner
+ *   { kind: "tied", … }   — two or more candidates tied for top score
+ */
+type MatchResult<T> =
+  | { kind: "none" }
+  | { kind: "single"; item: T; score: number }
+  | { kind: "tied"; items: T[]; score: number };
+
+function rankedMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]): MatchResult<T> {
+  let bestScore = 0;
+  let bestItems: T[] = [];
+  for (const item of items) {
+    const s = score(query, fieldsOf(item));
+    if (s <= 0) continue;
+    if (s > bestScore) {
+      bestScore = s;
+      bestItems = [item];
+    } else if (s === bestScore) {
+      bestItems.push(item);
+    }
+  }
+  if (bestItems.length === 0) return { kind: "none" };
+  if (bestItems.length === 1) return { kind: "single", item: bestItems[0], score: bestScore };
+  return { kind: "tied", items: bestItems, score: bestScore };
+}
+
 // ── Server ──
 
 const server = new McpServer({
@@ -484,14 +514,14 @@ server.tool(
 
     // Resolve camera
     const { data: cams } = await api<{ data: Array<{ id: string; make: string; model: string; format: string }> }>("/cameras");
-    const matches = cams.filter((c) => fuzzyMatch(camera, `${c.make} ${c.model}`, c.model, c.make));
-    if (matches.length === 0) {
+    const m = rankedMatch(camera, cams, (c) => [`${c.make} ${c.model}`, c.model, c.make]);
+    if (m.kind === "none") {
       return { content: [{ type: "text" as const, text: `Camera "${camera}" not found. Known cameras: ${cams.map((c) => `${c.make} ${c.model}`).join(", ") || "none"}.` }] };
     }
-    if (matches.length > 1) {
-      return { content: [{ type: "text" as const, text: `Camera "${camera}" is ambiguous. Matches: ${matches.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
+    if (m.kind === "tied") {
+      return { content: [{ type: "text" as const, text: `Camera "${camera}" is ambiguous. Tied matches: ${m.items.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
     }
-    const cam = matches[0];
+    const cam = m.item;
 
     // Load
     const loadBody: Record<string, unknown> = {
@@ -734,15 +764,15 @@ server.tool(
     let cameraLabel = "";
     if (camera) {
       const { data: cams } = await api<{ data: Array<{ id: string; make: string; model: string }> }>("/cameras");
-      const matches = cams.filter((c) => fuzzyMatch(camera, `${c.make} ${c.model}`, c.model, c.make));
-      if (matches.length === 0) {
+      const m = rankedMatch(camera, cams, (c) => [`${c.make} ${c.model}`, c.model, c.make]);
+      if (m.kind === "none") {
         return { content: [{ type: "text" as const, text: `Camera "${camera}" not found. Known: ${cams.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
       }
-      if (matches.length > 1) {
-        return { content: [{ type: "text" as const, text: `Camera "${camera}" is ambiguous. Matches: ${matches.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
+      if (m.kind === "tied") {
+        return { content: [{ type: "text" as const, text: `Camera "${camera}" is ambiguous. Tied matches: ${m.items.map((c) => `${c.make} ${c.model}`).join(", ")}.` }] };
       }
-      cameraId = matches[0].id;
-      cameraLabel = ` in ${matches[0].make} ${matches[0].model}`;
+      cameraId = m.item.id;
+      cameraLabel = ` in ${m.item.make} ${m.item.model}`;
     }
 
     const body: Record<string, unknown> = { filmStockId: stock.id, format: fmt };
