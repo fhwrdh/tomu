@@ -229,6 +229,32 @@ export const scanners = pgTable("scanners", {
   ...timestamps,
 });
 
+// ── Dev recipes (Massive Dev Chart) ──
+//
+// Tabular dev times scraped from MDC for the developers in the user's kit.
+// filmStockId is resolved via fuzzy match during import; null means we couldn't
+// find a matching stock in the user's collection (still kept for completeness).
+
+export const devRecipes = pgTable("dev_recipes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** The film name as it appears on MDC, e.g. "Ilford HP5+", "Eastman Double-X (5222)". */
+  filmName: text("film_name").notNull(),
+  /** Resolved film stock when the MDC name maps cleanly to a user's stock. */
+  filmStockId: uuid("film_stock_id").references(() => filmStocks.id, { onDelete: "set null" }),
+  developer: text("developer").notNull(),
+  dilution: text("dilution").notNull(),
+  asaIso: integer("asa_iso").notNull(),
+  /** Times in seconds. Each format is independent; null when MDC didn't list one. */
+  time35mmSec: integer("time_35mm_sec"),
+  time120Sec: integer("time_120_sec"),
+  timeSheetSec: integer("time_sheet_sec"),
+  temperatureC: numeric("temperature_c", { precision: 4, scale: 1 }),
+  /** True if the MDC row had [notes]. We don't ingest the actual note text. */
+  hasNotes: boolean("has_notes").notNull().default(false),
+  source: text("source").notNull(),
+  ...timestamps,
+});
+
 export const scans = pgTable("scans", {
   id: uuid("id").primaryKey().defaultRandom(),
   frameId: uuid("frame_id").notNull().references(() => frames.id, { onDelete: "cascade" }),

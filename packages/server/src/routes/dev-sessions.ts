@@ -6,7 +6,7 @@ import {
   parseDevShorthand,
 } from "@tomu/shared";
 import { db } from "../db/client.js";
-import { devSessions, filmStocks, rolls } from "../db/schema.js";
+import { devRecipes, devSessions, filmStocks, rolls } from "../db/schema.js";
 
 /** Compute display ID `YYYYMMDD.NN` for a new dev session. */
 async function computeSessionDisplayId(userId: string, localDate?: string): Promise<string> {
@@ -29,9 +29,11 @@ async function computeSessionDisplayId(userId: string, localDate?: string): Prom
 export async function devSessionsRoutes(fastify: FastifyInstance) {
   // ── Dev candidates ───────────────────────────────────────────────────
   // Returns shot-but-not-yet-developed rolls, grouped by recipe.
-  // Tier 1: rolls with explicit intended-dev (from bag/canister labels) → exact-match recipe.
-  // Tier 2: rolls without intended-dev → grouped by (stockId, ratedIso) using historical recipe if any.
-  // Tier 3: no history either → bucketed by (stock, ratedIso) so they cluster naturally.
+  // Tier 1: rolls with explicit intended-dev (from bag/canister labels).
+  // Tier 2: rolls without intended-dev → look up most recent completed session for (stockId, ratedIso).
+  // Tier 3 (MDC): rolls with no history → look up Massive Dev Chart recipes for the user's preferred developers.
+  //               Prefer HC-110, then Rodinal, then 510-Pyro. Match on exact ISO, fall back to nearest within ±20%.
+  // Tier 4: still nothing → cluster by (stock, ratedIso) so the user can manually pick a recipe.
   fastify.get("/candidates", async (request) => {
     const shotRolls = await db
       .select({
@@ -80,16 +82,73 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
       if (!recipeByStockIso.has(key)) recipeByStockIso.set(key, h);
     }
 
+    // Pull all MDC recipes for stocks the user has shot rolls for (just those stocks
+    // — keeps the working set small).
+    const stockIds = Array.from(new Set(shotRolls.map((r) => r.filmStockId)));
+    const mdcRows = stockIds.length
+      ? await db
+          .select({
+            filmStockId: devRecipes.filmStockId,
+            developer: devRecipes.developer,
+            dilution: devRecipes.dilution,
+            asaIso: devRecipes.asaIso,
+            time35mmSec: devRecipes.time35mmSec,
+            time120Sec: devRecipes.time120Sec,
+            timeSheetSec: devRecipes.timeSheetSec,
+            temperatureC: devRecipes.temperatureC,
+          })
+          .from(devRecipes)
+          .where(inArray(devRecipes.filmStockId, stockIds))
+      : [];
+
+    const DEV_PREF = ["HC-110", "Rodinal", "510-Pyro"];
+    /**
+     * Find the best MDC recipe for a (stockId, format, ratedIso). Walks developers
+     * in user-preference order. For each developer, prefers exact ISO; falls back
+     * to the nearest within ±20% (so ISO 5 hits ISO 6 recipes, 1600 hits 2000, etc.).
+     */
+    function findMdcRecipe(
+      stockId: string,
+      format: string,
+      ratedIso: number | null,
+    ): typeof mdcRows[number] | null {
+      if (ratedIso == null) return null;
+      const stockRecipes = mdcRows.filter((r) => r.filmStockId === stockId);
+      if (stockRecipes.length === 0) return null;
+
+      const formatTime = (r: typeof mdcRows[number]) =>
+        format === "120"
+          ? r.time120Sec
+          : format === "4x5" || format === "8x10"
+            ? r.timeSheetSec
+            : r.time35mmSec;
+
+      for (const dev of DEV_PREF) {
+        const devRows = stockRecipes.filter((r) => r.developer === dev && formatTime(r) != null);
+        if (!devRows.length) continue;
+        const exact = devRows.find((r) => r.asaIso === ratedIso);
+        if (exact) return exact;
+        // Nearest within ±20%
+        const tolerance = 0.2;
+        const inRange = devRows
+          .filter((r) => Math.abs(r.asaIso - ratedIso) / ratedIso <= tolerance)
+          .sort((a, b) => Math.abs(a.asaIso - ratedIso) - Math.abs(b.asaIso - ratedIso));
+        if (inRange.length) return inRange[0];
+      }
+      return null;
+    }
+
     type Recipe = {
       developer: string | null;
       dilution: string | null;
       devTimeSeconds: number | null;
       temperatureC: string | null;
+      mdcAsaIso?: number | null;
     };
     type Group = {
       recipeKey: string;
-      tier: "intended" | "history" | "stock-iso";
-      recipe: Recipe | null;
+      tier: "intended" | "history" | "mdc" | "stock-iso";
+      recipe: (Recipe & { mdcAsaIso?: number | null }) | null;
       rolls: typeof shotRolls;
     };
     const groups = new Map<string, Group>();
@@ -126,7 +185,27 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
         continue;
       }
 
-      // Tier 3: cluster by (stock, ratedIso) so similar rolls land together
+      // Tier 3: MDC recipe for the format + ISO (preferring user's developer order)
+      const mdc = findMdcRecipe(r.filmStockId, r.format, r.ratedIso);
+      if (mdc) {
+        const time =
+          r.format === "120"
+            ? mdc.time120Sec
+            : r.format === "4x5" || r.format === "8x10"
+              ? mdc.timeSheetSec
+              : mdc.time35mmSec;
+        const key = `mdc|${mdc.developer}|${mdc.dilution}|${time ?? ""}|${mdc.temperatureC ?? ""}|${mdc.asaIso}`;
+        bucket(key, "mdc", {
+          developer: mdc.developer,
+          dilution: mdc.dilution,
+          devTimeSeconds: time,
+          temperatureC: mdc.temperatureC,
+          mdcAsaIso: mdc.asaIso,
+        }, r);
+        continue;
+      }
+
+      // Tier 4: cluster by (stock, ratedIso) so similar rolls land together
       const key = `stock-iso|${r.filmStockId}|${r.ratedIso ?? ""}`;
       bucket(key, "stock-iso", null, r);
     }
