@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   integer,
   numeric,
   pgTable,
@@ -105,32 +106,40 @@ export const filmInventory = pgTable("film_inventory", {
 
 // ── Rolls ──
 
-export const rolls = pgTable("rolls", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").notNull().references(() => users.id),
-  cameraId: uuid("camera_id").references(() => cameras.id),
-  filmStockId: uuid("film_stock_id").notNull().references(() => filmStocks.id),
-  format: text("format").notNull(),
-  form: text("form").notNull().default("factory_roll"),
-  status: text("status").notNull().default("loaded"),
-  loadedAt: timestamp("loaded_at", { withTimezone: true }),
-  unloadedAt: timestamp("unloaded_at", { withTimezone: true }),
-  /** Human-readable ID assigned at unload time, format: YYYYMMDD.N (local date, N = Nth roll unloaded that day). */
-  displayId: text("display_id"),
-  ratedIso: integer("rated_iso"),
-  pushPullStops: numeric("push_pull_stops", { precision: 3, scale: 1 }),
-  frameCount: integer("frame_count").notNull().default(36),
-  title: text("title"),
-  description: text("description"),
-  tags: text("tags").array().notNull().default([]),
-  devSessionId: uuid("dev_session_id").references((): any => devSessions.id, { onDelete: "set null" }),
-  /** Intended dev recipe — captured from physical bag/canister labels or pre-planned ahead of session. */
-  intendedDeveloper: text("intended_developer"),
-  intendedDilution: text("intended_dilution"),
-  intendedDilutionRaw: text("intended_dilution_raw"),
-  intendedDevTimeSeconds: integer("intended_dev_time_seconds"),
-  ...timestamps,
-});
+export const rolls = pgTable(
+  "rolls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    cameraId: uuid("camera_id").references(() => cameras.id),
+    filmStockId: uuid("film_stock_id").notNull().references(() => filmStocks.id),
+    format: text("format").notNull(),
+    form: text("form").notNull().default("factory_roll"),
+    status: text("status").notNull().default("loaded"),
+    loadedAt: timestamp("loaded_at", { withTimezone: true }),
+    unloadedAt: timestamp("unloaded_at", { withTimezone: true }),
+    /** Human-readable ID assigned at unload time, format: YYYYMMDD.N (local date, N = Nth roll unloaded that day). */
+    displayId: text("display_id"),
+    ratedIso: integer("rated_iso"),
+    pushPullStops: numeric("push_pull_stops", { precision: 3, scale: 1 }),
+    frameCount: integer("frame_count").notNull().default(36),
+    title: text("title"),
+    description: text("description"),
+    tags: text("tags").array().notNull().default([]),
+    devSessionId: uuid("dev_session_id").references((): any => devSessions.id, { onDelete: "set null" }),
+    /** Intended dev recipe — captured from physical bag/canister labels or pre-planned ahead of session. */
+    intendedDeveloper: text("intended_developer"),
+    intendedDilution: text("intended_dilution"),
+    intendedDilutionRaw: text("intended_dilution_raw"),
+    intendedDevTimeSeconds: integer("intended_dev_time_seconds"),
+    /** Date the roll was developed (local). Pairs with devSeq to form the Dev Id (YYYYMMDD.NNNN). */
+    devDate: date("dev_date"),
+    /** Cumulative lifetime dev sequence number. Never resets. Unique per user. */
+    devSeq: integer("dev_seq"),
+    ...timestamps,
+  },
+  (t) => [unique().on(t.userId, t.devSeq)]
+);
 
 // ── Frames ──
 
