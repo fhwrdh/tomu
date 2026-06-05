@@ -790,8 +790,8 @@ server.tool(
   async ({ film, format, camera, ratedIso, shotDate, fieldSeq, intendedDeveloper, devShorthand, note, tags, form, frameCount, manufacturer, iso, type }) => {
     const fmt = format || "35mm";
 
-    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
-    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
+    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number; aliases?: string[] }> }>("/film-stocks");
+    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer, ...(s.aliases ?? [])]);
     let stock: { id: string; manufacturer: string; name: string; iso: number } | null = null;
     if (m.kind === "single") stock = m.item;
     else if (m.kind === "tied") {
@@ -997,8 +997,8 @@ server.tool(
     }
 
     // Resolve or create stock
-    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
-    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
+    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number; aliases?: string[] }> }>("/film-stocks");
+    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer, ...(s.aliases ?? [])]);
     let stock: { id: string; manufacturer: string; name: string; iso: number } | null = null;
     if (m.kind === "single") stock = m.item;
     else if (m.kind === "tied") {
@@ -1023,6 +1023,48 @@ server.tool(
       content: [{
         type: "text" as const,
         text: `Roll **${displayId}** repointed to **${stock.manufacturer} ${stock.name}** (ISO ${patch.ratedIso}).`,
+      }],
+    };
+  }
+);
+
+// ── Tool: tomu_set_stock_aliases ──────────────────────────────────────
+
+server.tool(
+  "tomu_set_stock_aliases",
+  "Add (or replace) alternate names on a film stock so fuzzy matching recognises shorthand. " +
+    "Example: add alias 'NCS' to 'NoColorStudio no.5' so 'NCS #5' resolves. " +
+    "Default mode is 'add' (merges with existing). Pass mode='set' to overwrite the list.",
+  {
+    film: z.string().describe("Film stock to update (e.g. 'NoColorStudio no.5')"),
+    aliases: z.array(z.string().min(1).max(50)).min(1).describe("Aliases to add or set (e.g. ['NCS no.5', 'NCS#5'])"),
+    mode: z.enum(["add", "set"]).optional().describe("'add' (default) merges; 'set' replaces the full list"),
+  },
+  async ({ film, aliases, mode }) => {
+    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; aliases?: string[] }> }>("/film-stocks");
+    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer, ...(s.aliases ?? [])]);
+    if (m.kind === "none") {
+      return { content: [{ type: "text" as const, text: `Film "${film}" not found.` }] };
+    }
+    if (m.kind === "tied") {
+      return { content: [{ type: "text" as const, text: `Film "${film}" is ambiguous. Tied: ${m.items.map((s) => displayStock(s.manufacturer, s.name)).join(", ")}.` }] };
+    }
+    const stock = m.item;
+
+    const next =
+      mode === "set"
+        ? Array.from(new Set(aliases))
+        : Array.from(new Set([...(stock.aliases ?? []), ...aliases]));
+
+    await api(`/film-stocks/${stock.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ aliases: next }),
+    });
+
+    return {
+      content: [{
+        type: "text" as const,
+        text: `**${displayStock(stock.manufacturer, stock.name)}** aliases ${mode === "set" ? "set" : "now"}: ${next.join(", ")}`,
       }],
     };
   }

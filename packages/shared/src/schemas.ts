@@ -47,6 +47,7 @@ export const createFilmStockSchema = z.object({
   iso: z.number().int().positive(),
   type: z.enum(FILM_TYPES),
   frameCount: z.number().int().positive().optional(),
+  aliases: z.array(z.string().min(1).max(50)).optional(),
   notes: z.string().max(2000).optional(),
 });
 

@@ -76,6 +76,8 @@ export const filmStocks = pgTable("film_stocks", {
   type: text("type").notNull(),
   /** Frame count for factory-loaded rolls of this stock (e.g. 29 for NoColorStudio no.5). Null = use format default. */
   frameCount: integer("frame_count"),
+  /** Alternate names the fuzzy matcher should accept (e.g. ["NCS"] for NoColorStudio). */
+  aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
   notes: text("notes"),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps,
