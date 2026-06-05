@@ -1,0 +1,2240 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict fZmALyTclo2bMdIlXoeqotcn4xoKLXHajVh84kLBmu50BJBNQgCI6P5RIMdoLrf
+
+-- Dumped from database version 16.13 (Homebrew)
+-- Dumped by pg_dump version 16.13 (Homebrew)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+ALTER TABLE IF EXISTS ONLY public.scans DROP CONSTRAINT IF EXISTS scans_scanner_id_scanners_id_fk;
+ALTER TABLE IF EXISTS ONLY public.scans DROP CONSTRAINT IF EXISTS scans_frame_id_frames_id_fk;
+ALTER TABLE IF EXISTS ONLY public.scanners DROP CONSTRAINT IF EXISTS scanners_user_id_users_id_fk;
+ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_user_id_users_id_fk;
+ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_film_stock_id_film_stocks_id_fk;
+ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_dev_session_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_camera_id_cameras_id_fk;
+ALTER TABLE IF EXISTS ONLY public.notes DROP CONSTRAINT IF EXISTS notes_user_id_users_id_fk;
+ALTER TABLE IF EXISTS ONLY public.notes DROP CONSTRAINT IF EXISTS notes_roll_id_rolls_id_fk;
+ALTER TABLE IF EXISTS ONLY public.notes DROP CONSTRAINT IF EXISTS notes_frame_id_frames_id_fk;
+ALTER TABLE IF EXISTS ONLY public.lenses DROP CONSTRAINT IF EXISTS lenses_user_id_users_id_fk;
+ALTER TABLE IF EXISTS ONLY public.frames DROP CONSTRAINT IF EXISTS frames_roll_id_rolls_id_fk;
+ALTER TABLE IF EXISTS ONLY public.frames DROP CONSTRAINT IF EXISTS frames_lens_id_lenses_id_fk;
+ALTER TABLE IF EXISTS ONLY public.film_stocks DROP CONSTRAINT IF EXISTS film_stocks_user_id_users_id_fk;
+ALTER TABLE IF EXISTS ONLY public.film_inventory DROP CONSTRAINT IF EXISTS film_inventory_user_id_users_id_fk;
+ALTER TABLE IF EXISTS ONLY public.film_inventory DROP CONSTRAINT IF EXISTS film_inventory_film_stock_id_film_stocks_id_fk;
+ALTER TABLE IF EXISTS ONLY public.dev_sessions DROP CONSTRAINT IF EXISTS dev_sessions_user_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.dev_recipes DROP CONSTRAINT IF EXISTS dev_recipes_film_stock_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.cameras DROP CONSTRAINT IF EXISTS cameras_user_id_users_id_fk;
+ALTER TABLE IF EXISTS ONLY public.camera_lenses DROP CONSTRAINT IF EXISTS camera_lenses_lens_id_lenses_id_fk;
+ALTER TABLE IF EXISTS ONLY public.camera_lenses DROP CONSTRAINT IF EXISTS camera_lenses_camera_id_cameras_id_fk;
+DROP INDEX IF EXISTS public.rolls_user_id_dev_seq_unique;
+DROP INDEX IF EXISTS public.idx_dev_recipes_stock_iso;
+DROP INDEX IF EXISTS public.idx_dev_recipes_developer;
+DROP INDEX IF EXISTS public.film_inventory_user_display_id_unique;
+ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_pkey;
+ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_email_unique;
+ALTER TABLE IF EXISTS ONLY public.scans DROP CONSTRAINT IF EXISTS scans_pkey;
+ALTER TABLE IF EXISTS ONLY public.scanners DROP CONSTRAINT IF EXISTS scanners_pkey;
+ALTER TABLE IF EXISTS ONLY public.rolls DROP CONSTRAINT IF EXISTS rolls_pkey;
+ALTER TABLE IF EXISTS ONLY public.notes DROP CONSTRAINT IF EXISTS notes_pkey;
+ALTER TABLE IF EXISTS ONLY public.lenses DROP CONSTRAINT IF EXISTS lenses_pkey;
+ALTER TABLE IF EXISTS ONLY public.frames DROP CONSTRAINT IF EXISTS frames_roll_id_frame_number_unique;
+ALTER TABLE IF EXISTS ONLY public.frames DROP CONSTRAINT IF EXISTS frames_pkey;
+ALTER TABLE IF EXISTS ONLY public.film_stocks DROP CONSTRAINT IF EXISTS film_stocks_pkey;
+ALTER TABLE IF EXISTS ONLY public.film_inventory DROP CONSTRAINT IF EXISTS film_inventory_pkey;
+ALTER TABLE IF EXISTS ONLY public.dev_sessions DROP CONSTRAINT IF EXISTS dev_sessions_pkey;
+ALTER TABLE IF EXISTS ONLY public.dev_recipes DROP CONSTRAINT IF EXISTS dev_recipes_pkey;
+ALTER TABLE IF EXISTS ONLY public.cameras DROP CONSTRAINT IF EXISTS cameras_pkey;
+ALTER TABLE IF EXISTS ONLY public.camera_lenses DROP CONSTRAINT IF EXISTS camera_lenses_camera_id_lens_id_unique;
+DROP TABLE IF EXISTS public.users;
+DROP TABLE IF EXISTS public.scans;
+DROP TABLE IF EXISTS public.scanners;
+DROP TABLE IF EXISTS public.rolls;
+DROP TABLE IF EXISTS public.notes;
+DROP TABLE IF EXISTS public.lenses;
+DROP TABLE IF EXISTS public.frames;
+DROP TABLE IF EXISTS public.film_stocks;
+DROP TABLE IF EXISTS public.film_inventory;
+DROP TABLE IF EXISTS public.dev_sessions;
+DROP TABLE IF EXISTS public.dev_recipes;
+DROP TABLE IF EXISTS public.cameras;
+DROP TABLE IF EXISTS public.camera_lenses;
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: camera_lenses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.camera_lenses (
+    camera_id uuid NOT NULL,
+    lens_id uuid NOT NULL
+);
+
+
+--
+-- Name: cameras; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cameras (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    make text NOT NULL,
+    model text NOT NULL,
+    format text NOT NULL,
+    serial_number text,
+    notes text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    frame_count integer
+);
+
+
+--
+-- Name: dev_recipes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dev_recipes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    film_name text NOT NULL,
+    film_stock_id uuid,
+    developer text NOT NULL,
+    dilution text NOT NULL,
+    asa_iso integer NOT NULL,
+    time_35mm_sec integer,
+    time_120_sec integer,
+    time_sheet_sec integer,
+    temperature_c numeric(4,1),
+    has_notes boolean DEFAULT false NOT NULL,
+    source text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: dev_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dev_sessions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    display_id text,
+    developer text NOT NULL,
+    dilution text,
+    dilution_raw text,
+    dev_time_seconds integer,
+    temperature_c numeric(4,1),
+    agitation text,
+    tank text,
+    stop_bath text,
+    fixer text,
+    fixer_time_seconds integer,
+    wash_method text,
+    wetting_agent text,
+    notes text,
+    developed_at timestamp with time zone,
+    completed_at timestamp with time zone,
+    results_rating integer,
+    results_notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: film_inventory; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.film_inventory (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    film_stock_id uuid NOT NULL,
+    quantity integer DEFAULT 0 NOT NULL,
+    expiration_date text,
+    storage_location text DEFAULT 'fridge'::text NOT NULL,
+    purchase_date text,
+    cost_per_roll numeric(8,2),
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    format text DEFAULT '35mm'::text NOT NULL,
+    form text DEFAULT 'factory_roll'::text NOT NULL,
+    remaining_length_ft numeric(8,1),
+    original_length_ft numeric(8,1),
+    frame_count integer,
+    display_id text,
+    rated_iso integer
+);
+
+
+--
+-- Name: film_stocks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.film_stocks (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    manufacturer text NOT NULL,
+    name text NOT NULL,
+    iso integer NOT NULL,
+    type text NOT NULL,
+    notes text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    frame_count integer
+);
+
+
+--
+-- Name: frames; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.frames (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roll_id uuid NOT NULL,
+    frame_number integer NOT NULL,
+    lens_id uuid,
+    shutter_speed text,
+    aperture text,
+    compensation text,
+    metering_mode text,
+    subject text,
+    notes text,
+    latitude numeric(10,7),
+    longitude numeric(10,7),
+    location_name text,
+    shot_at timestamp with time zone,
+    tags text[] DEFAULT '{}'::text[] NOT NULL,
+    rating integer,
+    is_portfolio boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: lenses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lenses (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    make text NOT NULL,
+    model text NOT NULL,
+    focal_length_mm integer,
+    max_aperture text,
+    serial_number text,
+    notes text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: notes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    roll_id uuid,
+    frame_id uuid,
+    type text,
+    content text,
+    file_key text,
+    file_url text,
+    thumbnail_url text,
+    duration_seconds integer,
+    mime_type text,
+    file_size_bytes integer,
+    latitude numeric(10,7),
+    longitude numeric(10,7),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT note_parent_check CHECK (((roll_id IS NOT NULL) OR (frame_id IS NOT NULL)))
+);
+
+
+--
+-- Name: rolls; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rolls (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    camera_id uuid,
+    film_stock_id uuid NOT NULL,
+    status text DEFAULT 'loaded'::text NOT NULL,
+    loaded_at timestamp with time zone,
+    rated_iso integer,
+    push_pull_stops numeric(3,1),
+    frame_count integer DEFAULT 36 NOT NULL,
+    title text,
+    description text,
+    tags text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    format text DEFAULT '35mm'::text NOT NULL,
+    form text DEFAULT 'factory_roll'::text NOT NULL,
+    unloaded_at timestamp with time zone,
+    display_id text,
+    dev_session_id uuid,
+    intended_developer text,
+    intended_dilution text,
+    intended_dilution_raw text,
+    intended_dev_time_seconds integer,
+    dev_date date,
+    dev_seq integer
+);
+
+
+--
+-- Name: scanners; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.scanners (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    make text,
+    model text,
+    notes text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: scans; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.scans (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    frame_id uuid NOT NULL,
+    scanner_id uuid,
+    file_key text NOT NULL,
+    file_url text NOT NULL,
+    thumbnail_url text,
+    original_filename text,
+    mime_type text,
+    file_size_bytes integer,
+    width_px integer,
+    height_px integer,
+    dpi integer,
+    bit_depth integer,
+    color_space text,
+    post_processing_notes text,
+    is_primary boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.users (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    email text NOT NULL,
+    password_hash text NOT NULL,
+    display_name text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Data for Name: camera_lenses; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.camera_lenses (camera_id, lens_id) FROM stdin;
+\.
+
+
+--
+-- Data for Name: cameras; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.cameras (id, user_id, make, model, format, serial_number, notes, is_active, created_at, updated_at, frame_count) FROM stdin;
+bb587d3e-06d6-414f-808d-d700b4f8c2b5	c0fe3ff9-a993-4021-95f0-3f782e4038e0	Nikon	F3	35mm	\N	\N	t	2026-03-30 18:17:30.251062-07	2026-03-30 18:17:30.251062-07	\N
+ecf85b27-a4e7-4233-b94e-06321e569c7f	d43eded1-69f1-427d-a695-70dbe56b69ef	Leica	M6	35mm	\N	\N	t	2026-03-30 19:19:29.383041-07	2026-03-30 19:19:29.383041-07	36
+3916c853-860d-425c-a436-8560756da3cd	d43eded1-69f1-427d-a695-70dbe56b69ef	Mamiya	7	120	\N	\N	t	2026-04-11 15:41:57.267044-07	2026-04-11 15:41:57.267044-07	10
+10424cc8-84ad-492a-a8e1-1171d3bd6c80	d43eded1-69f1-427d-a695-70dbe56b69ef	Graflex	Crown Graphic 4x5	4x5	\N	\N	t	2026-04-11 15:41:57.267044-07	2026-04-11 15:41:57.267044-07	1
+40a57744-5a31-4dd3-b322-97f283f2dc64	d43eded1-69f1-427d-a695-70dbe56b69ef	Intrepid	4x5	4x5	\N	\N	t	2026-04-11 15:41:57.267044-07	2026-04-11 15:41:57.267044-07	1
+8e9e496e-283e-481a-8822-d19f64eef741	d43eded1-69f1-427d-a695-70dbe56b69ef	Nikon	F3	35mm	\N	\N	t	2026-04-11 15:41:57.267044-07	2026-04-11 15:41:57.267044-07	36
+b2993b04-6997-47f7-bd0c-29c25158a829	d43eded1-69f1-427d-a695-70dbe56b69ef	Olympus	XA	35mm	\N	\N	t	2026-05-02 14:48:46.640524-07	2026-05-02 14:48:46.640524-07	36
+9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	d43eded1-69f1-427d-a695-70dbe56b69ef	Olympus	Pen FT	35mm	\N	Half-frame, 72 exposures per 36-exp cassette.	t	2026-05-02 14:48:46.674688-07	2026-05-02 14:48:46.674688-07	72
+79861fa3-9cbf-4181-9562-99492f069e80	d43eded1-69f1-427d-a695-70dbe56b69ef	Nikon	Nikonos V	35mm	\N	Underwater 35mm rangefinder.	t	2026-05-02 15:37:33.930861-07	2026-05-02 15:37:33.930861-07	36
+38f2fbd8-5e3c-4f06-bf1b-09e407fc6f21	d43eded1-69f1-427d-a695-70dbe56b69ef	Pentax	67	120	\N	6×7 medium format SLR. 10 exposures per 120 roll.	t	2026-05-02 16:11:46.72879-07	2026-05-02 16:11:46.72879-07	10
+\.
+
+
+--
+-- Data for Name: dev_recipes; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.dev_recipes (id, film_name, film_stock_id, developer, dilution, asa_iso, time_35mm_sec, time_120_sec, time_sheet_sec, temperature_c, has_notes, source, created_at, updated_at) FROM stdin;
+e076f10c-6d93-48a4-9077-0b2dd0081c55	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	510-Pyro	1+100	100	480	480	480	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.466066-07	2026-05-02 21:22:44.466066-07
+f66ddbec-798b-485a-90ae-3b0edb56c5af	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	510-Pyro	1+100	200	780	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.472326-07	2026-05-02 21:22:44.472326-07
+9dfbad20-92d6-4d92-9a0b-d075a91d0bca	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	510-Pyro	1+100	16	390	390	390	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.473056-07	2026-05-02 21:22:44.473056-07
+6aaf919c-1996-44de-ac0f-81ada87707f3	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	510-Pyro	1+100	16	300	300	300	21.0	t	MDC 510pyro chart	2026-05-02 21:22:44.473564-07	2026-05-02 21:22:44.473564-07
+01fe4807-cebb-426a-8bde-fc99aa08c47f	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	510-Pyro	1+100	80	630	630	630	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.474012-07	2026-05-02 21:22:44.474012-07
+4f5e7c6a-7db7-4b2b-8995-5ea9b14fecbf	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	510-Pyro	1+100	200	1110	1110	1110	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.474732-07	2026-05-02 21:22:44.474732-07
+3de1abaa-4bd6-46c6-b7b5-d94d6fc1c7c1	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	510-Pyro	1+100	100	675	675	675	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.475183-07	2026-05-02 21:22:44.475183-07
+d3824020-17a5-48dd-a0df-2b4ea8cea48f	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	510-Pyro	1+100	200	360	360	360	21.0	t	MDC 510pyro chart	2026-05-02 21:22:44.475596-07	2026-05-02 21:22:44.475596-07
+31a4d61f-d799-417b-a8b2-a7044ae14ec3	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	510-Pyro	1+100	800	810	810	810	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.47597-07	2026-05-02 21:22:44.47597-07
+be72bc16-9337-496d-ab4f-d8b93d8f619d	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	510-Pyro	1+100	320	810	810	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.47628-07	2026-05-02 21:22:44.47628-07
+bc145e79-4832-41e6-90dc-35ac2a630974	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	510-Pyro	1+100	800	\N	1050	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.476589-07	2026-05-02 21:22:44.476589-07
+bf960451-a8bd-41c4-b18c-41e2f3e520c3	CatLABS X Film 80	2cf48166-e27e-4d99-8a81-e51279b4e98f	510-Pyro	1+100	32	\N	780	780	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.476955-07	2026-05-02 21:22:44.476955-07
+703695a4-e36f-400e-9540-56c8bf836cfb	CatLABS X Film 80	2cf48166-e27e-4d99-8a81-e51279b4e98f	510-Pyro	1+100	32	\N	660	660	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.477301-07	2026-05-02 21:22:44.477301-07
+38575471-4f70-4371-8ae6-38c6990c8b58	CineStill BwXX	\N	510-Pyro	1+100	125	960	960	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.477619-07	2026-05-02 21:22:44.477619-07
+f3eb9333-a6a6-4e93-90a5-dea8ba3b6d8e	CineStill BwXX	\N	510-Pyro	1+100	200	420	420	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.477794-07	2026-05-02 21:22:44.477794-07
+59fbd6dd-aef8-442b-881a-8ec6196f21f3	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	510-Pyro	1+100	125	960	\N	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.477944-07	2026-05-02 21:22:44.477944-07
+7c5eabfe-48c4-486a-807d-d3843db5f34b	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	510-Pyro	1+100	200	420	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.478107-07	2026-05-02 21:22:44.478107-07
+7fce5f76-768b-4168-a7a2-96f51c49c766	Efke 100	\N	510-Pyro	1+100	100	465	465	465	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.47829-07	2026-05-02 21:22:44.47829-07
+8a895d0f-21c6-4496-b42c-2fa7d785dd9c	Efke 25	\N	510-Pyro	1+100	16	390	390	390	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.478514-07	2026-05-02 21:22:44.478514-07
+39dc0348-30ec-4e6c-a575-38dc93398c54	Ferrania Orto	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	510-Pyro	1+500	50	3600	\N	\N	21.0	t	MDC 510pyro chart	2026-05-02 21:22:44.478798-07	2026-05-02 21:22:44.478798-07
+8ba1f808-b74b-4faa-9a37-1ec341fb7827	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	510-Pyro	1+100	32	\N	900	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.47912-07	2026-05-02 21:22:44.47912-07
+64465af6-9c63-4320-b10c-d78ed083129a	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	510-Pyro	1+100	80	810	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.479438-07	2026-05-02 21:22:44.479438-07
+380ef495-d853-41da-ac4a-b18ac90bde2e	Ferrania P33	ac6d943d-46ba-404f-bbc0-54f0a5f12cdc	510-Pyro	1+100	160	720	\N	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.47975-07	2026-05-02 21:22:44.47975-07
+da281d6a-8c68-4c1b-acf6-f20263200925	Foma Ortho 400	c9bb56da-6fe5-41a7-a87b-1dfde30cc5bd	510-Pyro	1+100	400	510	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.480078-07	2026-05-02 21:22:44.480078-07
+7bf38eb2-47b7-4dd6-9671-9400e9c045d5	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	510-Pyro	1+100	50	480	480	480	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.48041-07	2026-05-02 21:22:44.48041-07
+b61b8637-7d69-435f-af98-d79f3af1805b	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	510-Pyro	1+100	80	630	630	630	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.480736-07	2026-05-02 21:22:44.480736-07
+6ba9a4e6-2637-461b-8941-db2b77d51cc0	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	510-Pyro	1+100	100	420	420	420	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.481062-07	2026-05-02 21:22:44.481062-07
+0106f08e-f1f9-48bb-b2f4-095247c753e8	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	510-Pyro	1+100	200	1110	1110	1110	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.481384-07	2026-05-02 21:22:44.481384-07
+2b10f4da-1084-4de1-be7d-8c5fa4838e0c	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	510-Pyro	1+100	100	675	675	675	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.481658-07	2026-05-02 21:22:44.481658-07
+915de2d4-dd04-4c06-a2f7-18e1267b744a	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	510-Pyro	1+100	160	390	390	390	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.481926-07	2026-05-02 21:22:44.481926-07
+f2664b92-511b-4c00-b07b-12fb90c2d0be	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	510-Pyro	1+100	200	450	450	450	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.482191-07	2026-05-02 21:22:44.482191-07
+b9d2fc65-a40d-4deb-af66-1e3a67c30884	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	510-Pyro	1+100	200	1020	1020	1020	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.482438-07	2026-05-02 21:22:44.482438-07
+2f005b37-2f51-4e86-8f29-7632c0bc113c	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	510-Pyro	1+100	400	1380	1380	1380	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.482689-07	2026-05-02 21:22:44.482689-07
+416055c2-9448-49cc-a0f2-716738330aae	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	510-Pyro	1+100	400	495	495	495	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.482932-07	2026-05-02 21:22:44.482932-07
+dd749ab3-6036-41d7-9ed4-41c7bf4d8178	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	510-Pyro	1+150	400	900	900	900	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.48319-07	2026-05-02 21:22:44.48319-07
+ecb7f247-9fe2-4f39-a041-8aa59a4d28d0	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	510-Pyro	1+100	100	465	465	465	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.483448-07	2026-05-02 21:22:44.483448-07
+42bdbc56-1ed0-48d4-b9ae-ff9683d9c9bd	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	510-Pyro	1+100	100	930	930	930	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.483939-07	2026-05-02 21:22:44.483939-07
+553e025d-961e-482a-a8e3-36421269693e	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	510-Pyro	1+100	100	660	660	660	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.484197-07	2026-05-02 21:22:44.484197-07
+d4d96369-cfee-4835-a014-188135354b8a	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	510-Pyro	1+100	100	870	870	870	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.484464-07	2026-05-02 21:22:44.484464-07
+f93dfc7a-e287-4a11-9c4f-5b180a263bab	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	510-Pyro	1+100	800	660	660	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.484702-07	2026-05-02 21:22:44.484702-07
+e09fb578-0fb6-423c-8275-4260ffb04744	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	510-Pyro	1+100	1600	810	810	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.48494-07	2026-05-02 21:22:44.48494-07
+63719615-0d46-4462-b725-51f8b7e4805e	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	510-Pyro	1+100	3200	1380	1380	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.485183-07	2026-05-02 21:22:44.485183-07
+e690cd61-c900-42d4-a28b-d5c8431a96b6	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	510-Pyro	1+100	250	420	420	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.485414-07	2026-05-02 21:22:44.485414-07
+6f774c99-8d5c-4bcd-b0f0-747d717bee0c	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	510-Pyro	1+100	400	735	735	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.485655-07	2026-05-02 21:22:44.485655-07
+f14896a1-a600-4823-b377-2e62593b25b1	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	510-Pyro	1+100	400	1320	1320	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.485917-07	2026-05-02 21:22:44.485917-07
+cbf399bd-4daf-4470-a472-aaedf377285e	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	510-Pyro	1+300	400	1620	1620	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.48611-07	2026-05-02 21:22:44.48611-07
+95d4853f-3f1a-412b-a8f2-3ff8a0d8a490	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	510-Pyro	1+200	64	420	420	420	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.48629-07	2026-05-02 21:22:44.48629-07
+ff001bf5-2331-462b-b0fb-f53e2ade79bd	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	510-Pyro	1+100	125	600	600	600	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.486457-07	2026-05-02 21:22:44.486457-07
+c917cda1-aef3-4211-8c20-966ee214e7c7	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	510-Pyro	1+100	125	1035	1035	1035	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.486602-07	2026-05-02 21:22:44.486602-07
+7763df31-3938-4891-98ae-505a6f51d42e	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	510-Pyro	1+100	125	420	420	420	21.0	t	MDC 510pyro chart	2026-05-02 21:22:44.486746-07	2026-05-02 21:22:44.486746-07
+c8fcfacd-6f42-42bc-91d4-5b09a02aa751	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	510-Pyro	1+100	400	870	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.486895-07	2026-05-02 21:22:44.486895-07
+1ff491a0-639f-4fdd-9107-8c25866ec0b0	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	510-Pyro	1+100	320	\N	\N	525	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.487141-07	2026-05-02 21:22:44.487141-07
+52bbfaff-8a43-4780-b3e1-5920d5cc7b44	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	510-Pyro	1+100	400	495	540	495	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.487375-07	2026-05-02 21:22:44.487375-07
+0dea7a5c-ea89-4f6c-91bc-4788f7e89fa6	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	510-Pyro	1+100	400	825	825	825	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.48763-07	2026-05-02 21:22:44.48763-07
+c763c761-02b3-48a4-94be-24e5eb523415	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	510-Pyro	1+100	500	525	\N	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.48786-07	2026-05-02 21:22:44.48786-07
+395a972e-8baf-4b8d-a3cb-f626bf70ebd3	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	510-Pyro	1+100	800	810	810	810	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.488608-07	2026-05-02 21:22:44.488608-07
+dc5f6cdf-cc9e-486a-a597-7f54393a6a2c	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	510-Pyro	1+100	1600	1680	1680	1680	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.488842-07	2026-05-02 21:22:44.488842-07
+9edce1d5-8606-4bbf-9d2d-ea2661d35174	Ilford Ortho Plus	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	510-Pyro	1+100	80	540	540	540	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.489081-07	2026-05-02 21:22:44.489081-07
+6e0de527-81ec-4ce6-985d-3d2fdd79f51d	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	510-Pyro	1+100	32	690	690	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.489309-07	2026-05-02 21:22:44.489309-07
+762c06ba-875e-4a21-9d97-0ed466746178	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	510-Pyro	1+100	50	510	510	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.489506-07	2026-05-02 21:22:44.489506-07
+23d75622-ae2e-413e-8546-ba83e0cdbd92	Ilford SFX 200	42f44ce0-b4a1-45f4-835d-7845d983bb2b	510-Pyro	1+100	200	765	765	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.48975-07	2026-05-02 21:22:44.48975-07
+e9c8b620-0515-45cf-8000-fca5570001b3	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	510-Pyro	1+100	200	600	600	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.48997-07	2026-05-02 21:22:44.48997-07
+787aea51-8eb6-4f57-a257-8ec300cd411c	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	510-Pyro	1+100	400	720	720	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.490179-07	2026-05-02 21:22:44.490179-07
+f1248719-fa8d-4a7f-a1a3-a5d5ce079228	JCH StreetPan 400	3c467ec4-504b-4d0c-ac76-085fa11aa165	510-Pyro	1+100	400	1320	\N	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.490381-07	2026-05-02 21:22:44.490381-07
+460a41e7-9b94-4e70-ad36-f3e00ad2dc0c	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	510-Pyro	1+100	100	705	705	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.490591-07	2026-05-02 21:22:44.490591-07
+2b581f9f-0ec7-40c3-ae28-e9f8c22735e5	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	510-Pyro	1+100	100	900	900	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.49079-07	2026-05-02 21:22:44.49079-07
+e0790772-805a-4ca2-9187-7954105d8734	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	510-Pyro	1+100	200	450	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.490986-07	2026-05-02 21:22:44.490986-07
+5aba5f9b-075a-43b9-890c-454618187d78	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	510-Pyro	1+100	400	660	660	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.491213-07	2026-05-02 21:22:44.491213-07
+aff11259-8f5b-4222-a3c0-b73ea02b0a46	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	510-Pyro	1+100	400	1230	1230	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.491644-07	2026-05-02 21:22:44.491644-07
+9fb3e6e1-7d29-4276-8b93-4be090dab6a7	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	510-Pyro	1+100	800	900	900	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.491877-07	2026-05-02 21:22:44.491877-07
+568c2054-1e32-45da-91e7-9543e9d0920a	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	510-Pyro	1+100	1600	1500	1500	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.492145-07	2026-05-02 21:22:44.492145-07
+f66eeb8a-8f8f-406b-8744-adeb2d58629a	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	510-Pyro	1+100	125	960	\N	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.49231-07	2026-05-02 21:22:44.49231-07
+8e17612a-0d0e-4752-99e9-a45000f84ae0	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	510-Pyro	1+100	200	420	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.492456-07	2026-05-02 21:22:44.492456-07
+6548eb06-79dc-44af-a4fb-7f8e732efe7e	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	510-Pyro	1+100	125	390	390	390	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.492644-07	2026-05-02 21:22:44.492644-07
+f69d37f4-2f5a-4965-972a-14054911408f	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	510-Pyro	1+100	64	1200	1200	1200	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.492833-07	2026-05-02 21:22:44.492833-07
+0a9e6cfe-62a9-46c3-8769-4fd42b9fc42b	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	510-Pyro	1+100	100	690	690	690	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.49302-07	2026-05-02 21:22:44.49302-07
+51ba76af-8578-4dad-9399-8e04a7b974b3	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	510-Pyro	1+100	100	420	420	420	21.0	t	MDC 510pyro chart	2026-05-02 21:22:44.493215-07	2026-05-02 21:22:44.493215-07
+9839cb81-2c82-441c-aa8d-4ff3c9ecfecb	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	510-Pyro	1+100	400	540	540	540	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.493392-07	2026-05-02 21:22:44.493392-07
+409864d5-4a12-4d92-9121-c7e25b897bbe	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	510-Pyro	1+100	400	1845	1845	1845	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.493579-07	2026-05-02 21:22:44.493579-07
+f188df68-6ee8-4180-ad58-ff6ee38beff9	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	510-Pyro	1+100	3200	1050	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.493763-07	2026-05-02 21:22:44.493763-07
+15d5c158-a49f-473d-88d2-c3860fcdd92e	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	510-Pyro	1+100	400	1320	1320	1320	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.495224-07	2026-05-02 21:22:44.495224-07
+8f4813ab-7abf-411b-807a-5e4bf5e088ad	Rollei Ortho 25	a7059048-69e1-473b-8eff-85eff3e99560	510-Pyro	1+100	25	480	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.495461-07	2026-05-02 21:22:44.495461-07
+077d8d1a-31c4-4efc-93a5-f8544580b687	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	510-Pyro	1+100	100	630	630	630	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.495691-07	2026-05-02 21:22:44.495691-07
+8ae4cae8-9d8f-4352-bf67-9db5544afc31	Rollei Retro 400	068df7e1-8f30-4560-8f39-715b5106e643	510-Pyro	1+100	320	780	780	780	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.495902-07	2026-05-02 21:22:44.495902-07
+0b1aef7a-96ea-4447-955f-81be900d1fa9	Rollei Retro 400S	068df7e1-8f30-4560-8f39-715b5106e643	510-Pyro	1+100	400	1320	1320	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.496075-07	2026-05-02 21:22:44.496075-07
+f717c529-7925-4a60-9464-3b62c3d31c6a	Rollei Retro 80S	068df7e1-8f30-4560-8f39-715b5106e643	510-Pyro	1+150	25	525	525	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.496338-07	2026-05-02 21:22:44.496338-07
+8216b864-c603-4d5d-ba66-db7399e9869f	Rollei Retro 80S	068df7e1-8f30-4560-8f39-715b5106e643	510-Pyro	1+100	80	585	585	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.496551-07	2026-05-02 21:22:44.496551-07
+2c94b052-05a4-43e1-9ebc-639985496056	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	510-Pyro	1+100	100	705	705	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.496765-07	2026-05-02 21:22:44.496765-07
+799b76ed-5023-4aac-91a3-fa37df40c539	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	510-Pyro	1+100	100	900	900	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.496992-07	2026-05-02 21:22:44.496992-07
+8cfe2f6d-8299-477e-970e-5977a83df0d3	Rollei RPX 25	a7059048-69e1-473b-8eff-85eff3e99560	510-Pyro	1+150	25	525	525	525	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.497181-07	2026-05-02 21:22:44.497181-07
+a3b5ac6d-97ea-4441-8617-eb70ea2ab057	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	510-Pyro	1+100	400	660	660	660	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.497382-07	2026-05-02 21:22:44.497382-07
+3c898a46-7ddb-4254-b51f-2d0772e5c7d1	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	510-Pyro	1+100	400	1230	1230	1230	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.497593-07	2026-05-02 21:22:44.497593-07
+08300863-bd0d-4b98-bb32-933c4edd4200	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	510-Pyro	1+100	1600	1500	1500	1500	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.497793-07	2026-05-02 21:22:44.497793-07
+7647c7fa-05da-4a6f-88ce-912d21741f4e	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	510-Pyro	1+100	100	750	\N	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.497964-07	2026-05-02 21:22:44.497964-07
+60002b3f-e7f2-4d08-9a9c-927a8a0ad104	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	510-Pyro	1+100	100	360	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.498319-07	2026-05-02 21:22:44.498319-07
+4cf3ae04-fa04-4ac5-b1fc-f1d072a56296	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	510-Pyro	1+100	125	600	\N	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.498477-07	2026-05-02 21:22:44.498477-07
+54f1926b-91be-4f53-b181-22fcbefd3c20	Washi - F	7689c7e4-e975-4709-b48a-f6a6a7e149ce	510-Pyro	1+100	100	1500	1500	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.498652-07	2026-05-02 21:22:44.498652-07
+d04a4362-cd8d-458d-b244-79a7d1c005b6	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	100	330	330	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.499083-07	2026-05-02 21:22:44.499083-07
+9ae445dc-fa50-462e-b46e-ad94c9758c7c	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	100	375	375	375	18.0	t	MDC hc110 chart	2026-05-02 21:22:44.499287-07	2026-05-02 21:22:44.499287-07
+a0123d63-4825-4904-9750-7ea1f837618d	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	H	100	660	660	660	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.499467-07	2026-05-02 21:22:44.499467-07
+fc411ee0-6397-4d57-81e0-dbb87492a060	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	100	330	330	300	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.499623-07	2026-05-02 21:22:44.499623-07
+e62cfc26-edfe-4d8c-aadd-b0b92a4af8a2	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	100	480	480	435	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.49978-07	2026-05-02 21:22:44.49978-07
+4d4d44ce-94f1-4172-9ddf-3c5c145cf711	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	D	100	420	420	375	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.499972-07	2026-05-02 21:22:44.499972-07
+1576ceef-8a51-4482-bbbc-8b7d4b411098	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	E	100	540	540	480	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.50013-07	2026-05-02 21:22:44.50013-07
+9a31b969-fb22-4e3c-9079-54050433ce8f	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	200	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.500295-07	2026-05-02 21:22:44.500295-07
+0ab398d1-72db-47b2-8e4f-40e1bedce496	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	400	540	540	540	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.500448-07	2026-05-02 21:22:44.500448-07
+d50ff599-5b6e-4200-90b3-62dbd3baa334	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	25	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.50064-07	2026-05-02 21:22:44.50064-07
+43fb3a5b-b32f-4ae1-ac9f-71dc7a84e77f	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	H	50	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.500863-07	2026-05-02 21:22:44.500863-07
+dfea8eb8-ffd9-47e7-96a9-0ff44f36918b	Adox CHS 50	612da9ef-5796-4fe0-aba2-0ff83ba928ab	HC-110	B	50	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.501044-07	2026-05-02 21:22:44.501044-07
+d8d61e7e-3443-453d-9580-e3a45b3dcf78	Adox CMS 20 II	ea1992e5-c396-45d0-a4a3-7e77cb30cd93	HC-110	G	12	3600	3600	3600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.501185-07	2026-05-02 21:22:44.501185-07
+9083c3fe-cffb-4c6b-9bc1-e5e52b9d23c2	Adox CMS 20 II	ea1992e5-c396-45d0-a4a3-7e77cb30cd93	HC-110	G	20	990	990	990	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.501327-07	2026-05-02 21:22:44.501327-07
+b85c8d5a-a1a4-480c-a864-89ff02858a28	Adox HR-50	\N	HC-110	H	50	540	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.501501-07	2026-05-02 21:22:44.501501-07
+0f8b741e-d648-4a29-bbef-2a327826ee29	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	50	270	270	270	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.501671-07	2026-05-02 21:22:44.501671-07
+8c9ee06f-52bf-4f3f-a26c-7c34df553514	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	100	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.501857-07	2026-05-02 21:22:44.501857-07
+aa1a1fd2-c5bd-42ff-95f2-b656fce71580	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	H	100	690	690	690	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.502044-07	2026-05-02 21:22:44.502044-07
+f55d97cd-9523-4110-81b5-7d970fa74f1f	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	200	210	210	210	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.502227-07	2026-05-02 21:22:44.502227-07
+9967a12c-a459-4908-8fda-bdeacff05a60	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	400	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.502405-07	2026-05-02 21:22:44.502405-07
+d91c844d-6e7d-4b0d-8050-c984ebf0014a	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	E	800	\N	\N	750	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.502615-07	2026-05-02 21:22:44.502615-07
+d18b7a2d-55b1-4353-8244-e872c8071b8e	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	H	100	660	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.502812-07	2026-05-02 21:22:44.502812-07
+4d88bf1c-4599-4784-956e-d10fabb67795	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	E	200	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.503006-07	2026-05-02 21:22:44.503006-07
+46e04ca2-ea5e-4572-a90b-08fdc1b52627	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	320	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.503208-07	2026-05-02 21:22:44.503208-07
+dfbf8a78-923a-45de-9f87-a22808361f2d	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	400	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.50341-07	2026-05-02 21:22:44.50341-07
+248d981c-a9a7-48f0-aedb-f8c994ea8a3c	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	H	400	780	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.503599-07	2026-05-02 21:22:44.503599-07
+c9d2a68c-a5ca-49b0-b15e-c928c48d982d	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	800	540	540	540	22.0	t	MDC hc110 chart	2026-05-02 21:22:44.503799-07	2026-05-02 21:22:44.503799-07
+9af929a3-fa57-4bf2-a0f4-ab1e792c8261	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	HC-110	B	1600	750	750	750	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.503983-07	2026-05-02 21:22:44.503983-07
+b618c651-dce9-476a-a849-9efb1450ebec	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	HC-110	1+49	200	630	630	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.504128-07	2026-05-02 21:22:44.504128-07
+473035de-9d02-4759-8388-197bd06f4a99	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	HC-110	H	320	840	840	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.504272-07	2026-05-02 21:22:44.504272-07
+d56e63f1-d1a3-488d-9732-4a07872e7e0b	CatLABS X Film 80	2cf48166-e27e-4d99-8a81-e51279b4e98f	HC-110	B	80	\N	525	525	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.504472-07	2026-05-02 21:22:44.504472-07
+4e8b3bdb-8ceb-44bf-9693-abd62d4b6e58	CineStill BwXX	\N	HC-110	B	64	180	180	\N	22.0	t	MDC hc110 chart	2026-05-02 21:22:44.504781-07	2026-05-02 21:22:44.504781-07
+7d8cd825-3bb9-4f06-8259-f73d989675da	CineStill BwXX	\N	HC-110	B	100	240	240	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.504965-07	2026-05-02 21:22:44.504965-07
+4a1f506e-f00b-4493-a6c7-d97adf7d7cc3	CineStill BwXX	\N	HC-110	B	200	300	300	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.505154-07	2026-05-02 21:22:44.505154-07
+0da52c46-cc16-42e0-b3bb-e62655db6118	CineStill BwXX	\N	HC-110	E	200	480	480	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.505319-07	2026-05-02 21:22:44.505319-07
+44263c12-beb3-49e3-b90f-f70d78d3f49f	CineStill BwXX	\N	HC-110	B	250	360	360	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.505483-07	2026-05-02 21:22:44.505483-07
+8828fa48-7c99-4836-be42-63270e69b6eb	CineStill BwXX	\N	HC-110	G	250	5400	5400	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.505654-07	2026-05-02 21:22:44.505654-07
+a7d0d89a-122a-44a1-881d-51ab38f80f0f	CineStill BwXX	\N	HC-110	B	400	390	390	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.505815-07	2026-05-02 21:22:44.505815-07
+b9052425-7d2b-4076-92c8-c546715b4f6c	CineStill BwXX	\N	HC-110	E	400	600	600	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.505978-07	2026-05-02 21:22:44.505978-07
+0484a2b6-8b0d-4f50-a6f0-4d2e9907dc05	CineStill BwXX	\N	HC-110	H	400	840	840	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.506137-07	2026-05-02 21:22:44.506137-07
+467544a5-83dc-47a2-9764-b40dc0cc9d4e	CineStill BwXX	\N	HC-110	B	800	750	750	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.506296-07	2026-05-02 21:22:44.506296-07
+fb31f4d5-d6c1-4891-97d3-d24f7dfd31ff	CineStill BwXX	\N	HC-110	B	1600	1200	1200	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.506458-07	2026-05-02 21:22:44.506458-07
+4f0dfe3e-9cfb-4aac-9f7b-26d488bf6270	CineStill BwXX	\N	HC-110	B	3200	1380	1380	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.50662-07	2026-05-02 21:22:44.50662-07
+d06229b7-3db9-48c5-aac5-f5f111bac4c1	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	64	180	\N	\N	22.0	t	MDC hc110 chart	2026-05-02 21:22:44.506756-07	2026-05-02 21:22:44.506756-07
+f3126d75-2a8b-4284-8665-51924066995d	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	100	240	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.506906-07	2026-05-02 21:22:44.506906-07
+f36d571a-a3f9-405c-a89b-7ef8f6988900	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	200	300	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.507082-07	2026-05-02 21:22:44.507082-07
+76129199-6b71-4876-b6b6-27f9af7ce477	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	E	200	480	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.507228-07	2026-05-02 21:22:44.507228-07
+1c0d330d-c745-48d6-9ab3-ca09b92de22f	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	250	360	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.507371-07	2026-05-02 21:22:44.507371-07
+9d281e2b-6ba3-4d0a-ae7d-b44a106c669c	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	G	250	5400	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.507516-07	2026-05-02 21:22:44.507516-07
+61d13bd8-98bd-4794-899b-d9e66332db1f	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	400	390	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.507662-07	2026-05-02 21:22:44.507662-07
+fa0690f3-8d2f-4c74-8dea-ff468e20896a	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	E	400	600	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.507806-07	2026-05-02 21:22:44.507806-07
+e0513f1b-3eb2-4001-9a45-5be6d90f7a38	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	H	400	840	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.507949-07	2026-05-02 21:22:44.507949-07
+8c16eac8-f351-4c95-b46c-b41b3213bfac	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	800	750	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.508093-07	2026-05-02 21:22:44.508093-07
+d9746c97-be4b-4451-b20a-815288c4537d	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	1600	1200	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.508237-07	2026-05-02 21:22:44.508237-07
+4f621222-3426-476d-812a-ddba380a989d	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	3200	1380	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.50838-07	2026-05-02 21:22:44.50838-07
+157ee777-708d-4f5a-ad36-cc072817653d	Efke 100	\N	HC-110	B	100	330	330	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.508543-07	2026-05-02 21:22:44.508543-07
+d8d10a46-f1d6-4202-ab9a-3e8727caaebc	Efke 25	\N	HC-110	B	25	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.508708-07	2026-05-02 21:22:44.508708-07
+18196e71-2038-4617-acc5-fba6ff829f57	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	HC-110	B	80	300	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.508873-07	2026-05-02 21:22:44.508873-07
+c301fd78-e78c-411b-a66c-119b0a3944b5	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	HC-110	H	80	720	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.509054-07	2026-05-02 21:22:44.509054-07
+3bef15e7-57c0-4e12-916d-4226e944c28d	Foma Ortho 400	c9bb56da-6fe5-41a7-a87b-1dfde30cc5bd	HC-110	1+31	400	\N	420	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.509272-07	2026-05-02 21:22:44.509272-07
+0a3caa2b-e2b7-4b6a-ac35-40b3e3260757	Foma Retropan 320	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	1+31	320	\N	450	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.509435-07	2026-05-02 21:22:44.509435-07
+a2dd970b-e9f9-47af-a8dd-ce3496d394e7	Foma Retropan 320	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	1+100	320	900	\N	900	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.509593-07	2026-05-02 21:22:44.509593-07
+67252867-a72f-49ec-b7f7-72682d0b414c	Foma Retropan 320	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	B	320	420	\N	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.509734-07	2026-05-02 21:22:44.509734-07
+b795473f-f0e4-497b-8b5e-24622ebf5ad2	Foma Retropan 320	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	B	640	660	\N	660	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.50989-07	2026-05-02 21:22:44.50989-07
+597e03f8-58ad-4222-9475-e18ade214bd8	Foma Retropan 320	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	B	3200	1200	\N	1200	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.510095-07	2026-05-02 21:22:44.510095-07
+f391ce49-d65d-4107-83b1-98a08871e74c	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	100	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.510245-07	2026-05-02 21:22:44.510245-07
+b5c243d5-189d-4e9f-bdeb-7386e628ac96	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	100	315	315	315	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.510526-07	2026-05-02 21:22:44.510526-07
+5c237b44-0522-4fa2-a982-dfde8cb1bc56	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	D	100	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.510662-07	2026-05-02 21:22:44.510662-07
+d0e83cac-6e2e-4f0e-b747-f1d3db17ad5b	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	F	100	720	720	720	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.510805-07	2026-05-02 21:22:44.510805-07
+3ae5c4f7-3a8f-4135-b2d5-181cdc9511af	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	H	100	600	600	600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.51093-07	2026-05-02 21:22:44.51093-07
+3620b858-3ab4-4bb2-a74c-5d6032c15e3c	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	E	200	480	480	480	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.51106-07	2026-05-02 21:22:44.51106-07
+30a2356e-c86e-4877-9004-2099832b8bbd	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	400	690	690	690	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.511186-07	2026-05-02 21:22:44.511186-07
+c09d5033-71e3-4343-8790-683f13d2d69d	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	1600	1140	1140	1140	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.511307-07	2026-05-02 21:22:44.511307-07
+8f2a808a-5775-4913-bea8-2a28d452a3f5	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	3200	1500	1500	1500	21.5	f	MDC hc110 chart	2026-05-02 21:22:44.511433-07	2026-05-02 21:22:44.511433-07
+3f9cb2f8-9e71-4269-b705-77a22f60cd1f	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	B	200	210	210	210	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.511556-07	2026-05-02 21:22:44.511556-07
+9a4fc3c5-2b19-41e8-9f97-abb7b8804dc4	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	E	200	330	330	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.511676-07	2026-05-02 21:22:44.511676-07
+8af0e679-190c-45d4-b7b8-d5f17f2817db	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	H	200	540	540	690	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.5118-07	2026-05-02 21:22:44.5118-07
+2e35c5fa-6120-4889-ae76-3e7f129143dd	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	G	200	\N	\N	1080	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.511904-07	2026-05-02 21:22:44.511904-07
+5a2ce976-8a6d-44c2-ae19-6a8ada8fc613	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	E	240	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.512014-07	2026-05-02 21:22:44.512014-07
+672b1331-3196-4d4d-99e3-8cb8c73d603a	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	B	320	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.512131-07	2026-05-02 21:22:44.512131-07
+2db80e1e-a0b0-408c-915a-30f76ea55740	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	B	400	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.512272-07	2026-05-02 21:22:44.512272-07
+51e63f60-89bf-4b7f-9405-908bb6e26f27	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	E	400	555	555	555	19.5	t	MDC hc110 chart	2026-05-02 21:22:44.512394-07	2026-05-02 21:22:44.512394-07
+3ac2d259-e9a0-4c4f-8e77-71e36195c27f	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	H	400	780	780	780	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.512504-07	2026-05-02 21:22:44.512504-07
+03bcddf5-12cb-4d24-9f77-239c4eef9f98	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	B	800	600	600	600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.512633-07	2026-05-02 21:22:44.512633-07
+b25946fc-cfcb-49d9-913e-2cfd06cbf6b3	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	B	1600	780	780	780	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.512745-07	2026-05-02 21:22:44.512745-07
+220798b0-9b9c-4ca1-979e-400d561425e7	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	HC-110	1+100	3200	3600	3600	3600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.512852-07	2026-05-02 21:22:44.512852-07
+bcef82ae-edd7-4079-b6cf-8405b5ade1dc	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	F	64	420	420	420	24.0	t	MDC hc110 chart	2026-05-02 21:22:44.512964-07	2026-05-02 21:22:44.512964-07
+09624558-54f6-4964-99e1-ea1a9a3d4380	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	B	80	270	270	270	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.513074-07	2026-05-02 21:22:44.513074-07
+514a3b40-4d42-4bea-a2bb-2716572d0c99	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	1+141	100	2700	2700	2700	21.0	t	MDC hc110 chart	2026-05-02 21:22:44.513186-07	2026-05-02 21:22:44.513186-07
+00baf8d8-96d5-4ebd-8356-f3b6a588ae2c	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	B	100	330	300	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.513295-07	2026-05-02 21:22:44.513295-07
+563cb291-7203-4c4e-adcc-48dd2d202ea7	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	C	100	300	300	300	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.513406-07	2026-05-02 21:22:44.513406-07
+ca51c993-dcf4-47fa-8956-3b1702bfd109	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	E	100	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.513514-07	2026-05-02 21:22:44.513514-07
+21442679-e886-45d3-a533-4a8d921ea16a	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	H	100	600	600	600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.513628-07	2026-05-02 21:22:44.513628-07
+e547520d-72c1-491b-ac77-cac278e73526	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	H	100	450	450	450	21.0	t	MDC hc110 chart	2026-05-02 21:22:44.513737-07	2026-05-02 21:22:44.513737-07
+62ab3b06-25e1-40ea-aa46-7067db69b060	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	B	125	330	300	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.513846-07	2026-05-02 21:22:44.513846-07
+6fb2bb1a-2794-48c0-b6eb-39955de05c9b	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	E	125	480	480	\N	19.5	t	MDC hc110 chart	2026-05-02 21:22:44.513957-07	2026-05-02 21:22:44.513957-07
+1dc6f105-fefb-4ef7-8fdb-2a5146adcbcb	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	B	200	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.514065-07	2026-05-02 21:22:44.514065-07
+7a7c6dc8-47c9-4f50-869e-3ad0443ac735	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	B	400	600	600	600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.514174-07	2026-05-02 21:22:44.514174-07
+96b1d1cc-93e3-484e-9646-9e93f0315079	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	E	400	420	420	420	24.0	t	MDC hc110 chart	2026-05-02 21:22:44.514305-07	2026-05-02 21:22:44.514305-07
+c8fc2950-dbda-4ad5-b137-953d274a4757	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	HC-110	B	800	840	840	840	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.514534-07	2026-05-02 21:22:44.514534-07
+42d0a3a7-e779-4aa6-9d2b-fa04eda7c4cc	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	B	50	300	300	300	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.514748-07	2026-05-02 21:22:44.514748-07
+4a7bb141-3bf3-41f3-93fe-0b50c6c3a4f0	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	E	50	330	330	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.514856-07	2026-05-02 21:22:44.514856-07
+636a1331-5ba6-40a9-a2da-016c04f9957f	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	1+39	100	\N	420	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.514975-07	2026-05-02 21:22:44.514975-07
+6e9ea161-a0a4-4396-8784-4e2146931ef9	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	B	100	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515085-07	2026-05-02 21:22:44.515085-07
+742a5a93-08c5-45b5-b355-a98d8f73f825	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	D	100	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515188-07	2026-05-02 21:22:44.515188-07
+75c277c6-b737-48aa-bdbb-c5809a8718de	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	E	100	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515291-07	2026-05-02 21:22:44.515291-07
+394152fd-6c7d-4e1e-8295-94ff9ca3724b	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	G	100	1440	1440	1440	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515407-07	2026-05-02 21:22:44.515407-07
+9fcee1cf-d2be-4184-96aa-c7b8d5cdff1d	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	B	200	480	480	480	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515546-07	2026-05-02 21:22:44.515546-07
+86b4b09e-e731-4954-ab34-5ed9f13632dd	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	E	200	600	600	600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515663-07	2026-05-02 21:22:44.515663-07
+7e79f24c-5d25-4ac8-94af-9f81b2bce434	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	HC-110	B	400	720	720	720	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515782-07	2026-05-02 21:22:44.515782-07
+666f270d-a1bc-4588-b5e0-5d21529ea548	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	B	400	360	360	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.515891-07	2026-05-02 21:22:44.515891-07
+74054d6f-51be-41aa-a5a6-62461dafeaba	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	A	800	270	270	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516002-07	2026-05-02 21:22:44.516002-07
+62c9d8f5-0b9f-4101-9d3e-b99844e2fa46	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	B	800	450	450	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516113-07	2026-05-02 21:22:44.516113-07
+a96317d8-74bd-4488-bb8e-106337e0da7d	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	A	1600	300	300	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516219-07	2026-05-02 21:22:44.516219-07
+ccfa4806-cf6e-4391-9b0e-7779ac2d25de	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	B	1600	540	540	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516319-07	2026-05-02 21:22:44.516319-07
+4cc28d62-1051-42ac-bda7-e335fcb45e4f	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	A	3200	480	480	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516426-07	2026-05-02 21:22:44.516426-07
+0cdcb0f2-c972-4e5a-9a7e-1313ee6ca5e1	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	B	3200	870	870	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516555-07	2026-05-02 21:22:44.516555-07
+eeb60773-c5ac-45f4-8604-66770d34e03d	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	HC-110	A	6400	780	780	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516666-07	2026-05-02 21:22:44.516666-07
+5c7ad533-6ece-4b5e-a03d-3f995f4a7ed2	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	B	100	270	270	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.51678-07	2026-05-02 21:22:44.51678-07
+0d8aa705-3460-4e67-8cb7-7f54c25aef44	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	B	200	300	300	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.516889-07	2026-05-02 21:22:44.516889-07
+c3b7509b-628f-4bfe-9bc7-39c780df9e5c	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	A	320	240	240	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517012-07	2026-05-02 21:22:44.517012-07
+421e9827-d924-4f4b-8c35-8e804f43440d	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	1+250	400	5400	5400	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517125-07	2026-05-02 21:22:44.517125-07
+494eaa0c-d88d-4ca3-8ad5-8250e1924e11	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	B	400	450	450	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517236-07	2026-05-02 21:22:44.517236-07
+d9d4a9c7-9040-4cd6-ad4c-58cc2e03f0e3	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	A	800	330	330	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517348-07	2026-05-02 21:22:44.517348-07
+ff4b6aea-1570-466c-9526-15da09f15562	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	B	800	600	600	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517468-07	2026-05-02 21:22:44.517468-07
+c54129fe-0c2c-4c18-99ed-7b386fa42c8d	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	A	1600	450	450	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517581-07	2026-05-02 21:22:44.517581-07
+771f788a-7aef-40bf-8116-017fd214996a	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	B	1600	810	810	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517696-07	2026-05-02 21:22:44.517696-07
+9b7b8fd5-2d61-4e87-bb23-f2e553f42a43	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	HC-110	A	3200	780	780	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.517821-07	2026-05-02 21:22:44.517821-07
+23582106-fdf1-4218-b56e-dcdb064f1a86	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	B	50	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.51793-07	2026-05-02 21:22:44.51793-07
+55207ae9-bbf3-40e1-b99e-0d968a3a34db	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	G	65	840	840	840	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.518042-07	2026-05-02 21:22:44.518042-07
+8890b0fa-cfe6-46eb-984d-c81bb16d5033	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	G	80	840	840	840	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.518157-07	2026-05-02 21:22:44.518157-07
+5eb57b0b-6f53-41b1-90b7-7024228878cc	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	E	100	\N	630	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.518264-07	2026-05-02 21:22:44.518264-07
+18145a48-d390-456a-8d8f-b022d5f1110c	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	H	100	630	630	540	21.0	t	MDC hc110 chart	2026-05-02 21:22:44.518372-07	2026-05-02 21:22:44.518372-07
+9ae8e759-4cb1-49d4-90c7-6de65a2e37b8	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	1+31	125	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.518611-07	2026-05-02 21:22:44.518611-07
+a3e01c69-6803-4438-94bf-a31c99bbc4bc	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	A	125	270	270	270	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.51872-07	2026-05-02 21:22:44.51872-07
+5df6bcc7-ed70-4042-b64c-064c9540e713	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	B	125	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.51883-07	2026-05-02 21:22:44.51883-07
+d4ea1ca7-016d-4a94-ad89-e22be4868725	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	E	125	720	720	720	18.0	t	MDC hc110 chart	2026-05-02 21:22:44.518937-07	2026-05-02 21:22:44.518937-07
+4147b82d-a9f6-445d-9144-3ab203cd1260	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	G	125	1080	1080	1080	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.519046-07	2026-05-02 21:22:44.519046-07
+98ae5f90-d7df-4774-b03a-135ded32c574	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	G	125	3600	3600	3600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.519165-07	2026-05-02 21:22:44.519165-07
+79e82310-487c-4c1e-af7d-9aa872e457e7	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	H	125	1080	1080	1080	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.519271-07	2026-05-02 21:22:44.519271-07
+1f121fe9-3872-4f7a-ad82-0dee15696852	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	A	200	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.51938-07	2026-05-02 21:22:44.51938-07
+aa795b41-91ef-4bbb-a8fe-98842658dc73	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	B	200	720	720	720	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.519491-07	2026-05-02 21:22:44.519491-07
+8ee55fe2-5c5b-4a90-a271-ff58d5ce7c1f	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	B	400	960	960	960	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.519607-07	2026-05-02 21:22:44.519607-07
+05435b5c-3420-46fe-bde3-83407055e499	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	E	500	1500	1500	1500	24.0	t	MDC hc110 chart	2026-05-02 21:22:44.519714-07	2026-05-02 21:22:44.519714-07
+cb03e679-ce18-475b-b930-5420379d714c	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	HC-110	B	800	1440	1440	1440	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.519828-07	2026-05-02 21:22:44.519828-07
+8a978bfc-064e-4e3a-bc2d-2d1b27a1296d	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	H	100	390	390	390	21.0	t	MDC hc110 chart	2026-05-02 21:22:44.519939-07	2026-05-02 21:22:44.519939-07
+ba6cd240-e6d6-44a5-92d9-d5b159c441a1	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	H	200	480	480	480	21.0	t	MDC hc110 chart	2026-05-02 21:22:44.520047-07	2026-05-02 21:22:44.520047-07
+aaa5b40b-2eb5-4036-8ace-d23b5c2057d2	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	A	400	150	150	150	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.520158-07	2026-05-02 21:22:44.520158-07
+5303b2b0-2112-42d2-8c64-c6adc494f271	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	B	400	300	300	300	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.520279-07	2026-05-02 21:22:44.520279-07
+e71ae8fd-0c43-4937-b016-75496852b0a0	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	E	400	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.520406-07	2026-05-02 21:22:44.520406-07
+e375a738-cc51-4c8a-85c4-5c563d08ca70	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	H	400	660	660	660	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.520519-07	2026-05-02 21:22:44.520519-07
+88f04535-8206-4ad3-83a6-332d62c0d5c5	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	H	400	570	570	570	23.0	t	MDC hc110 chart	2026-05-02 21:22:44.520653-07	2026-05-02 21:22:44.520653-07
+2964710e-ef24-481c-a73d-8fa75adc61b6	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	A	800	210	210	210	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.520769-07	2026-05-02 21:22:44.520769-07
+970d1bb0-81bc-4959-a668-1fdf8695bcf7	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	B	800	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.520874-07	2026-05-02 21:22:44.520874-07
+dc34cba2-78e1-45e8-ad34-bd3df69a121d	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	D	800	570	570	570	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52098-07	2026-05-02 21:22:44.52098-07
+de4fff10-b690-45b4-9b24-edb29bd5ca0c	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	A	1000	240	240	240	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.521087-07	2026-05-02 21:22:44.521087-07
+9dd467b1-73a3-4189-aa06-035415e4f95b	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	A	1600	330	330	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.521195-07	2026-05-02 21:22:44.521195-07
+5d41b3b3-6b83-4e21-a8aa-b9c4f0252360	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	B	1600	660	660	660	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.521302-07	2026-05-02 21:22:44.521302-07
+d10f90e5-fa32-41b2-8a77-759ff1f72295	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	A	3200	570	570	570	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.521414-07	2026-05-02 21:22:44.521414-07
+0046cb75-ea16-4486-8d78-2b3d18313a95	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	B	3200	960	960	960	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.52153-07	2026-05-02 21:22:44.52153-07
+9a1f06d2-123d-4ef3-b166-0ed2a7d79d9f	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	H	3200	2280	2280	2280	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.521637-07	2026-05-02 21:22:44.521637-07
+0dda6d6b-4f59-44d3-8e43-32f34e9316c7	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	F	6400	9000	9000	9000	22.0	t	MDC hc110 chart	2026-05-02 21:22:44.521747-07	2026-05-02 21:22:44.521747-07
+c3131985-4e95-47e4-aca3-3f30924a5c40	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	HC-110	B	12800	8400	8400	8400	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52186-07	2026-05-02 21:22:44.52186-07
+2e3aad52-9107-48fb-b3f5-1956b0afbb50	Ilford Ortho Plus	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	HC-110	B	80	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52198-07	2026-05-02 21:22:44.52198-07
+b09b24f3-6b46-4419-a245-ac6426c5bced	Ilford Ortho Plus	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	HC-110	B	80	480	480	480	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52209-07	2026-05-02 21:22:44.52209-07
+f0b6265f-2c65-47b7-97a0-9f12b240e6aa	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	B	50	240	240	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.522201-07	2026-05-02 21:22:44.522201-07
+91a779de-f97b-4bc3-be13-a0347ac7a1ba	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	E	50	330	330	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.522308-07	2026-05-02 21:22:44.522308-07
+4ceaf377-1aa6-4660-91b6-47ca9cd808d3	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	F	50	570	570	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.522527-07	2026-05-02 21:22:44.522527-07
+44ec3aa1-8817-49b0-9bd7-aec36e09d02c	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	F	100	690	690	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.522634-07	2026-05-02 21:22:44.522634-07
+bb09dcdb-386c-4224-a757-b09601c5f7e7	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	HC-110	D	125	540	540	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.522738-07	2026-05-02 21:22:44.522738-07
+34607bd8-535b-4f89-aa57-9c08c4e246f3	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	HC-110	E	200	540	\N	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.522843-07	2026-05-02 21:22:44.522843-07
+f9a0993f-4468-4383-b375-edbbfff98260	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	HC-110	B	400	330	330	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52295-07	2026-05-02 21:22:44.52295-07
+c8c3e8df-f365-49de-8e17-c53ab0f59a44	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	HC-110	E	400	600	600	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523071-07	2026-05-02 21:22:44.523071-07
+e365b8f4-b0e5-48e8-be3c-f754d5258070	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	HC-110	E	800	810	810	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523185-07	2026-05-02 21:22:44.523185-07
+3dc2d30d-ddc7-411a-9787-96da5c97dcac	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	HC-110	E	1600	1080	1080	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523292-07	2026-05-02 21:22:44.523292-07
+c354eac1-5950-470f-891f-7d101c72adfe	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	HC-110	E	3200	1440	1440	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523402-07	2026-05-02 21:22:44.523402-07
+da0eff4f-1a5e-4559-a46f-7ccaaf74c5b3	JCH StreetPan 400	3c467ec4-504b-4d0c-ac76-085fa11aa165	HC-110	B	400	300	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523509-07	2026-05-02 21:22:44.523509-07
+7f7831d3-3271-4da1-b49f-e5d452723279	JCH StreetPan 400	3c467ec4-504b-4d0c-ac76-085fa11aa165	HC-110	F	400	750	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523615-07	2026-05-02 21:22:44.523615-07
+fa65a171-5aaf-4396-abd3-908c466da4fe	JCH StreetPan 400	3c467ec4-504b-4d0c-ac76-085fa11aa165	HC-110	B	1600	555	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523724-07	2026-05-02 21:22:44.523724-07
+c6f4f5f4-727b-4b30-897a-9c50c89da3b3	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	100	390	390	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.523832-07	2026-05-02 21:22:44.523832-07
+f2b89c6f-7bcb-4942-aff5-b6365c77d338	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	100	390	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.523938-07	2026-05-02 21:22:44.523938-07
+0ee4983b-1bb6-485c-a286-921ce7d02f18	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	100	345	345	\N	22.0	t	MDC hc110 chart	2026-05-02 21:22:44.524057-07	2026-05-02 21:22:44.524057-07
+1149cc07-4e1e-4846-92e9-51a7a617d5dc	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	H	100	960	960	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52417-07	2026-05-02 21:22:44.52417-07
+b65afb1e-3cfa-46c7-8712-ff166e79e64a	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	200	480	480	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.524298-07	2026-05-02 21:22:44.524298-07
+48639a6c-3ad1-454f-a803-fecdf398594c	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	B	400	600	600	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.524405-07	2026-05-02 21:22:44.524405-07
+e00344e5-ada4-4b9c-bdb5-4a2daa89704e	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	H	400	1200	1200	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.524512-07	2026-05-02 21:22:44.524512-07
+c5a02fe6-8382-4c38-a01a-1a11b305947a	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	HC-110	A	800	900	900	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.524619-07	2026-05-02 21:22:44.524619-07
+68984491-6e21-4a37-bbe8-1369aa702630	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	H	160	\N	585	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.524731-07	2026-05-02 21:22:44.524731-07
+268cd2aa-f50e-436a-9068-b73da8c42ef3	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	1+31	200	300	300	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.524872-07	2026-05-02 21:22:44.524872-07
+1271ea25-9488-4986-b4b7-856ae7778654	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	E	200	480	480	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.524952-07	2026-05-02 21:22:44.524952-07
+9e83bcc2-bdb7-40b1-bf1d-d85e23c7e17d	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	1+31	400	450	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.525039-07	2026-05-02 21:22:44.525039-07
+0bef47b5-8880-40bb-9b88-536e41d5a235	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	1+31	800	690	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52513-07	2026-05-02 21:22:44.52513-07
+32ed0b1a-bd2d-4299-a055-731d8d7331d9	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	HC-110	1+31	1600	1350	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.525221-07	2026-05-02 21:22:44.525221-07
+f4f5535f-725b-4408-97b0-a492484d5b1c	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	H	25	450	450	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.525346-07	2026-05-02 21:22:44.525346-07
+0065e5a5-9758-4415-a10e-c2f696a2bb4d	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	H	50	510	510	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.525474-07	2026-05-02 21:22:44.525474-07
+04705592-6072-4f43-88e5-fcf0d4d9176e	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	200	210	210	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.525628-07	2026-05-02 21:22:44.525628-07
+3b1e968c-0608-4010-8bb4-529e7ae0ff6c	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	F	200	645	645	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.525755-07	2026-05-02 21:22:44.525755-07
+ae24b751-26b1-4f81-af16-5903f635098a	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	H	200	600	600	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.525878-07	2026-05-02 21:22:44.525878-07
+3648fc4d-1587-45de-8822-32525026f1f0	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	1+49	400	555	555	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.526122-07	2026-05-02 21:22:44.526122-07
+3c8bfccf-3bad-4a0a-a51d-3f48c6cb066d	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	400	300	300	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.526248-07	2026-05-02 21:22:44.526248-07
+80d214d4-196d-45cd-b2bd-d503af073a2f	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	D	400	450	450	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.526602-07	2026-05-02 21:22:44.526602-07
+19b691ab-3704-427f-a711-af7a3956e302	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	E	400	480	480	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.526726-07	2026-05-02 21:22:44.526726-07
+c22e2812-2cdd-40f8-98b9-3b046a7bb930	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	F	400	960	960	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.526858-07	2026-05-02 21:22:44.526858-07
+ed958a73-01d9-45d3-a8ee-2397f08a5a08	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	800	540	540	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.526973-07	2026-05-02 21:22:44.526973-07
+d7757032-4f4b-45e7-997b-8cb43762eeb2	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	E	800	780	780	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.527088-07	2026-05-02 21:22:44.527088-07
+7ce41c60-6598-4540-9650-40b295678499	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	1600	720	720	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.527205-07	2026-05-02 21:22:44.527205-07
+4616ba5a-fb30-4e41-aea0-0311749263e4	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	3200	900	900	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.527329-07	2026-05-02 21:22:44.527329-07
+2342560e-0e2b-43dd-bbbb-b43c75eaa0e0	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	64	180	\N	\N	22.0	t	MDC hc110 chart	2026-05-02 21:22:44.52742-07	2026-05-02 21:22:44.52742-07
+732e3dfd-100c-4ce2-b04e-86281352bce6	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	100	240	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.527506-07	2026-05-02 21:22:44.527506-07
+a4f2af94-d5ad-4474-a521-c7c5ee34d2ad	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	200	300	\N	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.52761-07	2026-05-02 21:22:44.52761-07
+96daa165-c4c4-4bad-ab16-8d317affdf48	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	E	200	480	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.527691-07	2026-05-02 21:22:44.527691-07
+9ff57562-8c5f-4083-822a-32f1039e2143	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	250	360	\N	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.527774-07	2026-05-02 21:22:44.527774-07
+ec306678-c723-4091-8d4e-59d88cfcf900	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	G	250	5400	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.527857-07	2026-05-02 21:22:44.527857-07
+705f8bd2-bb36-4b5a-904a-0a28983cbbaf	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	400	390	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.527937-07	2026-05-02 21:22:44.527937-07
+0698d817-8cc7-416c-b41e-cff7e4e607b4	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	E	400	600	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52802-07	2026-05-02 21:22:44.52802-07
+f8982782-5cb0-4781-a8c9-23003ea1ca7e	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	H	400	840	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52811-07	2026-05-02 21:22:44.52811-07
+86c8921e-fe97-4b00-9b35-2986db9e16df	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	800	750	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528193-07	2026-05-02 21:22:44.528193-07
+a6848313-04da-49ef-a3ea-2f0c71072ddc	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	1600	1200	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528271-07	2026-05-02 21:22:44.528271-07
+c78c6cfa-5dc5-4a0c-8181-bcbab5236e2d	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	3200	1380	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528356-07	2026-05-02 21:22:44.528356-07
+cd336ae1-12de-439e-ab28-1229d867a8a9	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	125	210	210	210	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528486-07	2026-05-02 21:22:44.528486-07
+0461b6d7-89f4-4a39-a457-e837888c4d42	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	B	125	300	300	300	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528606-07	2026-05-02 21:22:44.528606-07
+d5d007d4-e9d2-4737-a79b-4165ad37ad8d	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	HC-110	H	125	600	600	600	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528726-07	2026-05-02 21:22:44.528726-07
+3716f411-7257-4101-8e2c-8d9aa92dabdb	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	B	100	360	360	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528841-07	2026-05-02 21:22:44.528841-07
+e8f77b83-98ae-40ac-81f4-00b47c220a81	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	B	100	420	420	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.528912-07	2026-05-02 21:22:44.528912-07
+9c2a1781-e736-4445-aa83-d3da37620d8c	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	H	100	720	720	720	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529109-07	2026-05-02 21:22:44.529109-07
+299dc3c3-fbbf-47ba-826a-c24ff8bd1736	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	B	200	360	360	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529189-07	2026-05-02 21:22:44.529189-07
+9ac97a1f-0284-4540-bb05-04331bb89ad3	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	B	200	420	420	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529261-07	2026-05-02 21:22:44.529261-07
+cdce2c6c-5ae2-45d9-b60c-c957be46f2a3	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	B	400	690	690	690	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52934-07	2026-05-02 21:22:44.52934-07
+9491a6c5-d6a9-4e32-b2cb-cfe82d108f1c	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	B	400	570	570	570	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529409-07	2026-05-02 21:22:44.529409-07
+480143f0-38ca-4fb0-a9d5-3c7232ef49d5	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	1+31	800	\N	840	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529472-07	2026-05-02 21:22:44.529472-07
+787f5d7e-bbc4-4235-85e3-5cffcccf467a	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	HC-110	B	3200	4200	4200	4200	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529542-07	2026-05-02 21:22:44.529542-07
+b069aaa3-dbe6-4f35-9b65-688314448956	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	E	200	630	630	630	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529608-07	2026-05-02 21:22:44.529608-07
+6cf44303-a578-4ca7-b364-8e8d949f3299	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	320	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529676-07	2026-05-02 21:22:44.529676-07
+5199fe2d-5a9a-4623-883f-bf5e3e497327	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	1+250	400	2700	2700	2700	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529743-07	2026-05-02 21:22:44.529743-07
+e8805006-fd7f-4727-970e-0407a295b64c	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	400	330	330	315	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.52981-07	2026-05-02 21:22:44.52981-07
+4cb250bc-b7f0-4b37-8761-719162296c15	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	D	400	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.529884-07	2026-05-02 21:22:44.529884-07
+f92e6530-6f8f-4285-9f92-32316a613973	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	E	400	420	420	420	24.0	t	MDC hc110 chart	2026-05-02 21:22:44.52996-07	2026-05-02 21:22:44.52996-07
+f7ad4a04-c799-4642-a3bd-7cb4f909696e	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	H	400	735	\N	\N	20.0	f	MDC hc110 chart	2026-05-02 21:22:44.530031-07	2026-05-02 21:22:44.530031-07
+dc10a55d-d5f0-4890-9950-7c999fe0bfb5	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	H	400	540	540	540	24.0	t	MDC hc110 chart	2026-05-02 21:22:44.530102-07	2026-05-02 21:22:44.530102-07
+1600aca9-d875-440e-862d-52eb0bd5868c	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	640	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.53018-07	2026-05-02 21:22:44.53018-07
+ac974b58-3920-4ad7-8135-bbd45d6582ea	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	800	330	330	315	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530247-07	2026-05-02 21:22:44.530247-07
+832a505a-7b1e-439e-89a8-c7a9162b29f8	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	1600	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530314-07	2026-05-02 21:22:44.530314-07
+80c1e213-c281-4349-80ef-a2b96c07c6fd	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	HC-110	B	3200	570	570	570	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530382-07	2026-05-02 21:22:44.530382-07
+b008420b-f5cc-469f-852f-55794f923f9b	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	HC-110	B	400	450	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530456-07	2026-05-02 21:22:44.530456-07
+79a65296-0bd4-4138-890d-002467cfadeb	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	HC-110	B	800	510	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530524-07	2026-05-02 21:22:44.530524-07
+7bad3fb9-0a82-46cf-875e-aa2a94764f00	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	HC-110	B	1600	555	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530592-07	2026-05-02 21:22:44.530592-07
+6143d995-d131-415e-9f59-d1aa633112a5	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	HC-110	B	3200	630	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530661-07	2026-05-02 21:22:44.530661-07
+934497fa-5ea5-4dab-813f-0b526db73c8c	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	HC-110	E	3200	900	\N	\N	21.0	t	MDC hc110 chart	2026-05-02 21:22:44.530731-07	2026-05-02 21:22:44.530731-07
+90907cf2-4d57-48a6-9f08-9f11450c4b5b	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	HC-110	B	6400	720	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530796-07	2026-05-02 21:22:44.530796-07
+773a68a5-9731-47dd-9216-86644e0fa5c7	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	HC-110	H	100	720	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533194-07	2026-05-02 21:22:44.533194-07
+fa65a296-ed5b-4835-82ad-51a79abc15d5	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	HC-110	B	400	525	525	525	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533257-07	2026-05-02 21:22:44.533257-07
+fc3adacc-d5af-4f7d-87e5-ea4b20ab6a70	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	HC-110	B	400	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533383-07	2026-05-02 21:22:44.533383-07
+d48de8db-f98e-4eb8-b505-17d75ae7e80c	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	HC-110	G	1600	1500	1500	1500	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533445-07	2026-05-02 21:22:44.533445-07
+c4df5147-ec81-4580-8937-9a92c0cb61d4	Rollei Ortho 25 Plus	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	HC-110	B	25	330	330	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533537-07	2026-05-02 21:22:44.533537-07
+2040a7eb-3dd4-4fa2-b05f-5605755700bf	Rollei Pan 25	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	F	25	810	810	810	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533641-07	2026-05-02 21:22:44.533641-07
+057719cc-cc09-4cda-a2c0-4b335533700d	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	HC-110	B	80	420	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533731-07	2026-05-02 21:22:44.533731-07
+8d64aaf5-7033-44dd-964d-d418daff8b4f	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	HC-110	B	100	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533822-07	2026-05-02 21:22:44.533822-07
+68db707c-da0d-4613-9b36-de39ccc73498	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	HC-110	B	800	1200	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533909-07	2026-05-02 21:22:44.533909-07
+98b4f4d4-f99b-48af-b806-598587b10177	Rollei Retro 400S	068df7e1-8f30-4560-8f39-715b5106e643	HC-110	B	400	390	390	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533971-07	2026-05-02 21:22:44.533971-07
+1f3fb63a-f35e-4d7d-a1c8-087d9e734bf4	Rollei Retro 400S	068df7e1-8f30-4560-8f39-715b5106e643	HC-110	E	400	\N	600	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534031-07	2026-05-02 21:22:44.534031-07
+2dc76727-f450-4b9a-883a-76e068d96ac0	Rollei Retro 400S	068df7e1-8f30-4560-8f39-715b5106e643	HC-110	H	400	780	780	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534354-07	2026-05-02 21:22:44.534354-07
+33d23818-32fe-4d4c-b19b-5a0276440409	Rollei Retro 400S	068df7e1-8f30-4560-8f39-715b5106e643	HC-110	B	1600	960	960	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534425-07	2026-05-02 21:22:44.534425-07
+5e47a02d-d9a2-48fb-be5e-37645d2d1c40	Rollei RPX 25	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	25	300	300	300	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534494-07	2026-05-02 21:22:44.534494-07
+e12c52f4-3a2a-4527-91d4-5020c49b9a93	Rollei RPX 25	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	D	25	420	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534577-07	2026-05-02 21:22:44.534577-07
+3469ec78-42cf-4cbf-bf2f-24deae879461	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	50	360	360	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534674-07	2026-05-02 21:22:44.534674-07
+c8721b89-7423-43be-96a2-0f5c0ed4edda	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	A	100	270	270	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534765-07	2026-05-02 21:22:44.534765-07
+d219883a-9876-4411-a9e6-fdc8693cca06	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	100	420	420	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534855-07	2026-05-02 21:22:44.534855-07
+59616aef-724e-4394-8a62-ba6bd22102d5	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	A	200	360	360	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.534941-07	2026-05-02 21:22:44.534941-07
+763ae049-c28f-4a50-9a4f-63d5ec83230e	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	200	720	720	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535024-07	2026-05-02 21:22:44.535024-07
+c0af8050-3986-4707-b2ef-5240f9ef92bf	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	400	960	960	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535103-07	2026-05-02 21:22:44.535103-07
+c9e7941c-6b3a-4761-8755-d6c309bb7411	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	100	315	315	315	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535183-07	2026-05-02 21:22:44.535183-07
+34686be5-77d0-48c6-822e-3a68e8a1f1d1	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	H	200	465	465	465	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535266-07	2026-05-02 21:22:44.535266-07
+bf838a36-2274-4d86-b965-576b055129fe	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	400	360	360	360	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535349-07	2026-05-02 21:22:44.535349-07
+dc121ccb-31fe-40e7-8830-69289ae27ba5	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	E	400	540	540	540	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535447-07	2026-05-02 21:22:44.535447-07
+6758c67e-e6e1-446e-a39f-4adaaa6aaa05	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	800	450	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535549-07	2026-05-02 21:22:44.535549-07
+03d3ea49-09d4-4a34-b9d9-eefa285706b7	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	A	1600	330	330	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535631-07	2026-05-02 21:22:44.535631-07
+a843ce7a-0f4e-4aa5-91bc-4dd3eafc09f5	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	B	1600	660	660	660	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535721-07	2026-05-02 21:22:44.535721-07
+2b9ef3be-8a12-427d-a650-d591056831dc	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	HC-110	A	3200	570	570	570	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535815-07	2026-05-02 21:22:44.535815-07
+e3427229-02ea-44be-beba-847d8516dac6	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	HC-110	A	100	\N	300	300	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535885-07	2026-05-02 21:22:44.535885-07
+5380d7f8-6e84-48ab-b316-6e375dae1d09	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	HC-110	B	100	\N	450	450	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.535951-07	2026-05-02 21:22:44.535951-07
+2a193ec1-0845-4b17-be1c-09ee182e9112	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	HC-110	H	100	450	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.536017-07	2026-05-02 21:22:44.536017-07
+a3945e16-fb9b-4fdb-a311-aea3c15d074a	Silberra S25	345b2a21-1905-4b17-9fb5-7f5d4ea95e7a	HC-110	F	25	600	\N	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.53608-07	2026-05-02 21:22:44.53608-07
+300d4054-87cb-41e3-bc00-49832af32035	Washi - F	7689c7e4-e975-4709-b48a-f6a6a7e149ce	HC-110	A	100	270	270	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.536145-07	2026-05-02 21:22:44.536145-07
+b209a222-117a-4287-b9a6-f4c367efe625	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	50	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.536462-07	2026-05-02 21:22:44.536462-07
+e8588b44-7f1d-4dc2-940e-0831c2b312d4	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+25	80	300	300	300	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.536551-07	2026-05-02 21:22:44.536551-07
+b556adfa-7fd7-451f-baa4-7e7dfb6ce763	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+25	100	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.536678-07	2026-05-02 21:22:44.536678-07
+da352e6a-8f9c-4995-8139-588b254b6761	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	100	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.536777-07	2026-05-02 21:22:44.536777-07
+c93037e1-dcd8-4cd5-b04e-503521aff6da	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	100	960	960	960	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.536882-07	2026-05-02 21:22:44.536882-07
+65699fa1-4bcb-414d-9a5c-8dfa65135ec0	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+25	160	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.536979-07	2026-05-02 21:22:44.536979-07
+9b05fc5c-2bcd-41dc-b884-038e59480c8b	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	200	840	840	840	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.537069-07	2026-05-02 21:22:44.537069-07
+1a8f84b0-a64e-4a25-96a7-7bb21f253848	Adox CHS 100	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	400	1440	1440	1440	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.53716-07	2026-05-02 21:22:44.53716-07
+1c6f450f-6886-4e07-8391-15a77bce4531	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	50	\N	1320	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.537233-07	2026-05-02 21:22:44.537233-07
+6e0e7c72-9a00-4de7-92f1-65e738ec8bf6	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+25	100	330	330	300	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.537306-07	2026-05-02 21:22:44.537306-07
+23ca67b7-e531-4226-8626-9132fd86e60e	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	100	750	750	690	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.53738-07	2026-05-02 21:22:44.53738-07
+bb606850-f57a-4c06-ba2e-617266ce9a4a	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	100	1800	1800	1620	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.538071-07	2026-05-02 21:22:44.538071-07
+d20aa147-77d9-401b-a28d-0e1ee8f82a16	Adox CHS 100 II	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+25	200	720	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.538159-07	2026-05-02 21:22:44.538159-07
+82c9694c-09f1-45f9-ac71-f5db706fccb6	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	12	210	210	210	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.538262-07	2026-05-02 21:22:44.538262-07
+7d99570c-92c1-4652-b021-07980976d403	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	12	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.53836-07	2026-05-02 21:22:44.53836-07
+f9943ad3-da63-4106-9df6-f85e94c09dff	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	20	240	240	240	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.538453-07	2026-05-02 21:22:44.538453-07
+de4b0068-ab11-4fcd-a280-9c6fadd0b48b	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+99	20	390	390	390	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.538549-07	2026-05-02 21:22:44.538549-07
+eaddaf40-bf4b-478f-9909-41dd80bbdd8f	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+25	25	240	240	240	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.538637-07	2026-05-02 21:22:44.538637-07
+8937eeeb-2f37-4d30-8c32-7806c712c69f	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	25	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.538727-07	2026-05-02 21:22:44.538727-07
+15b1ba71-fe5a-4c6e-b351-c2c8f5d98fbc	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	25	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.53882-07	2026-05-02 21:22:44.53882-07
+5f95644d-91b6-4b24-8e47-9e358df0110b	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	25	660	660	660	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.538913-07	2026-05-02 21:22:44.538913-07
+52d326e7-39e9-4300-8f10-a0bb0704902d	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	25	600	600	600	24.0	t	MDC rodinal chart	2026-05-02 21:22:44.539006-07	2026-05-02 21:22:44.539006-07
+ac3dd62f-4c2e-4027-8db3-86e4adb465bb	Adox CHS 25	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	25	1020	1080	1020	21.0	f	MDC rodinal chart	2026-05-02 21:22:44.539099-07	2026-05-02 21:22:44.539099-07
+1750c877-84e2-4b12-813f-6c5432e68ac3	Adox CHS 50	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+25	50	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.539192-07	2026-05-02 21:22:44.539192-07
+f7030247-836e-4e77-a081-dc9aa9e9ef82	Adox CHS 50	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+50	50	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.53931-07	2026-05-02 21:22:44.53931-07
+441fc749-3c57-458b-a698-690f04c4b457	Adox CHS 50	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+100	50	1080	1080	1080	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.5394-07	2026-05-02 21:22:44.5394-07
+7365ad93-0d52-4f3f-93ce-1c6476e4cfc4	Adox CHS 50	612da9ef-5796-4fe0-aba2-0ff83ba928ab	Rodinal	1+200	50	3000	3000	3000	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.539503-07	2026-05-02 21:22:44.539503-07
+14e9c3cf-9636-4cb2-944f-d0b70b803f1f	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+50	50	270	\N	\N	21.5	t	MDC rodinal chart	2026-05-02 21:22:44.539609-07	2026-05-02 21:22:44.539609-07
+b7cfdbc2-d57f-4376-8982-85114ed743fa	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+100	50	420	420	420	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.539716-07	2026-05-02 21:22:44.539716-07
+15e503ff-d011-4ad8-927f-3667974abd97	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+25	100	210	210	210	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.539821-07	2026-05-02 21:22:44.539821-07
+39fa0486-5461-4096-ab18-17244e10d339	Arista EDU Ultra 100	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+50	100	420	420	420	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.539981-07	2026-05-02 21:22:44.539981-07
+b6785612-a2ae-4a47-ad2c-374e087cae0e	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+25	200	300	300	300	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54009-07	2026-05-02 21:22:44.54009-07
+d2a59b16-6cc5-4819-8531-73ca049430af	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+50	200	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.540212-07	2026-05-02 21:22:44.540212-07
+15dc9771-e347-4bec-9320-a252cf5d8822	Arista EDU Ultra 200	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+50	400	840	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.540324-07	2026-05-02 21:22:44.540324-07
+8792a005-a050-4964-b1f9-654b7436707b	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+25	400	330	330	330	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.540431-07	2026-05-02 21:22:44.540431-07
+17a93385-2f06-42b3-8da1-8f9c2c62a971	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+50	400	660	660	660	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.540749-07	2026-05-02 21:22:44.540749-07
+1764c669-89a5-4aa5-85ce-ca8e3f2c295b	Arista EDU Ultra 400	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	Rodinal	1+100	400	7200	7200	7200	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.540865-07	2026-05-02 21:22:44.540865-07
+66c40649-76b3-4183-bdbc-a82c3efa4c53	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+25	320	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.540958-07	2026-05-02 21:22:44.540958-07
+ec72aedd-b565-4c33-88a5-389f993e8314	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+50	320	1140	1140	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54106-07	2026-05-02 21:22:44.54106-07
+60ab997f-b9cd-4fe9-b130-22a02e320eba	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+20	1600	660	660	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.54115-07	2026-05-02 21:22:44.54115-07
+55f770ad-8df6-44af-a5e0-71e13607243e	CatLABS X Film 320	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+25	1600	1020	1020	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54124-07	2026-05-02 21:22:44.54124-07
+0092b69f-ea96-4350-b293-08ee61250efa	CatLABS X Film 80	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+25	50	\N	390	390	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.541359-07	2026-05-02 21:22:44.541359-07
+85d2d7d9-5b0f-491f-a19e-6d36b96b4c73	CatLABS X Film 80	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+25	80	\N	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.541472-07	2026-05-02 21:22:44.541472-07
+0f6d802c-1c85-4513-af0f-03d5ea2ac2ea	CatLABS X Film 80	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+50	80	\N	900	900	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54158-07	2026-05-02 21:22:44.54158-07
+fd6b5539-ea31-423d-bfde-45e25b4e7442	CatLABS X Film 80	2cf48166-e27e-4d99-8a81-e51279b4e98f	Rodinal	1+100	80	\N	2400	2400	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.541685-07	2026-05-02 21:22:44.541685-07
+8087624c-184f-47b7-86d3-d68df3992f08	CineStill BwXX	\N	Rodinal	1+100	25	180	180	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54179-07	2026-05-02 21:22:44.54179-07
+b3091877-c0fe-4a34-a7d7-7ee3a5b36748	CineStill BwXX	\N	Rodinal	1+20	200	300	300	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54189-07	2026-05-02 21:22:44.54189-07
+3a914459-dbbf-4ed6-a4cb-2da839872b21	CineStill BwXX	\N	Rodinal	1+60	200	420	420	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.541989-07	2026-05-02 21:22:44.541989-07
+c99bcf85-6893-4547-b89d-9ed5d1342dc1	CineStill BwXX	\N	Rodinal	1+25	250	345	345	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542087-07	2026-05-02 21:22:44.542087-07
+500230f9-29cd-4324-909a-9ea6380c9ad2	CineStill BwXX	\N	Rodinal	1+50	250	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542183-07	2026-05-02 21:22:44.542183-07
+52abe45b-e9a3-493e-9a19-de20fbff5c3f	CineStill BwXX	\N	Rodinal	1+50	400	660	660	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542281-07	2026-05-02 21:22:44.542281-07
+1e3167a8-9652-42ff-a549-bca4879f1749	CineStill BwXX	\N	Rodinal	1+25	500	450	450	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542378-07	2026-05-02 21:22:44.542378-07
+38837de9-2ca5-4d73-ac91-5f0c2e4ffeab	CineStill BwXX	\N	Rodinal	1+50	800	960	960	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542466-07	2026-05-02 21:22:44.542466-07
+c7daf21e-e45c-4fd9-a356-551c5b459a1c	CineStill BwXX	\N	Rodinal	1+25	1000	555	555	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542564-07	2026-05-02 21:22:44.542564-07
+07309eed-c485-4181-ab6e-4f73cf5a47a6	CineStill BwXX	\N	Rodinal	1+20	1600	600	600	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542677-07	2026-05-02 21:22:44.542677-07
+48605979-193f-48a9-b438-0020750fecfc	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+100	25	180	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542764-07	2026-05-02 21:22:44.542764-07
+3d8c4cc5-8406-4f4c-832c-237f643bfb01	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+20	200	300	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542857-07	2026-05-02 21:22:44.542857-07
+841bfae0-5a32-47f2-810e-265e13abcc41	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+60	200	420	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.542945-07	2026-05-02 21:22:44.542945-07
+9d158c87-f203-449b-a80d-0c4a0d8ec085	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+25	250	345	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543029-07	2026-05-02 21:22:44.543029-07
+48124d03-b5e8-4762-adda-ec746424db0f	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+50	250	540	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543112-07	2026-05-02 21:22:44.543112-07
+f7591e84-10b1-4b5e-8479-606932e8d366	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+50	400	660	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543195-07	2026-05-02 21:22:44.543195-07
+b50e5ce6-2812-4333-870c-7c5f68222384	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+25	500	450	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543278-07	2026-05-02 21:22:44.543278-07
+7f79701f-7986-4dda-9431-b40d42656241	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+50	800	960	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54336-07	2026-05-02 21:22:44.54336-07
+85fc06ec-a2aa-4e7f-92a0-2c4bc72161fe	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+25	1000	555	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543442-07	2026-05-02 21:22:44.543442-07
+3ec6ffe0-66d7-46a7-b941-558f975f1219	Eastman Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+20	1600	600	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543525-07	2026-05-02 21:22:44.543525-07
+fe3d3257-adfd-4327-8715-5ef3efe89735	Efke 100	\N	Rodinal	1+50	50	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543635-07	2026-05-02 21:22:44.543635-07
+97ab1f45-d73d-4e9d-b8d5-3570b97276ea	Efke 100	\N	Rodinal	1+25	80	300	300	300	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.543738-07	2026-05-02 21:22:44.543738-07
+0125b493-3383-4ac1-8e22-e19b7608c7e2	Efke 100	\N	Rodinal	1+25	100	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54384-07	2026-05-02 21:22:44.54384-07
+f6f840ed-67a7-460c-bc6e-3d3f3b8e9b6c	Efke 100	\N	Rodinal	1+50	100	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54394-07	2026-05-02 21:22:44.54394-07
+f1d34c9d-9a1b-4504-9610-aef683e5efa4	Efke 100	\N	Rodinal	1+25	160	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.544047-07	2026-05-02 21:22:44.544047-07
+5d96f3fb-b113-4621-9d26-5355fe57551f	Efke 100	\N	Rodinal	1+50	200	840	840	840	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.544355-07	2026-05-02 21:22:44.544355-07
+3110eec4-332d-47ab-afaa-775322801d5a	Efke 100	\N	Rodinal	1+25	400	810	810	810	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.544453-07	2026-05-02 21:22:44.544453-07
+7aab3eb9-b0e8-47dc-aaaf-27c33b58bb11	Efke 100	\N	Rodinal	1+50	400	1440	1440	1440	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.544555-07	2026-05-02 21:22:44.544555-07
+7b6cd865-1772-47b7-93d6-89fa428c201a	Efke 25	\N	Rodinal	1+25	25	240	240	240	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54466-07	2026-05-02 21:22:44.54466-07
+de9117a4-1220-45f4-94e2-cd84c1690dea	Efke 25	\N	Rodinal	1+50	25	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.544762-07	2026-05-02 21:22:44.544762-07
+5d1ef270-83e9-4cf1-a404-d76593235ebd	Efke 25	\N	Rodinal	1+100	25	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.544865-07	2026-05-02 21:22:44.544865-07
+74c82386-2ecb-4018-b334-cc406f962d33	Ferrania Orto	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	Rodinal	1+50	50	840	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.544949-07	2026-05-02 21:22:44.544949-07
+f8981077-9e46-42fd-b81e-18402cb2acab	Ferrania Orto	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	Rodinal	1+50	50	1080	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.545035-07	2026-05-02 21:22:44.545035-07
+c8abff24-e218-4f28-8947-bfa7ef71ba70	Ferrania Orto	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	Rodinal	1+100	50	3600	3600	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.545121-07	2026-05-02 21:22:44.545121-07
+16505e94-5178-4a8b-a016-857bef5e48cb	Ferrania Orto	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	Rodinal	1+25	100	480	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.545206-07	2026-05-02 21:22:44.545206-07
+d51d93ea-9a66-407f-ab1f-80234e5ea9c5	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	Rodinal	1+50	25	420	420	420	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.545315-07	2026-05-02 21:22:44.545315-07
+6aa53ab6-b30e-4fae-91df-c8b08803bda0	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	Rodinal	1+25	80	480	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.545429-07	2026-05-02 21:22:44.545429-07
+0821abc8-b261-4893-a2b3-8f6e2d6c2a33	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	Rodinal	1+50	80	840	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.545535-07	2026-05-02 21:22:44.545535-07
+30e84802-5baf-4e29-ab3b-f3684c6aabaa	Ferrania P30	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	Rodinal	1+100	80	3600	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.54564-07	2026-05-02 21:22:44.54564-07
+851d2394-6e20-46e7-9b28-5f3572d1bf95	Ferrania P33	ac6d943d-46ba-404f-bbc0-54f0a5f12cdc	Rodinal	1+25	160	480	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.545725-07	2026-05-02 21:22:44.545725-07
+806ccaea-7d2e-4463-bb4f-7349444ea706	Ferrania P33	ac6d943d-46ba-404f-bbc0-54f0a5f12cdc	Rodinal	1+25	160	420	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.545809-07	2026-05-02 21:22:44.545809-07
+e08c2183-0f91-4b99-a88c-1c7dea7dd1dc	Ferrania P33	ac6d943d-46ba-404f-bbc0-54f0a5f12cdc	Rodinal	1+25	200	660	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.545895-07	2026-05-02 21:22:44.545895-07
+1fd9c5fb-d54f-4e1e-b7a0-2d8f5afe3de4	Foma Ortho 400	c9bb56da-6fe5-41a7-a87b-1dfde30cc5bd	Rodinal	1+25	400	330	330	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54601-07	2026-05-02 21:22:44.54601-07
+3fe389f6-9ccb-452d-855c-a84927db4e07	Foma Ortho 400	c9bb56da-6fe5-41a7-a87b-1dfde30cc5bd	Rodinal	1+50	400	\N	600	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.546121-07	2026-05-02 21:22:44.546121-07
+15c0b0e0-8e7a-427f-92e3-cc81cde09bb7	Foma Ortho 400	c9bb56da-6fe5-41a7-a87b-1dfde30cc5bd	Rodinal	1+25	1600	\N	1440	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.546231-07	2026-05-02 21:22:44.546231-07
+755fe968-5ec6-47a3-a4a4-f8402ac048c1	Foma Retropan 320	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+25	320	420	\N	420	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.546354-07	2026-05-02 21:22:44.546354-07
+ab8cd27f-5a1f-4087-ac20-e0364e426fb7	Foma Retropan 320	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+50	320	840	\N	840	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.546475-07	2026-05-02 21:22:44.546475-07
+3ff012fa-6cda-428c-ad5b-c7eeae24be5c	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	80	420	420	420	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.546606-07	2026-05-02 21:22:44.546606-07
+30e78533-fea6-4b8a-b1b7-2e8f800e792f	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+25	100	240	240	240	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54679-07	2026-05-02 21:22:44.54679-07
+5f7331b5-45e1-4cd6-ac45-bec0d11acf3d	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	100	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.546961-07	2026-05-02 21:22:44.546961-07
+152ea3f3-e089-4c9a-a354-f436446be2aa	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+100	100	1080	1080	1080	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.547074-07	2026-05-02 21:22:44.547074-07
+395d1566-86c6-4d25-abb6-7ef94545275e	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+25	200	210	210	210	25.0	f	MDC rodinal chart	2026-05-02 21:22:44.547183-07	2026-05-02 21:22:44.547183-07
+4bb7d195-9c15-4466-a050-7f40ba7d6d6b	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	200	720	720	720	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.54729-07	2026-05-02 21:22:44.54729-07
+8276dcce-81f8-4188-8802-13a3926598b4	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+25	400	390	390	390	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.547395-07	2026-05-02 21:22:44.547395-07
+1d21c5ee-97a4-435c-a4da-26128800f1b2	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	400	1290	1290	1290	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.547503-07	2026-05-02 21:22:44.547503-07
+806f3a50-c3c3-4036-9d46-95cb8a58c194	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+100	400	1560	1560	1560	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.547616-07	2026-05-02 21:22:44.547616-07
+212d8b50-64fe-4041-9997-ea0008fd2dbe	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+25	800	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.547717-07	2026-05-02 21:22:44.547717-07
+9a244d2e-fb28-4606-9c30-e8acf12e3d03	Fomapan 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	800	1380	1380	1380	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.547828-07	2026-05-02 21:22:44.547828-07
+e789b398-f5a5-401f-9e0f-c626f187726e	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+25	25	210	210	210	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54794-07	2026-05-02 21:22:44.54794-07
+3b8b9a6a-d4a6-44cf-9b57-b315645e2511	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+50	160	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.548054-07	2026-05-02 21:22:44.548054-07
+1d126787-17a3-4238-95e6-5017de80a551	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+25	200	300	300	300	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54837-07	2026-05-02 21:22:44.54837-07
+8380a5d2-0679-43f6-98d2-d115591b6613	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+50	200	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.548585-07	2026-05-02 21:22:44.548585-07
+c728ef32-6fb5-49ad-ad2f-fbbbb8d089a6	Fomapan 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+50	400	840	840	840	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.548718-07	2026-05-02 21:22:44.548718-07
+92d44804-b202-471f-99aa-d16c7579f123	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+50	100	420	420	420	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54883-07	2026-05-02 21:22:44.54883-07
+25e1a439-77c1-476d-87b7-ae2a5bdbbc09	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+39	200	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54894-07	2026-05-02 21:22:44.54894-07
+98e767ce-ba2c-4203-a229-b0b06c7af86e	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+50	200	660	660	660	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.549049-07	2026-05-02 21:22:44.549049-07
+e8a90329-52d7-4ce5-8508-443e78464b69	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+25	400	330	330	330	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.549154-07	2026-05-02 21:22:44.549154-07
+1abca909-f985-4caf-b93f-fc2ab52083ec	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+50	400	660	660	660	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.54926-07	2026-05-02 21:22:44.54926-07
+ae359af1-a744-4aa1-8d9f-0b058a370e01	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+100	400	1800	1800	1800	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.549359-07	2026-05-02 21:22:44.549359-07
+286b22e4-2317-4db6-9c48-11786cbe7ead	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+25	800	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.549456-07	2026-05-02 21:22:44.549456-07
+0899e58d-1775-48d7-b57a-042d8d96acd7	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+50	800	1140	1140	1140	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.549553-07	2026-05-02 21:22:44.549553-07
+82385170-c5fd-4398-9b9e-35019c4de1f6	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+25	1600	1200	1200	1200	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.549649-07	2026-05-02 21:22:44.549649-07
+dbd7f96a-2c1a-44f8-ac46-ae18c9702f8a	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+50	1600	1440	1440	1440	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.549745-07	2026-05-02 21:22:44.549745-07
+731b6482-a629-40f5-b235-fe6f661099e9	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+25	3200	1500	1500	1500	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.549841-07	2026-05-02 21:22:44.549841-07
+a9662426-012d-4b8c-b1a8-d33eb05578ec	Fomapan 400	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	Rodinal	1+50	3200	3120	3120	3120	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.549938-07	2026-05-02 21:22:44.549938-07
+c742e8c3-3762-40a0-ab88-ff112d6647da	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+50	50	660	660	660	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550035-07	2026-05-02 21:22:44.550035-07
+296e5ed4-f383-42d8-952e-30eb0ab3b972	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+50	64	600	600	600	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550131-07	2026-05-02 21:22:44.550131-07
+7eb7b9c4-c2ca-4d33-9261-02b716b6a06f	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+50	80	690	690	690	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550228-07	2026-05-02 21:22:44.550228-07
+d23ac634-d395-41ce-bb89-8712ec99b279	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+25	100	390	390	390	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550323-07	2026-05-02 21:22:44.550323-07
+406d03ea-ba5b-49ae-be4d-94cfaca822ec	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+50	100	810	810	810	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550418-07	2026-05-02 21:22:44.550418-07
+c3f6d5a0-971a-464b-b878-932bc478c9f1	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+100	100	1080	1080	1080	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550515-07	2026-05-02 21:22:44.550515-07
+6983e205-599d-489d-9dc4-d991eac6a63c	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+25	125	405	405	405	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550611-07	2026-05-02 21:22:44.550611-07
+31b4d7a9-2fab-4b07-821b-4a72c5400555	Fuji Neopan 100 Acros II	3b66f352-2912-4921-a189-300b8a6bc8cc	Rodinal	1+25	400	465	465	465	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.550706-07	2026-05-02 21:22:44.550706-07
+eee058ed-f91e-41e3-8820-519b085080e8	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	Rodinal	1+25	50	420	420	420	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.550804-07	2026-05-02 21:22:44.550804-07
+f3378096-1bcb-42cf-87b0-a3682244ca03	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	Rodinal	1+50	50	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.550898-07	2026-05-02 21:22:44.550898-07
+a522a264-3186-45b7-82a8-6e43b5f210dc	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	Rodinal	1+25	100	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.550993-07	2026-05-02 21:22:44.550993-07
+ab19acb8-fcf4-4ed0-afee-671ce66415a6	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	Rodinal	1+50	100	840	840	840	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.55109-07	2026-05-02 21:22:44.55109-07
+1e5d84c8-0390-4aba-aa4c-b4a8f781e973	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	Rodinal	1+100	100	1080	1080	1080	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.551187-07	2026-05-02 21:22:44.551187-07
+a00ad88b-9cf2-4fea-87f7-54b8d0f7d75d	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	Rodinal	1+50	125	960	960	960	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.551283-07	2026-05-02 21:22:44.551283-07
+c2898749-c055-43ee-b13d-4d0c0bdfc422	Ilford Delta 100 Pro	b28883e1-0938-4b04-b060-545bc4d21f66	Rodinal	1+50	200	1080	1080	1080	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.551372-07	2026-05-02 21:22:44.551372-07
+76a38163-f8e3-4903-97d4-97c2022b4d03	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	400	330	330	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.551476-07	2026-05-02 21:22:44.551476-07
+6cee46a5-bc92-4d7f-9689-219965f6caed	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	800	420	420	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.551573-07	2026-05-02 21:22:44.551573-07
+af1019ba-c2d2-4e4c-aa3f-e716c677f930	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	1000	510	510	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.551668-07	2026-05-02 21:22:44.551668-07
+525b9163-1936-46b7-980e-693ca75b11a0	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	1600	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.551969-07	2026-05-02 21:22:44.551969-07
+1fdbb898-fa34-49c1-96b8-a930dc635d39	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+63	1600	1680	1680	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552064-07	2026-05-02 21:22:44.552064-07
+af347336-f1ab-4382-acd9-1eda389fa175	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	3200	660	660	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552161-07	2026-05-02 21:22:44.552161-07
+0eb426b6-2096-46b0-b552-dfe5a7d673a4	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+15	6400	1080	1080	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552253-07	2026-05-02 21:22:44.552253-07
+d19133a8-e84c-4ce0-933d-a9c1a1e6006a	Ilford Delta 3200 Pro	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	6400	1200	1200	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552351-07	2026-05-02 21:22:44.552351-07
+3c62fe0e-d220-4ffc-8d78-284f1bdb2914	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+25	100	330	330	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552451-07	2026-05-02 21:22:44.552451-07
+f14df7d0-682a-4c2b-927f-f04c5645470f	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+25	200	390	390	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552559-07	2026-05-02 21:22:44.552559-07
+46159de4-a823-4c7b-bb85-faed7b0d0e93	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+50	200	660	660	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552675-07	2026-05-02 21:22:44.552675-07
+cbb6ac3d-54a6-4f07-917e-09fb76fba22d	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+24	250	450	450	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552776-07	2026-05-02 21:22:44.552776-07
+2fa84141-3e51-4af4-902b-2b0e21854e0d	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+25	400	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552877-07	2026-05-02 21:22:44.552877-07
+6faf7724-2d68-4897-9e3e-25d40f32561f	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+50	400	1200	1200	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.552984-07	2026-05-02 21:22:44.552984-07
+6761c722-a42c-4086-a7a3-6a88a7a84b36	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+100	400	2160	2160	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.553097-07	2026-05-02 21:22:44.553097-07
+31b38d46-fc3e-4781-a1cb-7bfcfb3d7e5b	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+25	800	1110	1110	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.5532-07	2026-05-02 21:22:44.5532-07
+5b32d30d-a26b-4cfa-b97b-6c6ed384cbe6	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+25	800	960	960	\N	24.0	f	MDC rodinal chart	2026-05-02 21:22:44.553302-07	2026-05-02 21:22:44.553302-07
+a2d2c23d-153b-41eb-91f8-3b33c160cac1	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+16	1600	1200	1200	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.553402-07	2026-05-02 21:22:44.553402-07
+426f570d-c045-4996-a032-945eaba60aeb	Ilford Delta 400 Pro	8fa17252-6af5-4a06-a68a-3d5e88643e05	Rodinal	1+25	3200	2400	2400	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.553504-07	2026-05-02 21:22:44.553504-07
+63a760c8-4f96-45c9-8b5a-118e8fbd9b56	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+25	25	240	240	240	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.553605-07	2026-05-02 21:22:44.553605-07
+290b19c3-0640-482f-9585-f52a014df24f	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+50	50	450	450	450	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.553706-07	2026-05-02 21:22:44.553706-07
+e696b223-4886-41d0-959c-414520a831bb	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+100	50	1140	1140	1140	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.553817-07	2026-05-02 21:22:44.553817-07
+115712be-4b70-4fca-8fb7-ee05353fcf20	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+24	80	450	450	450	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.553922-07	2026-05-02 21:22:44.553922-07
+341d7d37-0f1f-4eae-94dc-6aed2e52e85d	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+50	100	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554027-07	2026-05-02 21:22:44.554027-07
+3607b92d-33c3-4ebf-b1c0-8d6de3558066	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+25	125	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554133-07	2026-05-02 21:22:44.554133-07
+4e3de095-d50a-4d71-82e8-11e4cfdedf42	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+50	125	900	900	900	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554231-07	2026-05-02 21:22:44.554231-07
+2be17c10-06ca-40c8-b480-688b49a51cb4	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+100	125	1200	1200	1200	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.554328-07	2026-05-02 21:22:44.554328-07
+20fb2da7-79da-4c96-8f71-923212eef7c7	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+25	200	780	780	780	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554428-07	2026-05-02 21:22:44.554428-07
+9ce2da9d-d34d-4a1b-9f83-79c4d1f80e04	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+50	200	1200	1200	1200	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554534-07	2026-05-02 21:22:44.554534-07
+da38d5cf-11ee-4876-95f6-20772cd12b6c	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+50	250	1560	1560	1560	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554637-07	2026-05-02 21:22:44.554637-07
+1f9cbbfb-744e-4063-85f4-1e4c89d311a6	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+24	400	1200	1200	1200	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554742-07	2026-05-02 21:22:44.554742-07
+e86b04e2-8ef1-4463-b34d-e070db7ebd71	Ilford FP4+	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	Rodinal	1+25	800	2100	2100	2100	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.554849-07	2026-05-02 21:22:44.554849-07
+711d67a4-19b8-471f-ac13-6251f8554e9b	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	25	420	420	420	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.554956-07	2026-05-02 21:22:44.554956-07
+e6ca5a93-aac8-432c-bf6d-11c503311dab	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+25	100	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.555057-07	2026-05-02 21:22:44.555057-07
+e587387d-16ef-4f6a-b898-c5b2cc8d1f70	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	100	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.55516-07	2026-05-02 21:22:44.55516-07
+ac09c14e-8bde-4b3a-a066-3a90bd649434	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+25	200	300	300	300	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.555263-07	2026-05-02 21:22:44.555263-07
+ade969b9-b902-4d13-9b97-18854fc278c7	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+36	200	450	450	450	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.555572-07	2026-05-02 21:22:44.555572-07
+4d7e9a80-70d4-4398-9b18-16bd3abf07e6	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	200	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.555673-07	2026-05-02 21:22:44.555673-07
+ee31db66-9fb5-47c3-80ab-ef646284cb52	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+75	200	1020	1020	1020	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.55577-07	2026-05-02 21:22:44.55577-07
+03cfb754-47f8-4c90-be3d-7970d2b7ab61	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	250	720	720	720	24.0	f	MDC rodinal chart	2026-05-02 21:22:44.555872-07	2026-05-02 21:22:44.555872-07
+33fd2ee2-192d-4d2d-9407-d4b257477186	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+25	320	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.555973-07	2026-05-02 21:22:44.555973-07
+9ef0edd0-6099-43da-a8be-4a92e3bd3364	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+25	400	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.556075-07	2026-05-02 21:22:44.556075-07
+0ef75079-4113-439e-8ee3-5401f1d90bdc	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	400	660	660	660	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.556177-07	2026-05-02 21:22:44.556177-07
+a2a3d2fd-75ff-4d9f-b8a4-3ec6b4208b04	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+100	400	960	960	960	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.556278-07	2026-05-02 21:22:44.556278-07
+6d07293e-0acc-4926-9e55-ca59f03570e5	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+25	800	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.556378-07	2026-05-02 21:22:44.556378-07
+ed605d88-741d-4525-b318-6a968c128371	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	800	960	960	960	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.556478-07	2026-05-02 21:22:44.556478-07
+ec9914eb-1558-4a3d-ae88-a8408904f4ce	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+25	1600	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.556579-07	2026-05-02 21:22:44.556579-07
+f7796905-cc58-4428-a83a-b8fd1de52a9f	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	1600	1440	1440	1440	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.556681-07	2026-05-02 21:22:44.556681-07
+f08fe969-5457-4cab-a2dc-e509b037fba0	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+100	1600	7200	7200	7200	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.556782-07	2026-05-02 21:22:44.556782-07
+cea0efef-dc97-4a53-ad33-d912ff341d4d	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+25	3200	1080	1080	1080	21.0	f	MDC rodinal chart	2026-05-02 21:22:44.556878-07	2026-05-02 21:22:44.556878-07
+78f5b2d6-c95b-4ee7-a464-47066fa02061	Ilford HP5+	aee798ee-c90b-43dd-a85a-57b795d33dfd	Rodinal	1+50	6400	3120	3120	3120	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.556974-07	2026-05-02 21:22:44.556974-07
+146a1c98-0fe6-4a03-ab1e-8d26a6da0e18	Ilford Ortho Plus	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	Rodinal	1+100	40	600	600	600	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.557071-07	2026-05-02 21:22:44.557071-07
+461938cc-bb25-4c95-a1c1-18652aaed294	Ilford Ortho Plus	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	Rodinal	1+25	80	420	420	420	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.557167-07	2026-05-02 21:22:44.557167-07
+78c40e3c-dd92-46ad-80ea-bfbe454d6909	Ilford Ortho Plus	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	Rodinal	1+50	80	900	900	900	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.557264-07	2026-05-02 21:22:44.557264-07
+de263e3e-097e-419a-8e6c-c54b3f542d2c	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+50	25	480	480	\N	21.0	f	MDC rodinal chart	2026-05-02 21:22:44.557367-07	2026-05-02 21:22:44.557367-07
+325bf859-1825-4e46-bb89-8519be7aa1f5	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+100	25	900	900	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.557463-07	2026-05-02 21:22:44.557463-07
+965072c1-b748-418b-8bbf-509cd92a1a2a	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+24	40	300	300	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.557561-07	2026-05-02 21:22:44.557561-07
+ee355637-a503-4801-b165-fd405e9cd367	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+19	50	300	300	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.557657-07	2026-05-02 21:22:44.557657-07
+91dbfbbf-db27-485d-a54e-cfa96b85bcc3	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+25	50	360	360	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.557754-07	2026-05-02 21:22:44.557754-07
+33334f96-0f64-4fd9-9f3e-50eb9ad57780	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+50	50	660	660	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.55785-07	2026-05-02 21:22:44.55785-07
+f83af8f7-696b-44f4-9605-450f7d020641	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+80	50	1020	1020	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.557947-07	2026-05-02 21:22:44.557947-07
+7ac3e225-efd1-4950-9632-4adf62aebdd5	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+100	50	3600	3600	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.558043-07	2026-05-02 21:22:44.558043-07
+78dd7de5-ad7f-44fb-8849-e849b1735135	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+50	64	720	720	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.55814-07	2026-05-02 21:22:44.55814-07
+d0ed27db-8234-4d1f-8ada-3e9b8ae7e3a0	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+50	80	810	810	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.558233-07	2026-05-02 21:22:44.558233-07
+1dd98f29-72a8-4a3a-b7d5-8f24d72f554c	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+25	100	720	720	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.558328-07	2026-05-02 21:22:44.558328-07
+88d7105d-4625-4db2-9caa-ccb5fbbb18c8	Ilford Pan F+	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	Rodinal	1+25	200	750	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.558425-07	2026-05-02 21:22:44.558425-07
+f4146806-15d8-416c-a525-d965ed667fc6	Ilford SFX 200	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	200	360	360	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.558548-07	2026-05-02 21:22:44.558548-07
+178bf948-46dd-4de6-8329-aa50958d6db1	Ilford SFX 200	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+50	200	600	600	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.558668-07	2026-05-02 21:22:44.558668-07
+ac3a1714-ec2a-456d-b972-230987e6a24f	Ilford SFX 200	42f44ce0-b4a1-45f4-835d-7845d983bb2b	Rodinal	1+25	400	390	390	\N	23.0	f	MDC rodinal chart	2026-05-02 21:22:44.558785-07	2026-05-02 21:22:44.558785-07
+9dd4e6e5-2751-4a82-89c7-4cfe39e451f6	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	Rodinal	1+100	200	3600	3600	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.558881-07	2026-05-02 21:22:44.558881-07
+08aa7151-a2e7-4608-9c29-e55ce4c5d052	Ilford XP2 Super	e388e75a-5ca1-447f-adb9-0358ab3e8671	Rodinal	1+25	400	1080	1080	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.559182-07	2026-05-02 21:22:44.559182-07
+42ae4b0b-df73-4b1b-8289-a266f8d6d612	JCH StreetPan 400	3c467ec4-504b-4d0c-ac76-085fa11aa165	Rodinal	1+25	160	405	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.559277-07	2026-05-02 21:22:44.559277-07
+7d0f3ddf-d8e1-4ef2-b6b1-39aabcb866de	JCH StreetPan 400	3c467ec4-504b-4d0c-ac76-085fa11aa165	Rodinal	1+25	400	630	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.559374-07	2026-05-02 21:22:44.559374-07
+aadaadf5-2ec8-42f3-a1b5-3bf219428c48	JCH StreetPan 400	3c467ec4-504b-4d0c-ac76-085fa11aa165	Rodinal	1+50	400	1320	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.559469-07	2026-05-02 21:22:44.559469-07
+9e67a42b-be17-47f9-abed-b49341dcf2cc	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	50	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.559563-07	2026-05-02 21:22:44.559563-07
+2f4ee3f1-9b5b-42f2-bfe8-94c03c0bece0	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+25	100	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.55966-07	2026-05-02 21:22:44.55966-07
+6fb9a343-649e-413b-af25-de0b400f1427	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	100	900	900	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.559768-07	2026-05-02 21:22:44.559768-07
+b6267458-8e12-4068-b0f8-c0cbd268448b	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+25	200	780	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.55987-07	2026-05-02 21:22:44.55987-07
+eac984d3-f9e6-43e9-bb6f-298fbbf05547	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	200	1200	1200	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.559971-07	2026-05-02 21:22:44.559971-07
+d6703e43-4364-42c0-b8f2-4840e9e9dd52	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+50	400	1500	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.560065-07	2026-05-02 21:22:44.560065-07
+d8aa9e2c-f9b7-4c82-8a9a-3eae7e29e582	Kentmere 100	03ee0cb0-6259-4872-b69a-94ab31532599	Rodinal	1+25	3200	4200	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560162-07	2026-05-02 21:22:44.560162-07
+0a5ed5bf-6eb6-478e-b49f-22d16c9bf1ce	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+25	200	600	600	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560259-07	2026-05-02 21:22:44.560259-07
+85e93ff8-b03e-4d03-8e1c-e38ce1d037cb	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+25	200	\N	360	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560357-07	2026-05-02 21:22:44.560357-07
+5f593ca0-81aa-4e31-9df2-1f9ccbc169d2	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+50	200	\N	720	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560455-07	2026-05-02 21:22:44.560455-07
+5409047e-7846-4594-b351-4f3e2470041c	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+50	200	\N	600	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560552-07	2026-05-02 21:22:44.560552-07
+a52822c3-b587-4289-82ef-84d8ca5f8812	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+50	200	705	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560681-07	2026-05-02 21:22:44.560681-07
+398f567d-bce6-4d9a-aca9-172139657fed	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+100	200	3600	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.560779-07	2026-05-02 21:22:44.560779-07
+91f0ebfd-379a-488f-82da-2fe1c1335c5a	Kentmere 200	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	Rodinal	1+25	800	\N	1350	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560877-07	2026-05-02 21:22:44.560877-07
+edc56ecc-25f1-49d2-99c7-58b395cd071a	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	50	630	630	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.560995-07	2026-05-02 21:22:44.560995-07
+19d3ec4c-09f4-40c9-9f13-398a7971c721	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	100	780	780	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.561114-07	2026-05-02 21:22:44.561114-07
+a08ceb2a-dca8-4448-9e8b-a1c17f5b8ee0	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	200	900	900	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.561227-07	2026-05-02 21:22:44.561227-07
+cac4ce9f-9a14-4083-b231-b7cbbffabacb	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	400	450	450	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.561332-07	2026-05-02 21:22:44.561332-07
+90783fe8-ae00-4439-90ab-6eb3230f753a	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	400	1050	1050	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.561438-07	2026-05-02 21:22:44.561438-07
+d5662cb9-e5d4-4753-8970-e615e35cd980	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	800	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.561545-07	2026-05-02 21:22:44.561545-07
+0ee198ff-d0e3-4bc6-bdc6-28fad2022087	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	800	1140	1140	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.56165-07	2026-05-02 21:22:44.56165-07
+d9eb5b9e-fb17-4798-91e5-324db521c6f7	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	1600	1500	1500	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.561755-07	2026-05-02 21:22:44.561755-07
+d06a8736-822d-496e-b2d3-7232d173d7e0	Kentmere 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	1600	1740	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.562057-07	2026-05-02 21:22:44.562057-07
+9af4e622-95a5-475d-86cd-0ac41944859c	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+100	25	180	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.56215-07	2026-05-02 21:22:44.56215-07
+837f6f18-1927-41a5-9ad7-25260dc0d57a	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+20	200	300	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562241-07	2026-05-02 21:22:44.562241-07
+af636f4c-d7ea-405f-83b8-5d92c3daaee4	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+60	200	420	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562339-07	2026-05-02 21:22:44.562339-07
+0e6ab4d9-76f9-4e4c-95f6-7c5f7355a748	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+25	250	345	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562429-07	2026-05-02 21:22:44.562429-07
+e334cf9c-3737-4fda-91a5-aed6dd5dbab1	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+50	250	540	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.56252-07	2026-05-02 21:22:44.56252-07
+47748fad-c7b6-44aa-84a4-96fa8f57f5d9	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+50	400	660	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562611-07	2026-05-02 21:22:44.562611-07
+d14b0aa0-f4b9-445f-aa89-497c89999200	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+25	500	450	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562701-07	2026-05-02 21:22:44.562701-07
+cb1d8146-0944-4ad0-ae31-a401cc872912	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+50	800	960	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562795-07	2026-05-02 21:22:44.562795-07
+06f42330-2e12-48f6-80a0-4f2ef92d496e	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+25	1000	555	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562887-07	2026-05-02 21:22:44.562887-07
+cfee7e50-d0ae-4748-8b6d-023facf3947d	Kodak Double-X (5222)	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+20	1600	600	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.562986-07	2026-05-02 21:22:44.562986-07
+895583ad-0ac9-4a2c-ac27-b558b00b8052	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+100	64	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.563098-07	2026-05-02 21:22:44.563098-07
+86989a79-1d74-47c9-b54f-0fac19274915	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+25	125	360	360	360	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.563216-07	2026-05-02 21:22:44.563216-07
+cacf4c71-033e-4ad5-a5be-c8e6ede5c366	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+50	125	780	780	780	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.563323-07	2026-05-02 21:22:44.563323-07
+d364abde-2ec2-4459-bb67-6031d8455a42	Kodak Plus-X	9ab33c20-cbbe-4613-9904-d61ee9d1718a	Rodinal	1+85	200	720	720	720	24.0	t	MDC rodinal chart	2026-05-02 21:22:44.563453-07	2026-05-02 21:22:44.563453-07
+344e13de-bccd-4d3b-9094-431aab7e1d94	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	Rodinal	1+50	50	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.563554-07	2026-05-02 21:22:44.563554-07
+4081837e-e46b-41a8-b7ce-8387fffc08c1	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	Rodinal	1+25	64	330	330	330	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.563653-07	2026-05-02 21:22:44.563653-07
+17b8fdd2-d03b-4565-88ec-42a003208e36	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	Rodinal	1+50	80	720	720	720	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.563755-07	2026-05-02 21:22:44.563755-07
+5ba096e9-0f68-4544-9774-6673dd32ee0b	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	Rodinal	1+25	100	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.563846-07	2026-05-02 21:22:44.563846-07
+18e31c55-67e0-44e1-9d09-635a5608d48d	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	Rodinal	1+50	100	720	720	720	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.563938-07	2026-05-02 21:22:44.563938-07
+677b57a0-732a-4fc7-9e33-c364f4fac370	Kodak TMax 100	f228f76e-d873-4eb5-8bac-cbe79fa0d422	Rodinal	1+25	400	510	510	510	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564028-07	2026-05-02 21:22:44.564028-07
+f612c952-12ec-4835-b98c-197af096046f	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	200	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564127-07	2026-05-02 21:22:44.564127-07
+efae0f84-1c59-4637-bf45-be83e1211013	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	250	510	510	510	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564227-07	2026-05-02 21:22:44.564227-07
+352f18ab-fb5d-4635-95ee-ad7c680bf9ed	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	320	300	300	300	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564326-07	2026-05-02 21:22:44.564326-07
+004d6b5f-aa7e-4c12-bdf7-58cd2753c1c1	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	320	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564424-07	2026-05-02 21:22:44.564424-07
+698d1075-6784-474b-955a-cdfa85a09e9e	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	400	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564723-07	2026-05-02 21:22:44.564723-07
+a1ab01db-22fa-4b32-8158-667221d13dd2	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	400	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564821-07	2026-05-02 21:22:44.564821-07
+eb05ee01-241a-4823-9d4a-9a1f5c1c107f	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	800	540	540	540	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.564919-07	2026-05-02 21:22:44.564919-07
+71911dd3-8225-419c-9c0f-10fb7feb2f46	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	800	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.565026-07	2026-05-02 21:22:44.565026-07
+0e382bc0-088e-4d19-922e-360f9378693b	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	1600	660	660	660	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.56512-07	2026-05-02 21:22:44.56512-07
+78623300-ae93-4ee0-8443-095f2293684d	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+50	1600	1080	1080	1080	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.565216-07	2026-05-02 21:22:44.565216-07
+9efcb28c-6bfc-45fb-897b-bcd35a5ec186	Kodak TMax 400	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	Rodinal	1+25	3200	1020	1020	1020	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.565313-07	2026-05-02 21:22:44.565313-07
+02ce286e-29b8-4f0e-8ed9-ec04d624203f	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	Rodinal	1+25	1250	480	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.565411-07	2026-05-02 21:22:44.565411-07
+b6aecc2f-798f-451f-a783-12131b3539f1	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	Rodinal	1+50	1250	960	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.565507-07	2026-05-02 21:22:44.565507-07
+793fc1e3-68fd-4dad-b557-26e2e69fc28b	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	Rodinal	1+25	3200	480	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.565604-07	2026-05-02 21:22:44.565604-07
+3dbd89ac-360b-48bc-b410-5dc99a1d0937	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	Rodinal	1+50	3200	960	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.565701-07	2026-05-02 21:22:44.565701-07
+af4c7993-7b50-438f-85cb-326cbec957be	Kodak TMax P3200	e61b27e1-58d6-4647-a738-476e7fe04445	Rodinal	1+25	6400	630	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.565797-07	2026-05-02 21:22:44.565797-07
+9ad8b9f2-07a6-48dc-8ab2-d5cab8e44485	NoColorStudio No.10	bd77c711-8ca6-4b25-9a59-edf4513fb6f1	Rodinal	1+50	100	810	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.567824-07	2026-05-02 21:22:44.567824-07
+7517445b-3570-4ffa-8972-7863ff0171a2	NoColorStudio No.5	bce2b5c9-2d4c-467c-9352-de43c2ee7023	Rodinal	1+50	6	480	\N	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.56792-07	2026-05-02 21:22:44.56792-07
+edda67a0-10bf-4e25-93cd-1774c3b18812	Rollei ATP 1.1	564b6bef-e10a-49f9-9013-aaf60040ed9f	Rodinal	1+150	15	390	390	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.568241-07	2026-05-02 21:22:44.568241-07
+51440d7d-87e1-4a8a-8f0b-4f36ec659c74	Rollei ATP 1.1	564b6bef-e10a-49f9-9013-aaf60040ed9f	Rodinal	1+300	20	720	720	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.568377-07	2026-05-02 21:22:44.568377-07
+dcba2b3a-d073-4c27-a4d5-372434e0063f	Rollei ATP 1.1	564b6bef-e10a-49f9-9013-aaf60040ed9f	Rodinal	1+300	25	720	720	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.568513-07	2026-05-02 21:22:44.568513-07
+6d4bd828-073e-49d8-88db-9ebbc4722fae	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	Rodinal	1+25	200	315	315	315	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.568623-07	2026-05-02 21:22:44.568623-07
+7f169a60-5d5d-4606-bab3-50974831d10f	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	Rodinal	1+50	200	510	510	510	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.568732-07	2026-05-02 21:22:44.568732-07
+27c82088-c124-4397-97df-10e927a5e630	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	Rodinal	1+25	400	450	450	450	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.56884-07	2026-05-02 21:22:44.56884-07
+a1e70cb6-858e-4054-bb5a-8fd9227ddb0a	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	Rodinal	1+25	400	630	630	630	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.568937-07	2026-05-02 21:22:44.568937-07
+407c4bac-0779-4b7c-bcc3-0fc538c81f71	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	Rodinal	1+50	400	720	720	720	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.569046-07	2026-05-02 21:22:44.569046-07
+ae06f3df-5c76-4853-be97-a4af7e8032e7	Rollei Infrared IR400	3841ac74-2774-4cf6-8724-226bc4b6c83e	Rodinal	1+50	400	1320	1320	1320	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.569145-07	2026-05-02 21:22:44.569145-07
+4d9ceba7-2116-4633-bc9f-4ef96aadf510	Rollei Ortho 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	25	240	240	240	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.56928-07	2026-05-02 21:22:44.56928-07
+870bc76e-1012-414e-91f7-d87b34a12c91	Rollei Ortho 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	25	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.569404-07	2026-05-02 21:22:44.569404-07
+827fce90-722e-464c-9b29-e18101ce7a57	Rollei Ortho 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+100	25	600	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.569525-07	2026-05-02 21:22:44.569525-07
+43f1b2cc-ce79-4c97-93e8-588298f0f437	Rollei Ortho 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	50	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.569643-07	2026-05-02 21:22:44.569643-07
+5d833792-1346-4970-aeb9-5e2d029268db	Rollei Pan 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	25	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.569763-07	2026-05-02 21:22:44.569763-07
+d153f8fd-4187-4e90-8137-2a28001fe656	Rollei Pan 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	25	660	660	660	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.569877-07	2026-05-02 21:22:44.569877-07
+c47cac2c-3e1b-4263-9cb3-b8f51d62eea0	Rollei Pan 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+100	25	1200	1200	1200	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.570048-07	2026-05-02 21:22:44.570048-07
+672cb114-3431-4369-89c7-471314832900	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	100	780	780	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.570172-07	2026-05-02 21:22:44.570172-07
+a8344e87-bbb4-4288-b8a6-cb06051021a4	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	125	480	480	480	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.570292-07	2026-05-02 21:22:44.570292-07
+1f992cf8-6351-4431-b011-bfdf114f9776	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	160	1020	1020	1020	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.570409-07	2026-05-02 21:22:44.570409-07
+4a996906-8dfe-42d3-b1f7-79eb340aa906	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	200	660	660	660	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.570527-07	2026-05-02 21:22:44.570527-07
+6be9cb86-6ba4-4b70-9826-1d4ad81939ec	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	200	1290	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.570643-07	2026-05-02 21:22:44.570643-07
+67557323-8e56-445b-a0b4-dab1a2155df2	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	400	900	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.570759-07	2026-05-02 21:22:44.570759-07
+dd709bd8-1144-490a-b953-cb4278dde20b	Rollei Retro 100	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	400	1740	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.570875-07	2026-05-02 21:22:44.570875-07
+32a06226-9487-47ca-ad77-7b738e2ad89a	Rollei Retro 400	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	200	600	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.570991-07	2026-05-02 21:22:44.570991-07
+11bb4d5e-3ec9-409b-8823-67ff356d907b	Rollei Retro 400	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	320	600	600	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571108-07	2026-05-02 21:22:44.571108-07
+ad3cc3de-c648-4e3a-bba4-0b2c3f6e8d74	Rollei Retro 400	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	320	1800	1800	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571224-07	2026-05-02 21:22:44.571224-07
+c63a1f6e-56a2-401d-a153-4fc73495e102	Rollei Retro 400	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	400	420	420	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.57134-07	2026-05-02 21:22:44.57134-07
+f147b19b-cda4-458f-a297-212542df73d0	Rollei Retro 400	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	800	840	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571456-07	2026-05-02 21:22:44.571456-07
+f87adbf1-1997-4e91-b4f2-66921eb9f214	Rollei Retro 400S	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	400	630	630	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571551-07	2026-05-02 21:22:44.571551-07
+7a32b88f-1561-4cd1-848f-8fd57acaf09b	Rollei Retro 400S	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	400	1320	1320	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571653-07	2026-05-02 21:22:44.571653-07
+9ce0a989-a019-4e51-8ffa-dc880fe2b419	Rollei Retro 80S	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	40	600	600	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571769-07	2026-05-02 21:22:44.571769-07
+d8aafd92-5af9-4366-a667-bfd83d45a576	Rollei Retro 80S	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	50	660	660	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571881-07	2026-05-02 21:22:44.571881-07
+1044fdd6-4294-4bd7-a004-2345745a459c	Rollei Retro 80S	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+25	80	480	480	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.571999-07	2026-05-02 21:22:44.571999-07
+875f3bea-839b-478a-820d-61ae109e4e54	Rollei Retro 80S	068df7e1-8f30-4560-8f39-715b5106e643	Rodinal	1+50	80	840	840	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.572331-07	2026-05-02 21:22:44.572331-07
+8b110c49-d6e7-4ac2-aaa4-d8debba76373	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	25	315	315	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.572447-07	2026-05-02 21:22:44.572447-07
+e7bbf64e-10aa-4c12-bbaf-44bda8d1e86d	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	50	420	420	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.572567-07	2026-05-02 21:22:44.572567-07
+6e4da80f-e0b4-4763-b7b6-095b51ed2630	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	100	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.572679-07	2026-05-02 21:22:44.572679-07
+42177f25-f93f-483c-95ef-a648868643cf	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	100	1080	1020	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.572805-07	2026-05-02 21:22:44.572805-07
+becb1f6f-e27c-4518-ae2d-cc41b531e29f	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	100	720	720	\N	24.0	f	MDC rodinal chart	2026-05-02 21:22:44.572922-07	2026-05-02 21:22:44.572922-07
+9703b32e-bbd4-4300-ab72-c6cc16e1c5a1	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	200	780	780	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.573039-07	2026-05-02 21:22:44.573039-07
+98f8dfae-f28b-47aa-b545-1c5e41c9efd6	Rollei RPX 100	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	200	1230	1230	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.573156-07	2026-05-02 21:22:44.573156-07
+2842a230-aed2-407e-acfd-0e045f9e5a9c	Rollei RPX 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	25	360	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.573252-07	2026-05-02 21:22:44.573252-07
+8fda9fac-392d-4cc2-adcf-92c0d42c314b	Rollei RPX 25	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	25	660	660	660	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.573349-07	2026-05-02 21:22:44.573349-07
+70f44dd9-1932-4bbc-b56d-e67f434d9f7d	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	400	720	720	720	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.573466-07	2026-05-02 21:22:44.573466-07
+b05db0ee-6306-49f0-b366-648199513769	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	400	1260	1260	1260	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.573584-07	2026-05-02 21:22:44.573584-07
+81677e8a-d873-4f3b-8d64-1ffb846fa08f	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+25	800	1080	1080	1080	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.573702-07	2026-05-02 21:22:44.573702-07
+444dcc28-6f1a-4835-a3cf-771897eb7ca8	Rollei RPX 400	a7059048-69e1-473b-8eff-85eff3e99560	Rodinal	1+50	800	1500	1500	1500	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.57382-07	2026-05-02 21:22:44.57382-07
+1199ea3c-e94d-4a3a-b0e3-110e0d316657	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	Rodinal	1+25	25	\N	180	180	21.0	f	MDC rodinal chart	2026-05-02 21:22:44.573917-07	2026-05-02 21:22:44.573917-07
+85891d20-7ad4-4565-9d76-7ab756bb1e44	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	Rodinal	1+25	50	\N	360	360	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.574012-07	2026-05-02 21:22:44.574012-07
+0665bae5-c4d2-43a8-a2fc-2f13c49d885f	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	Rodinal	1+25	100	390	600	600	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.57411-07	2026-05-02 21:22:44.57411-07
+c04c1592-9777-4246-bc9b-099e5aaf57c3	Shanghai GP3 Pan 100	77625610-a311-4e12-a30d-499f0b853130	Rodinal	1+50	100	480	900	900	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.574207-07	2026-05-02 21:22:44.574207-07
+f67dd6b0-a46e-46ff-9f47-d7ce0a875ebd	Silberra S25	345b2a21-1905-4b17-9fb5-7f5d4ea95e7a	Rodinal	1+100	25	360	\N	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.574302-07	2026-05-02 21:22:44.574302-07
+dfae657d-2acd-451c-a903-dea64766f6c6	Washi - F	7689c7e4-e975-4709-b48a-f6a6a7e149ce	Rodinal	1+25	100	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.574398-07	2026-05-02 21:22:44.574398-07
+c4235590-ef4d-49c2-acc2-5a70299be5db	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	510-Pyro	1+100	250	\N	390	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.493959-07	2026-05-02 21:22:44.493959-07
+ddfc81a5-a590-4994-8589-03b1508bac79	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	510-Pyro	1+100	400	480	480	\N	20.0	f	MDC 510pyro chart	2026-05-02 21:22:44.494149-07	2026-05-02 21:22:44.494149-07
+dbbf0d37-2b0b-4fcf-ab08-b050ea58c190	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	510-Pyro	1+100	400	990	990	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.494324-07	2026-05-02 21:22:44.494324-07
+bfe493b9-fdff-48cb-8503-b8aa1595123f	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	510-Pyro	1+100	400	450	450	\N	21.0	t	MDC 510pyro chart	2026-05-02 21:22:44.4945-07	2026-05-02 21:22:44.4945-07
+fee226e6-bdc8-4a36-b8b7-d19898f9de30	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	510-Pyro	1+100	800	780	780	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.494681-07	2026-05-02 21:22:44.494681-07
+9ed60423-7f77-43fd-814a-e6fa1fe2965c	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	510-Pyro	1+100	800	660	660	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.494864-07	2026-05-02 21:22:44.494864-07
+c35ca477-1265-40d6-ac38-9388fc730181	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	510-Pyro	1+100	1600	1260	1260	\N	20.0	t	MDC 510pyro chart	2026-05-02 21:22:44.49504-07	2026-05-02 21:22:44.49504-07
+af24ac5b-9220-44ae-8877-5d8f5ea6975e	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	E	250	\N	420	420	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.530902-07	2026-05-02 21:22:44.530902-07
+b2468ca6-dac7-41d3-a521-c3a2fec8919c	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	320	\N	285	195	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.531012-07	2026-05-02 21:22:44.531012-07
+aeecf0b9-388a-43f9-8b65-63a3aaaa3b2d	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	320	\N	330	330	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.531147-07	2026-05-02 21:22:44.531147-07
+1cd3082b-c03b-4856-ab5f-759ebf8e525e	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	G	320	\N	780	780	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.531324-07	2026-05-02 21:22:44.531324-07
+28d2b55a-13f1-4666-b1df-9fb1f93c5af5	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	640	\N	300	300	24.0	t	MDC hc110 chart	2026-05-02 21:22:44.531455-07	2026-05-02 21:22:44.531455-07
+842e1bcb-32fc-418b-bc7f-71f6e1ba319e	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	200	285	285	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.531526-07	2026-05-02 21:22:44.531526-07
+ff42f1c6-c21f-4298-a82f-7cd370220240	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	200	345	345	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.531602-07	2026-05-02 21:22:44.531602-07
+bcd186c1-387f-4f7b-8df1-e6c2daa8bc3e	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	E	200	270	270	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.531669-07	2026-05-02 21:22:44.531669-07
+9c309836-4700-418a-bc53-a12b3a490990	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	D	250	540	540	\N	22.0	t	MDC hc110 chart	2026-05-02 21:22:44.531739-07	2026-05-02 21:22:44.531739-07
+d35b351c-01ad-4c33-91a4-1f0a1c8ee3dc	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	E	320	570	570	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.531947-07	2026-05-02 21:22:44.531947-07
+7d638adc-10af-40ef-b2df-48bb0d81722f	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	1+95	400	840	840	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.53201-07	2026-05-02 21:22:44.53201-07
+0ef7ff21-68bc-46b8-80aa-3a943514ee11	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	1+100	400	1620	1620	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532071-07	2026-05-02 21:22:44.532071-07
+35adb5a4-3cdb-4da2-ae38-6229e1024999	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	A	400	225	225	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532137-07	2026-05-02 21:22:44.532137-07
+08ccdc37-99a5-4330-b1a5-1a9bafac3d36	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	400	270	270	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532211-07	2026-05-02 21:22:44.532211-07
+55b37227-6248-4651-b545-b85a2666b06e	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	400	450	450	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532282-07	2026-05-02 21:22:44.532282-07
+17587540-7168-4943-9d3c-8165796f91a3	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	E	400	390	390	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532348-07	2026-05-02 21:22:44.532348-07
+25ed9786-d369-4c3d-b728-864c9a45962b	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	E	400	420	420	\N	24.0	t	MDC hc110 chart	2026-05-02 21:22:44.532414-07	2026-05-02 21:22:44.532414-07
+214f1f57-0ce9-488e-914a-50ee0bdc286f	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	F	400	900	900	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532478-07	2026-05-02 21:22:44.532478-07
+54ba6e7f-0b89-4127-aac7-09c27307ea0b	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	H	400	540	540	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532542-07	2026-05-02 21:22:44.532542-07
+d76b7d1e-9f72-4dc6-a9ae-25efbfbef623	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	1+95	800	840	840	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532612-07	2026-05-02 21:22:44.532612-07
+620e7794-f401-44be-96c4-c092cacbd8f0	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	A	800	315	315	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532677-07	2026-05-02 21:22:44.532677-07
+933d6d63-2788-41e0-b2f3-4bd5d9a85b03	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	800	510	510	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532738-07	2026-05-02 21:22:44.532738-07
+b42b980e-0b54-41b1-b005-4b7c34eaf927	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	E	800	600	600	\N	23.0	t	MDC hc110 chart	2026-05-02 21:22:44.532802-07	2026-05-02 21:22:44.532802-07
+2d9ccfc7-2639-4025-9aca-40b1a4248c56	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	1+100	1600	2400	2400	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532866-07	2026-05-02 21:22:44.532866-07
+33dd7a88-4c31-4d08-9656-c1cef6f8c5ae	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	1600	960	960	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.532934-07	2026-05-02 21:22:44.532934-07
+5fecb63b-db29-46a4-a41f-d20dcf63ce87	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	1+100	3200	7200	7200	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533002-07	2026-05-02 21:22:44.533002-07
+21babf9c-59d8-457a-84e3-8971add8fc18	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	E	3200	480	480	\N	30.0	t	MDC hc110 chart	2026-05-02 21:22:44.533064-07	2026-05-02 21:22:44.533064-07
+2aedeafe-a5d8-4ca9-88b6-b7c4bfc24f16	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	HC-110	B	6400	1560	1560	\N	20.0	t	MDC hc110 chart	2026-05-02 21:22:44.533128-07	2026-05-02 21:22:44.533128-07
+244fd13c-21ef-4d10-9ec4-0f8d0858bc5c	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+25	320	\N	720	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.565928-07	2026-05-02 21:22:44.565928-07
+0c391c51-99fe-43f4-9978-384f3992989b	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	320	\N	900	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.566051-07	2026-05-02 21:22:44.566051-07
+08529eb3-9915-4d11-beba-f63e304f992c	Kodak Tri-X 320	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+100	320	\N	1200	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.566172-07	2026-05-02 21:22:44.566172-07
+fe651d41-f86b-4ad8-893a-cc359ee9bfb7	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	100	450	450	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.56627-07	2026-05-02 21:22:44.56627-07
+f6179efd-2a41-47a4-a01a-41c86366b366	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+25	200	420	420	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.566368-07	2026-05-02 21:22:44.566368-07
+9adc1d24-8e43-4a17-b740-78fbea035ada	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	200	540	540	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.566464-07	2026-05-02 21:22:44.566464-07
+60099868-c53c-4609-b375-57fe5ebf10ef	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+24	320	360	360	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.566564-07	2026-05-02 21:22:44.566564-07
+61a1e1f9-32d6-4734-ad3a-a034072a3ac5	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	320	570	570	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.566662-07	2026-05-02 21:22:44.566662-07
+2cdb4f76-f488-4150-b34c-63948aa64e8b	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+25	400	420	420	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.566759-07	2026-05-02 21:22:44.566759-07
+54b6fa92-7454-4db4-8b76-dac78dc3b710	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	400	780	780	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.566854-07	2026-05-02 21:22:44.566854-07
+df84564c-bfbe-443c-b11f-b4e6fdf2e632	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+100	400	1200	1200	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.566951-07	2026-05-02 21:22:44.566951-07
+2e637d50-a952-465e-a10e-7b65494ba26d	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+25	800	390	390	\N	24.0	f	MDC rodinal chart	2026-05-02 21:22:44.567049-07	2026-05-02 21:22:44.567049-07
+7ef37a97-7014-4826-b75b-81ae068003cd	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	800	990	990	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.567146-07	2026-05-02 21:22:44.567146-07
+dbcaf61a-f386-43f0-bac4-5d5d4a5646e6	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+25	1600	780	780	\N	20.0	f	MDC rodinal chart	2026-05-02 21:22:44.567243-07	2026-05-02 21:22:44.567243-07
+f7e30015-b1d2-4139-a883-641059e7c0eb	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	1600	1110	1110	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.56734-07	2026-05-02 21:22:44.56734-07
+de126b05-5d3e-4e3b-be7c-8027b965b6a3	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+100	1600	5400	5400	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.567438-07	2026-05-02 21:22:44.567438-07
+c6de0bac-ee19-4e69-a757-285ece7c3a83	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+25	3200	1020	\N	\N	20.5	t	MDC rodinal chart	2026-05-02 21:22:44.567536-07	2026-05-02 21:22:44.567536-07
+a3093a47-7e4a-49a5-a961-86a5e2ca2a00	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+50	3200	1980	1980	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.567634-07	2026-05-02 21:22:44.567634-07
+bed6ec8d-8005-4fc8-8da3-bbb07adbb78d	Kodak Tri-X 400	a30739bc-efc7-479f-a250-1f093df8f73b	Rodinal	1+100	3200	7200	7200	\N	20.0	t	MDC rodinal chart	2026-05-02 21:22:44.567729-07	2026-05-02 21:22:44.567729-07
+\.
+
+
+--
+-- Data for Name: dev_sessions; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.dev_sessions (id, user_id, display_id, developer, dilution, dilution_raw, dev_time_seconds, temperature_c, agitation, tank, stop_bath, fixer, fixer_time_seconds, wash_method, wetting_agent, notes, developed_at, completed_at, results_rating, results_notes, created_at, updated_at) FROM stdin;
+258dad40-9f12-4fae-b16e-6d8028e6dc4a	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.01	HC-110	B	B (1+31)	450	20.0	\N	Paterson 3-reel	\N	\N	\N	\N	\N	Tank 3 of 8 in 2026-05-12 batch dev day. 1000ml: 31.25ml syrup + 968.75ml water.	2026-05-12 15:23:54.09392-07	2026-05-12 15:23:54.09392-07	\N	\N	2026-05-12 15:23:54.09392-07	2026-05-12 15:23:54.09392-07
+9286d1d2-2990-4b27-8070-40de6a481467	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.02	HC-110	B	B (1+31)	450	20.0	\N	Paterson 2-reel #1	\N	\N	\N	\N	\N	Tank 4 of 8 in 2026-05-12 batch. 500ml: 15.6ml syrup + 484.4ml water. One of the two rolls came out blank/very thin — likely a short-loaded ~24-frame roll. Identity of blank roll unknown; revisit when scanning the non-blank one.	2026-05-12 16:19:23.65831-07	2026-05-12 16:19:23.65831-07	\N	\N	2026-05-12 16:19:23.65831-07	2026-05-12 16:19:23.65831-07
+0245b0e8-1f7c-4b32-b5e0-1b691f50f6f0	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.03	HC-110	E	E (1+47)	420	20.0	\N	Paterson 2-reel #3	\N	\N	\N	\N	\N	Tank 5 of 8 in 2026-05-12 batch. 500ml: 10.4ml syrup + 489.6ml water. Tri-X 400 @ 400 + Acros II 100 @ 100.	2026-05-12 16:47:52.119098-07	2026-05-12 16:47:52.119098-07	\N	\N	2026-05-12 16:47:52.119098-07	2026-05-12 16:47:52.119098-07
+09250c14-5cd4-45d2-ac2d-f9fdc8c66e00	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.05	HC-110	B	B (1+31)	420	20.0	inversion	Jobo 1520 stack (1 reel)	\N	\N	\N	\N	\N	Tank 7 of 8 in 2026-05-12 batch. 500ml: 15.6ml syrup + 484.4ml water. Solo Arista EDU 400 DX.	2026-05-12 17:45:56.474619-07	2026-05-12 17:45:56.474619-07	\N	\N	2026-05-12 17:45:56.474619-07	2026-05-12 17:45:56.474619-07
+020002da-8b44-41ab-aa3a-1a39529be955	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.04	HC-110	B	B (1+31)	450	20.0	\N	Paterson 2-reel #2	\N	\N	\N	\N	\N	Tank 6 of 8 in 2026-05-12 batch. 500ml: 15.6ml syrup + 484.4ml water. FP4+ expired @50 (dev as box 125, per expired-film convention) + mystery HP5+ @800 from canister labeled 24080102.	2026-05-12 17:52:46.850173-07	2026-05-12 17:52:46.850173-07	\N	\N	2026-05-12 17:52:46.850173-07	2026-05-12 17:52:46.850173-07
+90f8c757-46f6-48cf-963b-540c790e10d7	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.06	Rodinal	1+50	1+50	480	20.0	inversion	Jobo 1520 stack (2 reels)	\N	\N	\N	\N	\N	Tank 8 of 8 in 2026-05-12 batch. 510ml: 10ml syrup + 500ml water (per convention). 2× NoColorStudio no.5 @ ISO 5.	2026-05-12 18:18:07.214194-07	2026-05-12 18:18:07.214194-07	\N	\N	2026-05-12 18:18:07.214194-07	2026-05-12 18:18:07.214194-07
+d057d615-0b45-4330-b54c-e3c53f5d3dc5	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.07	HC-110	1+110	1+110 (rescue — intended H 1+63 but poured 4.5ml in 500ml)	960	20.0	\N	Stearman SP-445	\N	\N	\N	\N	\N	Tank 1 of 8. RESCUE: poured 4.5ml HC-110 syrup in 500ml total (=1+110) intending dilution H. Caught mid-tank at 6:00 elapsed; extended total to ~16:00 to compensate. Sheets may run thin — proof with care.	2026-05-12 12:18:27.80545-07	2026-05-12 12:18:27.80545-07	\N	\N	2026-05-12 18:18:27.80545-07	2026-05-12 18:18:27.80545-07
+0a5382f0-599d-4e0d-bba8-f55c7dda4477	d43eded1-69f1-427d-a695-70dbe56b69ef	20260512.08	HC-110	H	H (1+63)	690	20.0	\N	MOD54	\N	\N	\N	\N	\N	Tank 2 of 8. 1000ml: 15.6ml syrup + 984.4ml water. 3× Arista EDU Ultra 100 4x5 (cage half-empty).	2026-05-12 14:18:27.80545-07	2026-05-12 14:18:27.80545-07	\N	\N	2026-05-12 18:18:27.80545-07	2026-05-12 18:18:27.80545-07
+\.
+
+
+--
+-- Data for Name: film_inventory; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.film_inventory (id, user_id, film_stock_id, quantity, expiration_date, storage_location, purchase_date, cost_per_roll, notes, created_at, updated_at, format, form, remaining_length_ft, original_length_ft, frame_count, display_id, rated_iso) FROM stdin;
+e29be6c1-b0ac-4866-9f47-1020bcb5987a	c0fe3ff9-a993-4021-95f0-3f782e4038e0	a30739bc-efc7-479f-a250-1f093df8f73b	5	2027-06	fridge	\N	\N	\N	2026-03-30 18:18:15.525215-07	2026-03-30 18:18:15.525215-07	35mm	factory_roll	\N	\N	\N	\N	\N
+e4664165-7a78-41fc-9d5e-33d77829f1fb	d43eded1-69f1-427d-a695-70dbe56b69ef	8fa17252-6af5-4a06-a68a-3d5e88643e05	1	\N	fridge	\N	\N	Partially shot: 3 frames previously exposed, then rolled back into cassette with leader not retrieved. Before reloading: fish the leader, and advance an extra 4-5 frames to avoid overlap with the old exposures. Remaining usable: ~33 frames.	2026-04-11 17:54:55.195542-07	2026-04-11 17:54:55.218-07	35mm	factory_roll	\N	\N	33	R006	\N
+6853b110-6edb-4335-8f22-641d03b87742	d43eded1-69f1-427d-a695-70dbe56b69ef	ac6d943d-46ba-404f-bbc0-54f0a5f12cdc	1	\N	fridge	\N	\N	Rolled back into cassette with leader not retrieved. Unshot. Fish leader before reloading.	2026-04-11 17:56:31.599967-07	2026-04-11 17:56:31.622-07	35mm	factory_roll	\N	\N	\N	R007	\N
+7180d050-760b-41a1-95e7-45a7ba945fba	d43eded1-69f1-427d-a695-70dbe56b69ef	bd77c711-8ca6-4b25-9a59-edf4513fb6f1	1	\N	fridge	\N	\N	\N	2026-04-11 16:16:25.867999-07	2026-04-11 16:16:25.867999-07	35mm	factory_roll	\N	\N	\N	\N	\N
+a3822a4d-10d5-4dca-b716-152780034b48	d43eded1-69f1-427d-a695-70dbe56b69ef	ed42bb5c-f728-4dcc-8351-36578fbc7563	2	\N	fridge	\N	\N	\N	2026-04-11 16:18:33.656094-07	2026-04-11 16:18:33.656094-07	35mm	factory_roll	\N	\N	\N	\N	\N
+4f678e2c-19db-47a4-8323-de399607a42f	d43eded1-69f1-427d-a695-70dbe56b69ef	42f44ce0-b4a1-45f4-835d-7845d983bb2b	1	\N	fridge	\N	\N	\N	2026-04-11 16:23:31.858326-07	2026-04-11 16:23:31.858326-07	35mm	factory_roll	\N	\N	\N	\N	\N
+1f9e6e84-0265-4403-8147-8fd99e5cf85b	d43eded1-69f1-427d-a695-70dbe56b69ef	e388e75a-5ca1-447f-adb9-0358ab3e8671	1	\N	fridge	\N	\N	\N	2026-04-11 16:23:31.886553-07	2026-04-11 16:23:31.886553-07	35mm	factory_roll	\N	\N	\N	\N	\N
+97294346-4de8-4ee2-9c70-a499c8492655	d43eded1-69f1-427d-a695-70dbe56b69ef	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	1	\N	fridge	\N	\N	\N	2026-04-11 16:23:31.893264-07	2026-04-11 16:23:31.893264-07	35mm	factory_roll	\N	\N	\N	\N	\N
+81c13197-9c0d-4580-b1a0-9f5177eec029	d43eded1-69f1-427d-a695-70dbe56b69ef	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	1	\N	fridge	\N	\N	\N	2026-04-11 16:23:31.920681-07	2026-04-11 16:23:31.920681-07	35mm	factory_roll	\N	\N	\N	\N	\N
+7b02b4f4-41b8-40bd-9fcd-ed24dce5df18	d43eded1-69f1-427d-a695-70dbe56b69ef	aee798ee-c90b-43dd-a85a-57b795d33dfd	1	\N	fridge	\N	\N	bulk-spooled cassette	2026-04-11 16:26:52.692649-07	2026-04-11 16:26:52.692649-07	35mm	factory_roll	\N	\N	10	\N	\N
+e85c7bfc-cc01-4adb-8873-987e14596550	d43eded1-69f1-427d-a695-70dbe56b69ef	aee798ee-c90b-43dd-a85a-57b795d33dfd	1	\N	fridge	\N	\N	no box, unknown origin — might be factory, might be bulk-spooled	2026-04-11 16:31:09.695705-07	2026-04-11 16:40:19.011-07	35mm	factory_roll	\N	\N	\N	R001	\N
+7492561c-80e6-49cb-bf63-1119574e5d1f	d43eded1-69f1-427d-a695-70dbe56b69ef	03ee0cb0-6259-4872-b69a-94ab31532599	2	\N	fridge	\N	\N	\N	2026-04-11 16:41:43.133465-07	2026-04-11 16:41:43.133465-07	35mm	factory_roll	\N	\N	\N	\N	\N
+67e22e48-e992-469d-b559-3fbba0775d69	d43eded1-69f1-427d-a695-70dbe56b69ef	f070c495-d3dc-4666-ba4e-d4855df9aba9	1	\N	fridge	\N	\N	\N	2026-04-11 16:43:14.771302-07	2026-04-11 16:43:14.771302-07	35mm	factory_roll	\N	\N	\N	\N	\N
+3521c517-f2f4-4c01-a9b8-dcb690ae5c8f	d43eded1-69f1-427d-a695-70dbe56b69ef	612da9ef-5796-4fe0-aba2-0ff83ba928ab	1	\N	fridge	\N	\N	\N	2026-04-11 17:19:57.938874-07	2026-04-11 17:19:57.938874-07	35mm	factory_roll	\N	\N	\N	\N	\N
+ac3356c4-aed9-4898-83d8-6872b37148ad	d43eded1-69f1-427d-a695-70dbe56b69ef	4b8c6364-deb6-43d6-b735-cc96a8c6d214	1	2012-01	fridge	\N	\N	\N	2026-04-11 17:21:31.663822-07	2026-04-11 17:25:03.774-07	35mm	factory_roll	\N	\N	\N	\N	\N
+eb6c5cbf-b52e-44de-a47e-31b7207111f6	d43eded1-69f1-427d-a695-70dbe56b69ef	97899da6-11a2-470a-b629-723b51930301	1	2012	fridge	\N	\N	\N	2026-04-11 17:25:57.208069-07	2026-04-11 17:25:57.208069-07	35mm	factory_roll	\N	\N	\N	\N	\N
+2aac5126-5999-4ca1-9129-3935c2b609c7	d43eded1-69f1-427d-a695-70dbe56b69ef	3c467ec4-504b-4d0c-ac76-085fa11aa165	1	\N	fridge	\N	\N	\N	2026-04-11 17:26:45.727625-07	2026-04-11 17:26:45.727625-07	35mm	factory_roll	\N	\N	\N	\N	\N
+695d8dc4-c495-4f02-9644-50932298380f	d43eded1-69f1-427d-a695-70dbe56b69ef	c9bb56da-6fe5-41a7-a87b-1dfde30cc5bd	1	\N	fridge	\N	\N	\N	2026-04-11 17:27:44.753014-07	2026-04-11 17:27:44.753014-07	35mm	factory_roll	\N	\N	\N	\N	\N
+1957afdd-8f2c-45fd-9086-6cd2be00b9b2	d43eded1-69f1-427d-a695-70dbe56b69ef	fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	1	\N	fridge	\N	\N	\N	2026-04-11 17:28:36.097581-07	2026-04-11 17:28:36.097581-07	35mm	factory_roll	\N	\N	\N	\N	\N
+9987f14d-26b2-4151-b82a-63212fee0613	d43eded1-69f1-427d-a695-70dbe56b69ef	3818009d-c3de-40f1-82c9-c9f6f9413ede	1	1992	fridge	\N	\N	\N	2026-04-11 17:30:53.321673-07	2026-04-11 17:30:53.321673-07	35mm	factory_roll	\N	\N	\N	\N	\N
+86962cd4-b6a2-486a-85d5-03d572513190	d43eded1-69f1-427d-a695-70dbe56b69ef	2cf48166-e27e-4d99-8a81-e51279b4e98f	1	\N	fridge	\N	\N	\N	2026-04-11 17:33:42.560815-07	2026-04-11 17:33:42.560815-07	35mm	factory_roll	\N	\N	\N	\N	\N
+38bad597-f972-4884-be6b-42f0879083a4	d43eded1-69f1-427d-a695-70dbe56b69ef	068df7e1-8f30-4560-8f39-715b5106e643	1	\N	fridge	\N	\N	\N	2026-04-11 17:34:39.993771-07	2026-04-11 17:34:39.993771-07	35mm	factory_roll	\N	\N	\N	\N	\N
+19016b68-ccb3-469d-a23e-38c2490f6b3f	d43eded1-69f1-427d-a695-70dbe56b69ef	3841ac74-2774-4cf6-8724-226bc4b6c83e	1	\N	fridge	\N	\N	\N	2026-04-11 17:36:18.161309-07	2026-04-11 17:36:18.161309-07	35mm	factory_roll	\N	\N	\N	\N	\N
+f6ec594b-0e20-418c-8cf0-9fdeb37d4c87	d43eded1-69f1-427d-a695-70dbe56b69ef	1cb6a6be-de3d-4f20-9424-e1446f3bb9b4	1	2023	fridge	\N	\N	\N	2026-04-11 17:37:44.767779-07	2026-04-11 17:37:44.767779-07	35mm	factory_roll	\N	\N	\N	\N	\N
+893c966b-b712-4453-b308-37095142b226	d43eded1-69f1-427d-a695-70dbe56b69ef	345b2a21-1905-4b17-9fb5-7f5d4ea95e7a	1	2023	fridge	\N	\N	\N	2026-04-11 17:38:48.707688-07	2026-04-11 17:38:48.707688-07	35mm	factory_roll	\N	\N	\N	\N	\N
+0a048bb7-0003-41c9-b889-527f95a87d2f	d43eded1-69f1-427d-a695-70dbe56b69ef	ea1992e5-c396-45d0-a4a3-7e77cb30cd93	2	\N	fridge	\N	\N	\N	2026-04-11 17:40:08.270526-07	2026-04-11 17:40:08.270526-07	35mm	factory_roll	\N	\N	\N	\N	\N
+f07273e2-4c11-42b7-b183-be0e2bc7a6c1	d43eded1-69f1-427d-a695-70dbe56b69ef	564b6bef-e10a-49f9-9013-aaf60040ed9f	2	2015	fridge	\N	\N	\N	2026-04-11 17:41:46.236723-07	2026-04-11 17:41:46.236723-07	35mm	factory_roll	\N	\N	\N	\N	\N
+aa411c9c-05a5-4262-a8cb-e41838992ac6	d43eded1-69f1-427d-a695-70dbe56b69ef	42f44ce0-b4a1-45f4-835d-7845d983bb2b	1	\N	fridge	\N	\N	out of box, believed fresh and unshot but not certain	2026-04-11 17:43:43.117197-07	2026-04-11 17:43:43.141-07	35mm	factory_roll	\N	\N	\N	R002	\N
+e205d50c-d8d8-43f4-a858-66bd37d3ea8f	d43eded1-69f1-427d-a695-70dbe56b69ef	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	1	\N	fridge	\N	\N	unhoused, unknown expiration. User-rated at ISO 25.	2026-04-11 17:48:14.719015-07	2026-04-11 17:48:14.732-07	35mm	factory_roll	\N	\N	\N	R003	25
+94192812-d170-4c54-908b-66fafe4269b1	d43eded1-69f1-427d-a695-70dbe56b69ef	9ab33c20-cbbe-4613-9904-d61ee9d1718a	1	\N	fridge	\N	\N	bulk-spooled cassette, 24 frames	2026-04-11 17:51:49.68013-07	2026-04-11 17:51:49.702-07	35mm	factory_roll	\N	\N	24	R005	\N
+0ad3dd5d-0aab-443e-9f4e-9bff16e58409	d43eded1-69f1-427d-a695-70dbe56b69ef	ea8830a4-12ed-4201-9991-446a25d173ee	1	1998	fridge	\N	\N	Mystery 20-exposure roll, hand-written ISO 400 on cassette, expired 1998. User-rated ISO 25 to compensate.	2026-04-11 18:03:30.725772-07	2026-04-11 18:03:30.747-07	35mm	factory_roll	\N	\N	20	R009	25
+6eaaeeb0-adb6-47c5-a7a3-1a2e74fa482f	d43eded1-69f1-427d-a695-70dbe56b69ef	b28883e1-0938-4b04-b060-545bc4d21f66	1	\N	fridge	\N	\N	Rolled up in cassette, leader inside. Believed fresh/unshot.	2026-04-11 18:04:28.202838-07	2026-04-11 18:04:28.225-07	35mm	factory_roll	\N	\N	\N	R010	\N
+04b03489-55df-4d6f-ad53-c65667edd084	d43eded1-69f1-427d-a695-70dbe56b69ef	d41801c0-113a-487e-bcef-35af2d89d079	1	\N	fridge	\N	\N	In a reused Kentmere 400 canister — NOT actually Kentmere 400. Best guess HP5 or FP4 based on feel/source. Fresh. Stand dev planned. Frame count uncertain (24?).	2026-04-11 18:07:56.671108-07	2026-04-11 18:07:56.692-07	35mm	factory_roll	\N	\N	24	R011	\N
+05023095-a2ca-413e-9c44-605ea98f5565	d43eded1-69f1-427d-a695-70dbe56b69ef	01feb6be-5390-433a-88ce-6d57a97e73f9	1	\N	fridge	\N	\N	Very old, unknown stock. Stand dev in Rodinal. Unknown frame count.	2026-04-11 18:10:07.491257-07	2026-04-11 18:10:07.556-07	35mm	factory_roll	\N	\N	\N	R014	25
+8d367275-8ed4-4e47-bd88-46752103c0ff	d43eded1-69f1-427d-a695-70dbe56b69ef	01feb6be-5390-433a-88ce-6d57a97e73f9	1	\N	fridge	\N	\N	Very old, unknown stock. Stand dev in Rodinal. Unknown frame count.	2026-04-11 18:10:07.515524-07	2026-04-11 18:10:07.515524-07	35mm	factory_roll	\N	\N	\N	R012	25
+fffeb0a3-0c9f-4dae-8518-8a90881da9b0	d43eded1-69f1-427d-a695-70dbe56b69ef	01feb6be-5390-433a-88ce-6d57a97e73f9	1	\N	fridge	\N	\N	Very old, unknown stock. Stand dev in Rodinal. Unknown frame count.	2026-04-11 18:10:07.536222-07	2026-04-11 18:10:07.536222-07	35mm	factory_roll	\N	\N	\N	R013	25
+4480714b-a6f6-43cb-a997-86a8383d4d7e	d43eded1-69f1-427d-a695-70dbe56b69ef	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	1	\N	fridge	\N	\N	Rolled up in cassette, leader inside. Fish leader before reloading.	2026-04-11 18:17:39.337677-07	2026-04-11 18:17:39.359-07	35mm	factory_roll	\N	\N	\N	R015	\N
+5faecf1d-bb59-4398-960f-fe7b8fd0c579	d43eded1-69f1-427d-a695-70dbe56b69ef	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	0	\N	fridge	\N	\N	\N	2026-04-11 16:23:31.827339-07	2026-05-01 20:28:59.936075-07	35mm	factory_roll	\N	\N	\N	\N	\N
+ade71f34-d34f-42da-900c-83fa4a4e39c9	d43eded1-69f1-427d-a695-70dbe56b69ef	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	0	\N	fridge	\N	\N	\N	2026-04-11 17:29:19.229121-07	2026-05-01 20:52:37.93144-07	35mm	factory_roll	\N	\N	\N	\N	\N
+e437233e-1cd1-4755-a919-c3f5b94c63c0	d43eded1-69f1-427d-a695-70dbe56b69ef	f228f76e-d873-4eb5-8bac-cbe79fa0d422	0	\N	fridge	\N	\N	\N	2026-04-11 17:32:44.434066-07	2026-05-01 20:40:37.523105-07	35mm	factory_roll	\N	\N	\N	\N	\N
+faec8699-58d8-433d-9a7b-c0b220b89d4d	d43eded1-69f1-427d-a695-70dbe56b69ef	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	0	\N	fridge	\N	\N	In canister, no box. Possibly partially shot — treating as unshot, any double exposures are a feature.	2026-04-11 17:59:14.998544-07	2026-05-01 21:24:31.261199-07	35mm	factory_roll	\N	\N	\N	R008	\N
+deafa787-f828-44a8-a7a7-f90087bc93d7	d43eded1-69f1-427d-a695-70dbe56b69ef	aee798ee-c90b-43dd-a85a-57b795d33dfd	3	\N	fridge	\N	\N	bulk-spooled cassettes	2026-04-11 16:26:52.67673-07	2026-05-01 21:04:18.999917-07	35mm	factory_roll	\N	\N	24	\N	\N
+5a97b16a-c87f-406e-a7d9-a5deaa6f91b0	d43eded1-69f1-427d-a695-70dbe56b69ef	bce2b5c9-2d4c-467c-9352-de43c2ee7023	6	\N	fridge	\N	\N	\N	2026-04-11 16:11:22.465974-07	2026-05-01 21:22:13.162861-07	35mm	factory_roll	\N	\N	\N	\N	\N
+59a5a0ce-6bf3-47dc-9bf9-7ee43d9eb900	d43eded1-69f1-427d-a695-70dbe56b69ef	a30739bc-efc7-479f-a250-1f093df8f73b	1	1996	fridge	\N	\N	24-exposure roll, expired 1996, user-rated at ISO 100	2026-04-11 17:50:10.537248-07	2026-04-11 17:50:10.559-07	35mm	factory_roll	\N	\N	24	R004	100
+d8d722f9-5088-4d42-8f0e-228e7ff950e3	d43eded1-69f1-427d-a695-70dbe56b69ef	5a05232c-37df-4618-821b-59fdbf24ec5d	1	~2010	fridge	\N	\N	Fuji discontinued this line ~2007, so this roll is likely ~15 years past expiration. Rate down a stop or two at load time.	2026-04-11 18:19:12.434702-07	2026-04-11 18:19:12.458-07	35mm	factory_roll	\N	\N	\N	R016	\N
+263cdea4-e57b-4dc6-b450-0d412fb9e7a8	d43eded1-69f1-427d-a695-70dbe56b69ef	ed721b8a-4c96-4f89-b6e2-c7802e5d23ec	3	\N	fridge	\N	\N	\N	2026-04-11 18:23:17.232235-07	2026-04-11 18:23:17.232235-07	35mm	factory_roll	\N	\N	\N	\N	\N
+4ba6099f-751d-4d1d-8a50-a132ab9bbd5f	d43eded1-69f1-427d-a695-70dbe56b69ef	778072dc-6bce-46d0-b43e-ef20da374970	2	\N	fridge	\N	\N	\N	2026-04-11 18:24:32.732498-07	2026-04-11 18:24:32.732498-07	35mm	factory_roll	\N	\N	\N	\N	\N
+749c7004-f503-4640-82f1-0c1e0b85a237	d43eded1-69f1-427d-a695-70dbe56b69ef	822a752f-82eb-4cbd-94a2-bfb0a2130302	1	2022	fridge	\N	\N	\N	2026-04-11 18:25:18.384043-07	2026-04-11 18:25:18.384043-07	35mm	factory_roll	\N	\N	\N	\N	\N
+3fd8862a-c91f-4248-bb3c-bfd7ac188a63	d43eded1-69f1-427d-a695-70dbe56b69ef	4f64213e-1317-4eb5-a518-d0fd7193823d	1	\N	fridge	\N	\N	\N	2026-04-11 18:28:24.09354-07	2026-04-11 18:28:24.09354-07	35mm	factory_roll	\N	\N	\N	\N	\N
+243de2f7-bc78-45a9-906f-2fa0ca6409be	d43eded1-69f1-427d-a695-70dbe56b69ef	d3a6998f-d6c4-4470-8826-46737470c1b5	2	\N	fridge	\N	\N	24-exposure rolls, unknown expiration, unlikely to shoot.	2026-04-11 18:29:50.534462-07	2026-04-11 18:29:50.534462-07	35mm	factory_roll	\N	\N	24	\N	\N
+1680379b-d5ee-4da0-ad05-2a233d1f4bfc	d43eded1-69f1-427d-a695-70dbe56b69ef	b430b223-a809-42f7-b2dd-0e5a36a03f16	1	\N	fridge	\N	\N	Slightly past expiration but not significantly.	2026-04-11 18:31:16.048495-07	2026-04-11 18:31:16.048495-07	35mm	factory_roll	\N	\N	\N	\N	\N
+4b5d4d29-b397-410c-8119-5cfeb34f1efd	d43eded1-69f1-427d-a695-70dbe56b69ef	36ffb370-b34d-4635-beaa-3555cdd672e4	1	\N	fridge	\N	\N	Out of box, not really expired but should shoot soon.	2026-04-11 18:32:38.590546-07	2026-04-11 18:32:38.613-07	35mm	factory_roll	\N	\N	\N	R017	\N
+441fbf90-3ae3-4e31-aedb-6004d0cb2190	d43eded1-69f1-427d-a695-70dbe56b69ef	a907a12e-7f02-4fb0-8923-2f245457bd8b	1	\N	fridge	\N	\N	Out of box, fresh enough, should shoot soon.	2026-04-11 18:34:18.360784-07	2026-04-11 18:34:18.384-07	35mm	factory_roll	\N	\N	\N	R018	\N
+0b9ccd1e-3d08-415a-9357-f7098384bffb	d43eded1-69f1-427d-a695-70dbe56b69ef	3b046fe1-068b-4156-b205-38366dc9d679	1	\N	fridge	\N	\N	Rolled up in cassette, leader inside. Fresh. Fish leader before reloading.	2026-04-11 18:36:20.533477-07	2026-04-11 18:36:20.557-07	35mm	factory_roll	\N	\N	\N	R019	\N
+6668d770-b621-4926-aec2-d17c9d70b9ce	d43eded1-69f1-427d-a695-70dbe56b69ef	7fc536bd-66aa-4bbc-960c-544d639c950f	1	\N	fridge	\N	\N	Out of box. Fresh.	2026-04-11 18:37:42.350577-07	2026-04-11 18:37:42.372-07	35mm	factory_roll	\N	\N	\N	R020	\N
+f9b8e3a0-5587-4d12-b686-fd44930eb605	d43eded1-69f1-427d-a695-70dbe56b69ef	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	0	\N	fridge	\N	\N	\N	2026-04-12 18:59:29.899153-07	2026-04-12 19:11:15.207-07	4x5	sheet	\N	\N	\N	\N	\N
+d8987080-8d9c-4a53-a4f9-14a6de2805d3	d43eded1-69f1-427d-a695-70dbe56b69ef	deea6e69-42a7-4d93-bd6b-00e7fc92045a	1	1987	fridge	\N	\N	~39 years past expiration. Expect significant shifts and base fog. Rate down heavily at load time.\n\nRescue option: B&W cross-process, Rodinal stand 1+100, 20°C, 60 min, no agitation. Rate 1-2 stops below box. Expect low contrast + heavy base fog but usually scannable B&W.	2026-04-11 18:26:22.066932-07	2026-04-11 18:26:22.089-07	35mm	factory_roll	\N	\N	\N	\N	\N
+de4378ff-d0da-4147-a2d3-06c67077af3a	d43eded1-69f1-427d-a695-70dbe56b69ef	561d839e-3459-4939-a777-422a92a2e205	1	1993	fridge	\N	\N	~30+ years past expiration. Unlikely to shoot.\n\nRescue option: B&W cross-process, Rodinal stand 1+100, 20°C, 60 min, no agitation. Rate 1-2 stops below box. Expect low contrast + heavy base fog but usually scannable B&W.	2026-04-11 18:40:02.772314-07	2026-04-11 18:40:02.772314-07	35mm	factory_roll	\N	\N	\N	\N	\N
+13e8c31e-80e4-411e-85cf-f9d4708edcf7	d43eded1-69f1-427d-a695-70dbe56b69ef	362b021e-fd19-48fd-b6cc-4f5ee1ee5ba7	1	\N	fridge	\N	\N	Expiration unknown but stock dates to late 1980s–early 1990s; likely ~30+ years past expiration.\n\nRescue option: B&W cross-process, Rodinal stand 1+100, 20°C, 60 min, no agitation. Rate 1-2 stops below box. Expect low contrast + heavy base fog but usually scannable B&W.	2026-04-11 18:54:51.492874-07	2026-04-11 18:54:51.492874-07	35mm	factory_roll	\N	\N	\N	\N	\N
+3f2bf5d1-6618-4bb1-866a-005f1906b731	d43eded1-69f1-427d-a695-70dbe56b69ef	5173fa4f-5925-477b-92b5-644394f564f2	1	~2005	fridge	\N	\N	Early 2000s stock. Likely ~20 years past expiration.\n\nRescue option: B&W cross-process, Rodinal stand 1+100, 20°C, 60 min, no agitation. Rate 1-2 stops below box. Expect low contrast + heavy base fog but usually scannable B&W.	2026-04-11 18:56:39.887349-07	2026-04-11 18:57:22.112-07	35mm	factory_roll	\N	\N	24	\N	\N
+17ba9cc4-0934-4471-a8ad-ae4f509ab18a	d43eded1-69f1-427d-a695-70dbe56b69ef	27184828-62f2-4d45-84bf-8547db19dc36	1	\N	fridge	\N	\N	Sticker over plain black canister reading "Black's Slide Duplicating Film". No other info. Age unknown (Black's shut down 2015 so box is pre-2015 at minimum). Almost certainly expired.\n\nRescue option: B&W cross-process, Rodinal stand 1+100, 20°C, 60 min, no agitation. Rate 1-2 stops below box. Expect low contrast + heavy base fog but usually scannable B&W.	2026-04-11 18:59:35.557951-07	2026-04-11 18:59:35.581-07	35mm	factory_roll	\N	\N	\N	R021	\N
+4da95e9c-d842-442f-bb47-db73f1a64a85	d43eded1-69f1-427d-a695-70dbe56b69ef	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	1	\N	fridge	\N	\N	Older box — qty is placeholder for sheets currently in holders. Full count TBD.	2026-04-12 19:16:54.105748-07	2026-04-12 19:16:54.168-07	4x5	sheet	\N	\N	\N	\N	\N
+a96ab32a-7bb8-4aa5-9c3d-41afdde030e3	d43eded1-69f1-427d-a695-70dbe56b69ef	aee798ee-c90b-43dd-a85a-57b795d33dfd	0	\N	fridge	\N	\N	Box — qty is placeholder for sheets currently in holders. Full count TBD.	2026-04-12 19:16:54.126492-07	2026-04-12 19:16:54.21-07	4x5	sheet	\N	\N	\N	\N	\N
+4f845f1f-4ee1-453a-acaf-130c75249448	d43eded1-69f1-427d-a695-70dbe56b69ef	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	39	\N	fridge	\N	\N	Fresh box, separate batch from the 2 loose sheets.	2026-04-12 19:03:19.361087-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N
+a9844b83-70a9-491a-ab35-dea0bad04536	d43eded1-69f1-427d-a695-70dbe56b69ef	aee798ee-c90b-43dd-a85a-57b795d33dfd	0	\N	fridge	\N	\N	\N	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	\N	\N	\N	\N	\N
+4541dcbd-a70d-468b-b9da-837972503e3e	d43eded1-69f1-427d-a695-70dbe56b69ef	aee798ee-c90b-43dd-a85a-57b795d33dfd	1	\N	fridge	\N	\N	split from 24-frame bulk pack; status uncertain (possibly unshot)	2026-05-01 21:04:18.999917-07	2026-05-01 21:04:18.999917-07	35mm	factory_roll	\N	\N	24	R022	\N
+6772f7a2-e80e-471f-bcd4-8a7bb70e115b	d43eded1-69f1-427d-a695-70dbe56b69ef	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	1	\N	fridge	\N	\N	vintage cassette, ripped leader — unshot	2026-05-01 21:36:48.630034-07	2026-05-01 21:36:48.630034-07	35mm	factory_roll	\N	\N	\N	R023	\N
+2a0495bb-d879-449b-8f5b-12ca3df57a11	d43eded1-69f1-427d-a695-70dbe56b69ef	77625610-a311-4e12-a30d-499f0b853130	1	\N	fridge	\N	\N	ripped leader — unshot	2026-05-01 21:40:32.574486-07	2026-05-01 21:40:32.574486-07	35mm	factory_roll	\N	\N	\N	R024	\N
+\.
+
+
+--
+-- Data for Name: film_stocks; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.film_stocks (id, user_id, manufacturer, name, iso, type, notes, is_active, created_at, updated_at, frame_count) FROM stdin;
+a30739bc-efc7-479f-a250-1f093df8f73b	c0fe3ff9-a993-4021-95f0-3f782e4038e0	Kodak	Tri-X 400	400	bw	\N	t	2026-03-30 18:17:30.294557-07	2026-03-30 18:17:30.294557-07	\N
+aee798ee-c90b-43dd-a85a-57b795d33dfd	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	HP5 Plus	400	bw	\N	t	2026-03-30 19:22:58.71147-07	2026-03-30 19:22:58.71147-07	\N
+a1a136a7-d66a-46cd-9433-ff106fe3f3b9	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	FP4 Plus	125	bw	\N	t	2026-03-30 19:22:58.719781-07	2026-03-30 19:22:58.719781-07	\N
+bce2b5c9-2d4c-467c-9352-de43c2ee7023	d43eded1-69f1-427d-a695-70dbe56b69ef	NoColorStudio	no.5	5	bw	29 exposures per roll (non-standard)	t	2026-04-11 16:11:22.434031-07	2026-04-11 16:13:54.384-07	29
+bd77c711-8ca6-4b25-9a59-edf4513fb6f1	d43eded1-69f1-427d-a695-70dbe56b69ef	NoColorStudio	No.10	100	bw	wide-spectrum panchromatic	t	2026-04-11 16:16:19.682371-07	2026-04-11 16:16:19.682371-07	\N
+ed42bb5c-f728-4dcc-8351-36578fbc7563	d43eded1-69f1-427d-a695-70dbe56b69ef	NoColorStudio	No.12 Baryta	6	bw	orthochromatic paperfilm	t	2026-04-11 16:18:33.623783-07	2026-04-11 16:18:33.623783-07	16
+c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	Ortho Plus	80	bw	\N	t	2026-04-11 16:23:31.80141-07	2026-04-11 16:23:31.80141-07	\N
+42f44ce0-b4a1-45f4-835d-7845d983bb2b	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	Delta 3200	3200	bw	\N	t	2026-04-11 16:23:31.835721-07	2026-04-11 16:23:31.835721-07	\N
+e388e75a-5ca1-447f-adb9-0358ab3e8671	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	XP2 Super	400	bw	C41-process black and white	t	2026-04-11 16:23:31.865566-07	2026-04-11 16:23:31.865566-07	\N
+dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	Pan F Plus	50	bw	\N	t	2026-04-11 16:23:31.900046-07	2026-04-11 16:23:31.900046-07	\N
+03ee0cb0-6259-4872-b69a-94ab31532599	d43eded1-69f1-427d-a695-70dbe56b69ef	Kentmere	Pan 100	100	bw	\N	t	2026-04-11 16:41:43.113547-07	2026-04-11 16:41:43.113547-07	\N
+f070c495-d3dc-4666-ba4e-d4855df9aba9	d43eded1-69f1-427d-a695-70dbe56b69ef	Lomography	Fantome	8	bw	\N	t	2026-04-11 16:43:14.750721-07	2026-04-11 16:43:14.750721-07	\N
+612da9ef-5796-4fe0-aba2-0ff83ba928ab	d43eded1-69f1-427d-a695-70dbe56b69ef	ADOX	CHS 100 II	100	bw	\N	t	2026-04-11 17:19:57.902583-07	2026-04-11 17:19:57.902583-07	\N
+778072dc-6bce-46d0-b43e-ef20da374970	d43eded1-69f1-427d-a695-70dbe56b69ef	SantaColor	100	100	color_negative	Rebranded Kodak Aerocolor aerial surveillance stock. C-41 compatible.	t	2026-04-11 18:24:32.7101-07	2026-04-11 18:24:32.7101-07	\N
+4b8c6364-deb6-43d6-b735-cc96a8c6d214	d43eded1-69f1-427d-a695-70dbe56b69ef	Efke	IR 820	400	bw	Infrared film, sensitive to ~820nm. Box ISO 400 unfiltered. With IR filter (Hoya R72, Tiffen #87, B+W 092): rate ISO 25. With very deep IR filter: rate ISO 1-2. Standard B&W chemistry.	t	2026-04-11 17:21:31.641563-07	2026-04-11 17:24:25.229-07	\N
+97899da6-11a2-470a-b629-723b51930301	d43eded1-69f1-427d-a695-70dbe56b69ef	Efke	KB 50	50	bw	\N	t	2026-04-11 17:25:57.181799-07	2026-04-11 17:25:57.181799-07	\N
+3c467ec4-504b-4d0c-ac76-085fa11aa165	d43eded1-69f1-427d-a695-70dbe56b69ef	Japan Camera Hunter	StreetPan 400	400	bw	\N	t	2026-04-11 17:26:45.701825-07	2026-04-11 17:26:45.701825-07	\N
+c9bb56da-6fe5-41a7-a87b-1dfde30cc5bd	d43eded1-69f1-427d-a695-70dbe56b69ef	Foma	Ortho 400	400	bw	orthochromatic	t	2026-04-11 17:27:44.728108-07	2026-04-11 17:27:44.728108-07	\N
+fbfb3f3a-b396-4cbe-9717-b20ec744dd1b	d43eded1-69f1-427d-a695-70dbe56b69ef	Ferrania	P30	80	bw	\N	t	2026-04-11 17:28:36.071509-07	2026-04-11 17:28:36.071509-07	\N
+79fad1b7-75b1-42c2-a934-4b6557f2d2c3	d43eded1-69f1-427d-a695-70dbe56b69ef	Ferrania	Orto	50	bw	orthochromatic	t	2026-04-11 17:29:19.2075-07	2026-04-11 17:29:19.2075-07	\N
+3818009d-c3de-40f1-82c9-c9f6f9413ede	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Technical Pan	25	bw	Kodak 2415. Discontinued 2004. Fine-grain extended-red B&W. ISO 16-25 for pictorial (low contrast), up to 125-320 for high contrast. Kodaks Technidol developer is long gone; realistic options: highly-dilute Rodinal, HC-110 (dilute), D-76 (will be extreme contrast). Avoid D-19/Dektol unless high-contrast line work is the goal.	t	2026-04-11 17:30:53.295929-07	2026-04-11 17:31:28.953-07	\N
+f228f76e-d873-4eb5-8bac-cbe79fa0d422	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	T-Max 100	100	bw	\N	t	2026-04-11 17:32:44.405937-07	2026-04-11 17:32:44.405937-07	\N
+2cf48166-e27e-4d99-8a81-e51279b4e98f	d43eded1-69f1-427d-a695-70dbe56b69ef	CatLABS	X Film 320 Pro	320	bw	\N	t	2026-04-11 17:33:42.538181-07	2026-04-11 17:33:42.538181-07	\N
+068df7e1-8f30-4560-8f39-715b5106e643	d43eded1-69f1-427d-a695-70dbe56b69ef	Rollei	Retro 400S	400	bw	\N	t	2026-04-11 17:34:39.964231-07	2026-04-11 17:34:39.964231-07	\N
+3841ac74-2774-4cf6-8724-226bc4b6c83e	d43eded1-69f1-427d-a695-70dbe56b69ef	Rollei	Infrared	400	bw	Near-IR sensitive (~750nm). Box range 200-400; rate lower (25 or below) with an IR filter.	t	2026-04-11 17:36:18.138059-07	2026-04-11 17:36:18.138059-07	\N
+1cb6a6be-de3d-4f20-9424-e1446f3bb9b4	d43eded1-69f1-427d-a695-70dbe56b69ef	Rollei	Infrarot	400	bw	German-labeled IR film (Infrarot = Infrared). Likely same emulsion as Rollei Infrared but treating as separate stock.	t	2026-04-11 17:37:44.743701-07	2026-04-11 17:37:44.743701-07	\N
+345b2a21-1905-4b17-9fb5-7f5d4ea95e7a	d43eded1-69f1-427d-a695-70dbe56b69ef	Silberra	S25 Limited Edition	25	bw	\N	t	2026-04-11 17:38:48.681714-07	2026-04-11 17:38:48.681714-07	\N
+ea1992e5-c396-45d0-a4a3-7e77cb30cd93	d43eded1-69f1-427d-a695-70dbe56b69ef	ADOX	CMS 20	20	bw	Ultra-fine grain, high-resolution. New version requires ADOX CMS II developer for optimal results.	t	2026-04-11 17:40:08.242196-07	2026-04-11 17:40:08.242196-07	\N
+564b6bef-e10a-49f9-9013-aaf60040ed9f	d43eded1-69f1-427d-a695-70dbe56b69ef	Rollei	ATP 1.1	32	bw	Advanced Technical Pan — ultra-fine grain microfilm. Use ATP-DC developer for pictorial results; standard devs give extreme contrast.	t	2026-04-11 17:41:46.202977-07	2026-04-11 17:41:46.202977-07	\N
+9ab33c20-cbbe-4613-9904-d61ee9d1718a	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Double-X 5222	250	bw	Eastman Double-X motion picture stock. Native EI 250 daylight / 200 tungsten. Shoots from 6 to 6400 with dev adjustments. Develops in any B&W dev.	t	2026-04-11 17:51:49.657807-07	2026-04-11 17:51:49.657807-07	\N
+8fa17252-6af5-4a06-a68a-3d5e88643e05	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	Delta 400	400	bw	\N	t	2026-04-11 17:54:55.173954-07	2026-04-11 17:54:55.173954-07	\N
+ac6d943d-46ba-404f-bbc0-54f0a5f12cdc	d43eded1-69f1-427d-a695-70dbe56b69ef	Ferrania	P33	160	bw	Panchromatic, 160 ISO. Made in Cairo Montenotte, Italy. Successor to P30 — more versatile, classic look, fine grain, good contrast.	t	2026-04-11 17:56:31.570034-07	2026-04-11 17:56:31.570034-07	\N
+81fff50e-94b7-4cc7-9c23-a1c2937bc82a	d43eded1-69f1-427d-a695-70dbe56b69ef	Kentmere	Pan 200	200	bw	\N	t	2026-04-11 17:59:14.965471-07	2026-04-11 17:59:14.965471-07	\N
+ea8830a4-12ed-4201-9991-446a25d173ee	d43eded1-69f1-427d-a695-70dbe56b69ef	Unknown	Hand-labeled 400	400	bw	Previous owner hand-wrote ISO 400 on the cassette. Manufacturer and exact stock unknown.	t	2026-04-11 18:03:30.693705-07	2026-04-11 18:03:30.693705-07	\N
+b28883e1-0938-4b04-b060-545bc4d21f66	d43eded1-69f1-427d-a695-70dbe56b69ef	Ilford	Delta 100	100	bw	\N	t	2026-04-11 18:04:28.169117-07	2026-04-11 18:04:28.169117-07	\N
+d41801c0-113a-487e-bcef-35af2d89d079	d43eded1-69f1-427d-a695-70dbe56b69ef	Unknown	Bulk mystery	400	bw	Generic placeholder for bulk-spooled film of uncertain identity. Plan on stand development.	t	2026-04-11 18:07:56.640159-07	2026-04-11 18:07:56.640159-07	\N
+01feb6be-5390-433a-88ce-6d57a97e73f9	d43eded1-69f1-427d-a695-70dbe56b69ef	Unknown	Black canister mystery	400	bw	Fully opaque black canisters, no markings. Assume very old. Plan: rate at ISO 25 or lower, stand-dev in Rodinal.	t	2026-04-11 18:10:07.479665-07	2026-04-11 18:10:07.479665-07	\N
+5a05232c-37df-4618-821b-59fdbf24ec5d	d43eded1-69f1-427d-a695-70dbe56b69ef	Fujifilm	Neopan SS	100	bw	Classic Fuji ortho-panchromatic B&W, wide latitude. Discontinued ~2007 (latest 2012). Shelf life would put expiration around 2009-2014.	t	2026-04-11 18:19:12.412575-07	2026-04-11 18:19:12.412575-07	\N
+ed721b8a-4c96-4f89-b6e2-c7802e5d23ec	d43eded1-69f1-427d-a695-70dbe56b69ef	Atlanta Film Co	Koji 125T	125	color_negative	Tungsten-balanced color negative (3200K). Likely rebranded motion picture stock.	t	2026-04-11 18:23:17.196896-07	2026-04-11 18:23:17.196896-07	\N
+822a752f-82eb-4cbd-94a2-bfb0a2130302	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Ektachrome E100	100	color_positive	Color reversal (slide). E-6 process.	t	2026-04-11 18:25:18.35761-07	2026-04-11 18:25:18.35761-07	\N
+deea6e69-42a7-4d93-bd6b-00e7fc92045a	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Kodacolor VR 400	400	color_negative	Vintage 1980s Kodak C-41 color negative. Discontinued long ago.	t	2026-04-11 18:26:22.046497-07	2026-04-11 18:26:22.046497-07	\N
+4f64213e-1317-4eb5-a518-d0fd7193823d	d43eded1-69f1-427d-a695-70dbe56b69ef	Harman	Switch Azure 125	125	color_negative	Creative C-41 color negative with color-swapped couplers: blues → orange/amber, yellows → azure blue, reds → purple. High contrast, narrow dynamic range (~5-6 stops). Standard C-41 processing.	t	2026-04-11 18:28:24.066381-07	2026-04-11 18:28:24.066381-07	\N
+d3a6998f-d6c4-4470-8826-46737470c1b5	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Gold 100	100	color_negative	C-41 consumer color negative.	t	2026-04-11 18:29:50.507286-07	2026-04-11 18:29:50.507286-07	\N
+b430b223-a809-42f7-b2dd-0e5a36a03f16	d43eded1-69f1-427d-a695-70dbe56b69ef	Moody's	400T	400	color_negative	Tungsten-balanced (3200K) respooled motion picture stock. ECN-2 process (needs rem-jet removal or specialized lab, not standard C-41).	t	2026-04-11 18:31:16.012751-07	2026-04-11 18:31:16.012751-07	\N
+36ffb370-b34d-4635-beaa-3555cdd672e4	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Portra 400	400	color_negative	Pro C-41 color negative, wide latitude.	t	2026-04-11 18:32:38.560172-07	2026-04-11 18:32:38.560172-07	\N
+a907a12e-7f02-4fb0-8923-2f245457bd8b	d43eded1-69f1-427d-a695-70dbe56b69ef	Harman	Phoenix 200	200	color_negative	Harmans first in-house C-41 color negative. High contrast, narrow latitude.	t	2026-04-11 18:34:18.337532-07	2026-04-11 18:34:18.337532-07	\N
+3b046fe1-068b-4156-b205-38366dc9d679	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Ektar 100	100	color_negative	Pro C-41 color negative. Fine grain, saturated, daylight-balanced.	t	2026-04-11 18:36:20.505463-07	2026-04-11 18:36:20.505463-07	\N
+7fc536bd-66aa-4bbc-960c-544d639c950f	d43eded1-69f1-427d-a695-70dbe56b69ef	Lomography	Purple	400	color_negative	Creative C-41 color-shift film (greens → purple). Variable ISO 100-400 depending on desired effect.	t	2026-04-11 18:37:42.323439-07	2026-04-11 18:37:42.323439-07	\N
+561d839e-3459-4939-a777-422a92a2e205	d43eded1-69f1-427d-a695-70dbe56b69ef	Agfa	Agfachrome 1000 RS	1000	color_positive	E-6 color reversal. Released 1989, discontinued 1995. Known for grain and blue shifts.	t	2026-04-11 18:40:02.761158-07	2026-04-11 18:40:02.761158-07	\N
+362b021e-fd19-48fd-b6cc-4f5ee1ee5ba7	d43eded1-69f1-427d-a695-70dbe56b69ef	Fujifilm	Fujicolor Super HR 100	100	color_negative	Official film of Expo 1988. Japan-made C-41. Long discontinued.	t	2026-04-11 18:54:51.448375-07	2026-04-11 18:54:51.448375-07	\N
+5173fa4f-5925-477b-92b5-644394f564f2	d43eded1-69f1-427d-a695-70dbe56b69ef	Fujifilm	Fujicolor Super HQ 200	200	color_negative	Fuji consumer C-41, early 2000s production (US Wal-Mart channel). SureColor tech. Example expirations in the wild date to 2005. Discontinued.	t	2026-04-11 18:56:39.864821-07	2026-04-11 18:57:22.079-07	\N
+27184828-62f2-4d45-84bf-8547db19dc36	d43eded1-69f1-427d-a695-70dbe56b69ef	Black's	Slide Duplicating Film	8	color_positive	Almost certainly a Black's Photography (Canadian retailer, 1930-2015) rebadge of Kodak Ektachrome SE Slide Duplicating Film SO-366 or similar. E-6 reversal, tungsten-balanced (~3200K), low-contrast, fine grain. ISO is batch-variable and was printed on the original carton (which is lost) — typical range 8-12. Placeholder ISO 8.	t	2026-04-11 18:59:35.531801-07	2026-04-11 18:59:35.531801-07	\N
+02c35ea6-8d7d-42a6-bb27-84c80678f4b5	d43eded1-69f1-427d-a695-70dbe56b69ef	Arista	EDU Ultra 100	100	bw	Budget B&W, widely believed to be rebranded Fomapan 100.	t	2026-04-12 18:59:29.87453-07	2026-04-12 18:59:29.87453-07	\N
+badc259c-4762-45b3-9017-cfeabffdd00d	d43eded1-69f1-427d-a695-70dbe56b69ef	Arista	EDU 400 DX	400	bw	\N	t	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07	36
+3b66f352-2912-4921-a189-300b8a6bc8cc	d43eded1-69f1-427d-a695-70dbe56b69ef	Fujifilm	Acros II 100	100	bw	\N	t	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07	36
+77625610-a311-4e12-a30d-499f0b853130	d43eded1-69f1-427d-a695-70dbe56b69ef	Shanghai	GP3 100	100	bw	\N	t	2026-05-01 21:40:32.574486-07	2026-05-01 21:40:32.574486-07	36
+81cf5142-c23e-4f7e-b7ff-3754e0f344ed	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	T-Max 400	400	bw	\N	t	2026-05-01 21:47:52.704463-07	2026-05-01 21:47:52.704463-07	36
+7b7f1a95-29d3-496f-b154-7bddfc8afcea	d43eded1-69f1-427d-a695-70dbe56b69ef	NoColorStudio	no.25 Gamma	25	bw	Panchromatic B&W. Medium-high contrast, very fine grain, high resolution. Originally for technical drawings. Narrow exposure latitude. 20 exposures/roll. Pushable ISO 6–80.	t	2026-05-02 14:31:09.943272-07	2026-05-02 14:31:44.555-07	20
+e61b27e1-58d6-4647-a738-476e7fe04445	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	T-Max P3200	3200	bw	High-speed B&W. Pushable to 12500, pullable to 800–1600.	t	2026-05-02 15:46:33.58309-07	2026-05-02 15:46:33.58309-07	\N
+7689c7e4-e975-4709-b48a-f6a6a7e149ce	d43eded1-69f1-427d-a695-70dbe56b69ef	Film Washi	F	100	bw	Hand-coated panchromatic B&W. Aerial-photography heritage.	t	2026-05-02 15:53:25.095261-07	2026-05-02 15:53:25.095261-07	\N
+a7059048-69e1-473b-8eff-85eff3e99560	d43eded1-69f1-427d-a695-70dbe56b69ef	Rollei	RPX 25	25	bw	Slow B&W. Fine grain, high resolution, high acutance.	t	2026-05-02 15:55:29.478445-07	2026-05-02 15:55:29.478445-07	\N
+80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	d43eded1-69f1-427d-a695-70dbe56b69ef	Foma	Fomapan 400	400	bw	Panchromatic B&W. Pushable.	t	2026-05-02 16:07:40.172545-07	2026-05-02 16:07:40.172545-07	\N
+fb2a27c9-a6c1-4fe6-b17b-9809520a0474	d43eded1-69f1-427d-a695-70dbe56b69ef	Kodak	Ektapan	100	bw	\N	t	2026-06-05 11:51:10.812419-07	2026-06-05 11:51:10.812419-07	\N
+\.
+
+
+--
+-- Data for Name: frames; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.frames (id, roll_id, frame_number, lens_id, shutter_speed, aperture, compensation, metering_mode, subject, notes, latitude, longitude, location_name, shot_at, tags, rating, is_portfolio, created_at, updated_at) FROM stdin;
+02a42fd8-2f36-4f17-8069-aa7139582656	167302f3-f2ff-4a66-b015-ae2c4f39a0d7	1	\N	\N	\N	\N	\N	Tacoma Narrows Bridge	150mm lens	\N	\N	\N	2026-04-12 19:11:15.165-07	{}	\N	f	2026-04-12 19:11:15.165313-07	2026-04-12 19:11:15.165313-07
+96d6f8fe-0c8b-49ac-abef-498fb3a71761	f3c1eee9-8a7a-485f-9413-c7c170c7b278	1	\N	\N	\N	\N	\N	Tacoma Narrows Bridge	150mm lens	\N	\N	\N	2026-04-12 19:11:15.226-07	{}	\N	f	2026-04-12 19:11:15.227114-07	2026-04-12 19:11:15.227114-07
+9a5f7611-3982-4d8e-9448-a0f2c1456aa2	9a48fe91-34a3-4d71-bf3b-638aad97f3dd	1	\N	\N	\N	\N	\N	Fort Worden	150mm lens	\N	\N	\N	2026-05-01 20:19:47.417292-07	{}	\N	f	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07
+2837cc8a-02ab-4dc7-af5e-b3bcccd8cff4	a69124fc-0b51-46c8-a9e5-a3f12dcd42cf	1	\N	\N	\N	\N	\N	Fort Worden	150mm lens	\N	\N	\N	2026-05-01 20:19:47.417292-07	{}	\N	f	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07
+db6c78cf-c6ae-478d-a521-8a8abc0b1703	f0f11095-d728-4b74-b051-f31cd5aecd20	1	\N	\N	\N	\N	\N	Fort Worden	150mm lens	\N	\N	\N	2026-05-01 20:19:47.417292-07	{}	\N	f	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07
+a8a2d3e9-6c02-4e3d-becc-b5ff4180224f	d228c9da-af9e-4260-9046-1e850955d026	1	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+27909ecc-8f84-4060-b679-054d1fb81a76	d228c9da-af9e-4260-9046-1e850955d026	2	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+ebf80dee-8009-4adb-8a5c-f0b002c5545e	d228c9da-af9e-4260-9046-1e850955d026	3	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+bfece404-eb34-423b-8a3c-9d153718f385	d228c9da-af9e-4260-9046-1e850955d026	4	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+e492549d-8d7c-4ab5-82c9-b510bf1f82c3	d228c9da-af9e-4260-9046-1e850955d026	5	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+7ddf6ff5-030d-43d2-8aa7-6bf790833620	d228c9da-af9e-4260-9046-1e850955d026	6	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+7f185021-0ab6-4e9f-902d-0b01a1f69069	d228c9da-af9e-4260-9046-1e850955d026	7	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+a6381f06-4c7a-4a51-ba5b-6aa21c219bb0	d228c9da-af9e-4260-9046-1e850955d026	8	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+010ca161-dcbb-4391-bece-36b726b50a3f	d228c9da-af9e-4260-9046-1e850955d026	9	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+67dcf28b-b186-478a-819b-aca42efc1c63	d228c9da-af9e-4260-9046-1e850955d026	10	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+b78bec89-573a-4e6a-81d5-1eba04260f0a	d228c9da-af9e-4260-9046-1e850955d026	11	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+ca3fd91e-373b-4a44-9807-a354dcf58259	d228c9da-af9e-4260-9046-1e850955d026	12	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+3bc44d07-200f-4c0d-8be0-b8fbc7e61b28	d228c9da-af9e-4260-9046-1e850955d026	13	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+94045fb8-91cd-4a5f-99e5-6e84cffa3cd8	d228c9da-af9e-4260-9046-1e850955d026	14	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+3266ba73-33a7-49ed-be5f-3613d6e83f69	d228c9da-af9e-4260-9046-1e850955d026	15	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+57d3a5e5-ac7b-4ede-b881-1f8894aa5286	d228c9da-af9e-4260-9046-1e850955d026	16	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+8c50603e-8116-42c1-9217-8c1ee40fe513	d228c9da-af9e-4260-9046-1e850955d026	17	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+542b0200-7f55-46a2-9506-0b1a50c8984c	d228c9da-af9e-4260-9046-1e850955d026	18	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+e0c5a5e6-7c64-4d63-9795-fa0dd85ca183	d228c9da-af9e-4260-9046-1e850955d026	19	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+290d7191-bc25-410d-b8c0-4d7281a03566	d228c9da-af9e-4260-9046-1e850955d026	20	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	Fort Worden	\N	\N	\N	\N	2026-05-01 20:31:06.312896-07	{}	\N	f	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07
+4c2f2050-b8fb-4157-8703-6c434023c9cf	da250e1e-fb73-4263-b6d2-25ed81106fb0	1	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+fac45417-e364-4f14-9308-be7ce4430da3	da250e1e-fb73-4263-b6d2-25ed81106fb0	2	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+9f8a0e9c-92cd-4735-b34a-79d598381391	da250e1e-fb73-4263-b6d2-25ed81106fb0	3	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+76f17ded-4392-494a-9bb1-c25af31d3bd0	da250e1e-fb73-4263-b6d2-25ed81106fb0	4	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+2b342c92-21c8-49e6-bf6d-b8239a6154c3	da250e1e-fb73-4263-b6d2-25ed81106fb0	5	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+0d6f4fe0-8900-4b36-a701-c7bff508d836	da250e1e-fb73-4263-b6d2-25ed81106fb0	6	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+e458082a-1d30-40f5-94cd-4bb89f3d97d0	da250e1e-fb73-4263-b6d2-25ed81106fb0	7	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+9adb9a59-7c5b-447a-a866-26731475745e	da250e1e-fb73-4263-b6d2-25ed81106fb0	8	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+17e22cb5-b036-4a6c-ab37-178168bd41c4	da250e1e-fb73-4263-b6d2-25ed81106fb0	9	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+942cb1c3-510d-4f63-a566-b0c8379daffa	da250e1e-fb73-4263-b6d2-25ed81106fb0	10	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+0d5a5a38-626b-4405-a55d-0a7cc23eac8c	da250e1e-fb73-4263-b6d2-25ed81106fb0	11	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+6cd19d13-c943-40c9-ba21-5ff66e945912	da250e1e-fb73-4263-b6d2-25ed81106fb0	12	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+f046e23c-0674-453f-8edb-ad01782a8fc8	da250e1e-fb73-4263-b6d2-25ed81106fb0	13	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+b5f80c31-3f4b-4b93-837f-2ed5e65de2cf	da250e1e-fb73-4263-b6d2-25ed81106fb0	14	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+79340778-a78a-43b2-aae8-44459ae82cba	da250e1e-fb73-4263-b6d2-25ed81106fb0	15	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+f6160f5e-8a80-4d60-bc5a-03a902451528	da250e1e-fb73-4263-b6d2-25ed81106fb0	16	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+563bb686-bd2d-437c-b722-944783d1df19	da250e1e-fb73-4263-b6d2-25ed81106fb0	17	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+825dcf13-7643-4af8-a821-138f568ab55d	da250e1e-fb73-4263-b6d2-25ed81106fb0	18	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+c5092bc7-3181-45c3-8f53-fb015943a335	da250e1e-fb73-4263-b6d2-25ed81106fb0	19	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+6bd75e99-be63-46f5-ba70-8b06c0a5081a	da250e1e-fb73-4263-b6d2-25ed81106fb0	20	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+d35984e8-a9df-4f3d-957e-01073d2b467c	da250e1e-fb73-4263-b6d2-25ed81106fb0	21	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+3f3d21be-a1c0-4bad-a3ae-b339536fa406	da250e1e-fb73-4263-b6d2-25ed81106fb0	22	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+ca77ab3f-0155-4e0c-9621-2d6bcb0339c7	da250e1e-fb73-4263-b6d2-25ed81106fb0	23	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+7a148994-81ca-4104-86d2-95ac0a00cad3	da250e1e-fb73-4263-b6d2-25ed81106fb0	24	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+803940f0-9221-4d39-8ce1-964f4f040268	da250e1e-fb73-4263-b6d2-25ed81106fb0	25	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+52fd9064-4384-4b46-83eb-cd592116eab1	da250e1e-fb73-4263-b6d2-25ed81106fb0	26	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+05ca1fe3-e521-4af6-bf7f-0ee3c1541708	da250e1e-fb73-4263-b6d2-25ed81106fb0	27	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+ec52f4d7-f0bb-4a54-bfd3-1b1932a22ddb	da250e1e-fb73-4263-b6d2-25ed81106fb0	28	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+96921950-da8d-431e-9e9e-e79a2f3f2382	da250e1e-fb73-4263-b6d2-25ed81106fb0	29	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+af9881ab-dd5e-4ba7-96e3-3747367ff0ae	da250e1e-fb73-4263-b6d2-25ed81106fb0	30	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+4a4d2e02-6e4f-47b4-9459-63c1fcb98a9a	da250e1e-fb73-4263-b6d2-25ed81106fb0	31	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+440b02c4-41c1-4dc4-b8a6-67988cc3d392	da250e1e-fb73-4263-b6d2-25ed81106fb0	32	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+ee9d86ba-95bf-4095-a023-88e1090cdfbe	da250e1e-fb73-4263-b6d2-25ed81106fb0	33	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+a52b2663-6200-4b42-b520-e4216071676f	da250e1e-fb73-4263-b6d2-25ed81106fb0	34	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+f112e706-4e82-4972-a323-4c086ec93b0f	da250e1e-fb73-4263-b6d2-25ed81106fb0	35	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+e84c3445-09f3-4f51-914c-0b1c81f03962	da250e1e-fb73-4263-b6d2-25ed81106fb0	36	\N	\N	\N	\N	\N	drivers seat	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:40:37.523105-07	2026-05-01 20:40:37.523105-07
+c2882d5b-dccd-4a98-9d73-8256a1c84570	7099e680-3cdf-4da0-b790-f6630c94b851	1	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+ebb07e0c-b6cf-44fb-ad72-f18ea21490b6	7099e680-3cdf-4da0-b790-f6630c94b851	2	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+e7eda7e6-e2c3-4b97-9769-9452b0ae8b6c	7099e680-3cdf-4da0-b790-f6630c94b851	3	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+0a503428-98d2-4c43-805a-0bfaa913f59c	7099e680-3cdf-4da0-b790-f6630c94b851	4	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+6c0b4e90-ecda-47cc-8eb7-c9c27b3a74c8	7099e680-3cdf-4da0-b790-f6630c94b851	5	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+6e0865d4-9160-47be-9ec9-5006bb1c04f8	7099e680-3cdf-4da0-b790-f6630c94b851	6	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+f0988b68-ad2f-44b4-9ffd-d5f1f7adc2d9	7099e680-3cdf-4da0-b790-f6630c94b851	7	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+07986f26-5131-4404-9786-f4fa753dbdc7	7099e680-3cdf-4da0-b790-f6630c94b851	8	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+77eaa6a7-0814-46aa-bd03-17be70c7c0ca	7099e680-3cdf-4da0-b790-f6630c94b851	9	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+39cdea3c-a024-4ff2-ab64-24542a10d35a	7099e680-3cdf-4da0-b790-f6630c94b851	10	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+fa31e90d-827e-4091-bfe8-668cb1e97dfa	7099e680-3cdf-4da0-b790-f6630c94b851	11	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+7bd54802-4588-4fd5-8861-5eb68d14054d	7099e680-3cdf-4da0-b790-f6630c94b851	12	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+829765cb-0f64-4020-9728-a372a324434a	7099e680-3cdf-4da0-b790-f6630c94b851	13	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+585caaf3-591a-4e69-8419-92c9938bdba4	7099e680-3cdf-4da0-b790-f6630c94b851	14	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+11c8ace8-5e2c-4f9f-9d5a-0342152282e4	7099e680-3cdf-4da0-b790-f6630c94b851	15	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+2c725fe2-2188-4cb9-ad87-7b48b5270851	7099e680-3cdf-4da0-b790-f6630c94b851	16	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+f01324e2-09ec-4bf6-8600-cfc8af71ab6d	7099e680-3cdf-4da0-b790-f6630c94b851	17	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+0d2c06dc-257d-4b76-bebf-23caed58d87b	7099e680-3cdf-4da0-b790-f6630c94b851	18	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+f3f74ee2-054c-40a0-b6df-32a685396c0e	7099e680-3cdf-4da0-b790-f6630c94b851	19	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+de05fa91-a7f2-4ab7-9438-46b18b0ff892	7099e680-3cdf-4da0-b790-f6630c94b851	20	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+b51154ed-dfda-4d4d-8551-999299dc012a	7099e680-3cdf-4da0-b790-f6630c94b851	21	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+304e8c47-191d-4e40-9f79-1bcef70ba67b	7099e680-3cdf-4da0-b790-f6630c94b851	22	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+3658b20a-acc5-423a-876f-0729237c95d7	7099e680-3cdf-4da0-b790-f6630c94b851	23	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+cb348170-ade5-407f-980f-a9317c871f2d	7099e680-3cdf-4da0-b790-f6630c94b851	24	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+b6d0527b-3041-4042-b60d-4a7fe0c194f2	7099e680-3cdf-4da0-b790-f6630c94b851	25	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+a302755d-f54e-4018-9e9f-b40983800a13	7099e680-3cdf-4da0-b790-f6630c94b851	26	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+5efcbf78-1fe2-46b8-9986-edf1bc0a3ec9	7099e680-3cdf-4da0-b790-f6630c94b851	27	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+557d2aed-56f6-4da8-9664-03cfcc027a00	7099e680-3cdf-4da0-b790-f6630c94b851	28	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+bcc9d174-7424-4bd9-92e7-f7589587151f	7099e680-3cdf-4da0-b790-f6630c94b851	29	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07
+7c042fad-b00c-4e75-a67d-0bd0026450b6	f49bef4e-800f-44f8-87c4-bb0873e71a30	1	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+305f0319-7fe9-4e55-bdbc-58a125914e6a	f49bef4e-800f-44f8-87c4-bb0873e71a30	2	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+0313eba6-ea49-48e9-8ecf-4680dd87a7b8	f49bef4e-800f-44f8-87c4-bb0873e71a30	3	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+835d37a7-fc51-441b-96a6-e46725a4766f	f49bef4e-800f-44f8-87c4-bb0873e71a30	4	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+cc149b7a-0ffc-4171-b001-011b7497764e	f49bef4e-800f-44f8-87c4-bb0873e71a30	5	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+685ba8af-53aa-4063-a7bc-e409c43294de	f49bef4e-800f-44f8-87c4-bb0873e71a30	6	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+9cb29f48-588a-4233-ad5b-20979fd6d392	f49bef4e-800f-44f8-87c4-bb0873e71a30	7	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+648b0384-d29b-4401-9d56-90f42eb1f054	f49bef4e-800f-44f8-87c4-bb0873e71a30	8	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+caa2490c-06e1-4cfd-92e8-587fbf0acf5b	f49bef4e-800f-44f8-87c4-bb0873e71a30	9	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+09302565-9064-4b8a-a619-d66bf577da47	f49bef4e-800f-44f8-87c4-bb0873e71a30	10	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+38b883a4-c45c-417a-bf32-8e3e35123835	f49bef4e-800f-44f8-87c4-bb0873e71a30	11	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+640027bf-3632-40de-9c66-3517520d30c4	f49bef4e-800f-44f8-87c4-bb0873e71a30	12	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+3026e3c1-c0a4-44b2-a1ab-b8ced5a0d3af	f49bef4e-800f-44f8-87c4-bb0873e71a30	13	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+c4b63a70-ffcd-4de2-aa97-9262b2c60ea3	f49bef4e-800f-44f8-87c4-bb0873e71a30	14	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+bbb7f772-1620-4586-b148-c14bbedf3156	f49bef4e-800f-44f8-87c4-bb0873e71a30	15	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+4207e26d-e923-44b4-b69d-e6800dbd2d66	f49bef4e-800f-44f8-87c4-bb0873e71a30	16	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+5577b20a-6575-4a9f-81b5-9c6d3244cddf	f49bef4e-800f-44f8-87c4-bb0873e71a30	17	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+3244c0a5-b624-43fd-be05-ca5e9dc64de9	f49bef4e-800f-44f8-87c4-bb0873e71a30	18	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+9c7cf601-a6a4-4bd3-916e-19f8db835f7f	f49bef4e-800f-44f8-87c4-bb0873e71a30	19	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+be73b6c4-9102-449b-8f70-0ca0a63a9950	f49bef4e-800f-44f8-87c4-bb0873e71a30	20	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+cc9c60f7-b245-40f9-9aa3-e83fda0885de	f49bef4e-800f-44f8-87c4-bb0873e71a30	21	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+8d03f3de-c5d2-4d59-add8-20d6c261a105	f49bef4e-800f-44f8-87c4-bb0873e71a30	22	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+718fa08a-5ea2-4f53-8250-e425d6314dac	f49bef4e-800f-44f8-87c4-bb0873e71a30	23	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+4041d68f-3a9b-40d4-9e84-4be305f621aa	f49bef4e-800f-44f8-87c4-bb0873e71a30	24	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+dd276bd7-5336-4eb8-a743-c67571d79e28	f49bef4e-800f-44f8-87c4-bb0873e71a30	25	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+66e9d7ec-e150-4e99-8565-6af17929d484	f49bef4e-800f-44f8-87c4-bb0873e71a30	26	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+38915df8-698f-452b-806c-036adf56d73b	f49bef4e-800f-44f8-87c4-bb0873e71a30	27	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+09f174da-dc51-453a-a7af-aa035e9438bf	f49bef4e-800f-44f8-87c4-bb0873e71a30	28	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+d99edae6-fd9b-461d-ad13-0a1edb08a567	f49bef4e-800f-44f8-87c4-bb0873e71a30	29	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+d127e992-c9fe-4149-93c1-3fba9a0c1872	f49bef4e-800f-44f8-87c4-bb0873e71a30	30	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+bdc3d314-757f-4f16-992b-3bcd7380b274	f49bef4e-800f-44f8-87c4-bb0873e71a30	31	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+05ffa08f-26c3-4da5-84fd-8d218fd3e53e	f49bef4e-800f-44f8-87c4-bb0873e71a30	32	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+f7574635-d099-4f9a-b071-0567c3b1b040	f49bef4e-800f-44f8-87c4-bb0873e71a30	33	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+87cd021c-a030-4731-a88d-d3b2ee8f7904	f49bef4e-800f-44f8-87c4-bb0873e71a30	34	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+515f8938-d7cc-4a12-b615-261b795df5fe	f49bef4e-800f-44f8-87c4-bb0873e71a30	35	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+e941d6a2-4446-467a-b00a-59a2627af13e	f49bef4e-800f-44f8-87c4-bb0873e71a30	36	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+ae005d80-28b6-48bf-87da-3e32e955300e	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	1	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+9348deb5-3f12-4238-b7e6-9056f94c6987	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	2	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+93a62ceb-2711-4328-8766-a0ba8fcf4df3	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	3	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+f9c80a3b-7541-48f2-be51-6222017b3b2e	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	4	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+07457629-6c7d-4743-a0ba-b4a768e0cea7	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	5	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+01994cbb-41fc-4f32-8cf3-e559fe9cc2e3	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	6	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+ea4a0d1f-f4e1-4b4a-ab4f-385512ec34c0	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	7	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+518acc55-5596-405c-9e73-f46f8f9ed015	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	8	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+f0c569a0-194f-436d-9504-62b38333b2cc	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	9	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+d979ab39-f0fe-4893-ab47-c4ad587917e6	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	10	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+c44ff8f4-b7e8-41e5-afac-f94aa235229c	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	11	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+8306f6ca-8eb9-4d73-9bea-0b2562ba40af	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	12	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+53755fe7-6b49-4191-9443-cc82533af36c	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	13	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+f3f8d27f-e4f2-445c-8c5f-2ac5453e6988	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	14	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+ce915b31-62cf-4fe6-9e2e-1402c4a5e0d2	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	15	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+1e18358f-f784-46c1-a0c3-44fc56cefbdf	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	16	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+a9c66beb-dcbe-4ba1-9383-9b73a0b1117b	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	17	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+f9612c68-7bd7-431d-b21b-fc9b31bddb78	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	18	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+748f617b-3a7f-4972-8abb-d16877d4e15b	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	19	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+186d5e48-e54b-4825-b269-8c964f7aa1f2	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	20	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+0281f902-d14f-4c4d-aec4-ccea2748ab03	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	21	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+a055aa74-a648-42b8-a0f1-ac9191f0f4c6	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	22	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+a1febbbf-8dfd-41d9-8dda-b3d1459280e8	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	23	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+25905295-7edf-49b0-b3dc-666572643fff	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	24	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+331c91c4-e97c-4a03-9c4a-62d5485cf0ad	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	25	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+1a91c5ac-2ab8-4f48-9e6f-dab32b689ae7	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	26	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+c749f843-2928-4d34-8fdd-224291254884	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	27	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+aa6a868b-1ef0-4df5-8b7b-84a54dbbb106	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	28	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+152803b5-e2ef-4b25-b680-acbd67b62a91	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	29	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+91ded8eb-6e19-4280-a591-50147f3f8b99	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	30	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+a36f1486-c50a-4c5c-ba9b-ce7c27c94633	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	31	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+22f41465-bef3-4f13-bc1e-e34b249502bb	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	32	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+c7f77cff-c676-408e-bf0f-2445a26fcf3a	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	33	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+6ce68a84-ebc0-4101-b9ff-43d231678b15	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	34	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+addb9186-1237-4ff5-a79c-9fa1ab843b91	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	35	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+bf000703-7182-4c71-a1f4-79cf03b701bf	399a2c05-8c32-477c-8b7c-64b2eb6e27bf	36	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+df908db6-0aeb-487d-898c-262dfeea562f	5341c4e9-6e96-4f54-820e-f140c2f2b343	1	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+1bad3911-03eb-42f8-af66-8e2829a9706f	5341c4e9-6e96-4f54-820e-f140c2f2b343	2	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+d8f99372-9911-4029-8b8c-0a723583cc44	5341c4e9-6e96-4f54-820e-f140c2f2b343	3	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+eb130b7f-b270-40a1-a6c4-d4fe59c1fa3f	5341c4e9-6e96-4f54-820e-f140c2f2b343	4	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+93740e49-d1a5-4d17-b672-85b8f2ba046e	5341c4e9-6e96-4f54-820e-f140c2f2b343	5	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+06e6eef8-b07b-4836-b90b-a65f9af74eeb	5341c4e9-6e96-4f54-820e-f140c2f2b343	6	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+e1b57df3-7e1f-41d1-9493-d1e04e9ed638	5341c4e9-6e96-4f54-820e-f140c2f2b343	7	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+d4bae5c0-8849-4898-a281-5b5288a045cf	5341c4e9-6e96-4f54-820e-f140c2f2b343	8	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+a8432c64-bbd5-412c-943e-128e63833654	5341c4e9-6e96-4f54-820e-f140c2f2b343	9	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+1ca0759a-a622-43a8-bafc-d56867e18dbf	5341c4e9-6e96-4f54-820e-f140c2f2b343	10	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+a5174acf-5d65-49b8-ab88-ebe466130169	5341c4e9-6e96-4f54-820e-f140c2f2b343	11	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+b597cc0e-8960-4be0-98cb-453bcdae278b	5341c4e9-6e96-4f54-820e-f140c2f2b343	12	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+2668900c-7804-4223-88c5-1d63696f2ca2	5341c4e9-6e96-4f54-820e-f140c2f2b343	13	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+10f19c86-febe-46d9-b4ff-fbd9d3509793	5341c4e9-6e96-4f54-820e-f140c2f2b343	14	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+4a23add9-52ef-4699-9454-db7119a7e827	5341c4e9-6e96-4f54-820e-f140c2f2b343	15	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+deb71389-f33c-4d17-a302-5eced7ecf1b2	5341c4e9-6e96-4f54-820e-f140c2f2b343	16	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+887817b0-eaf0-40a3-9f67-6402c79e1e4e	5341c4e9-6e96-4f54-820e-f140c2f2b343	17	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+55ca2cb3-960d-4d47-8632-fed5a3e60d74	5341c4e9-6e96-4f54-820e-f140c2f2b343	18	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+1174a7af-4c8e-4fac-bb15-265d68bf4bf3	5341c4e9-6e96-4f54-820e-f140c2f2b343	19	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+79d6974c-f32b-4f31-b9ea-c43b11618b4b	5341c4e9-6e96-4f54-820e-f140c2f2b343	20	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+bc1d4cff-6643-4c1e-8e9d-efa48e536a24	5341c4e9-6e96-4f54-820e-f140c2f2b343	21	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+d698449a-4be1-4411-a2f5-700a2e2c3740	5341c4e9-6e96-4f54-820e-f140c2f2b343	22	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+f7463945-0624-4bba-b880-2c7498cbcb7e	5341c4e9-6e96-4f54-820e-f140c2f2b343	23	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+870f05b8-084b-4581-a96f-b030c7726e2e	5341c4e9-6e96-4f54-820e-f140c2f2b343	24	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+9573ffd8-1dbb-4336-bc51-5937fccd1b35	5341c4e9-6e96-4f54-820e-f140c2f2b343	25	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+0a368385-4cbc-4b5f-bb5f-19a19cf80a45	5341c4e9-6e96-4f54-820e-f140c2f2b343	26	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+057bd32a-0b26-4152-9ede-5595e694e2c4	5341c4e9-6e96-4f54-820e-f140c2f2b343	27	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+b201e566-a6ca-4c99-bbde-6ee4a8fc8acb	5341c4e9-6e96-4f54-820e-f140c2f2b343	28	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+886516c3-04ee-4a80-a5b2-1914414f8b03	5341c4e9-6e96-4f54-820e-f140c2f2b343	29	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+cf3a3b67-c6dd-4647-a0ea-31c4bb6a6fe5	5341c4e9-6e96-4f54-820e-f140c2f2b343	30	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+c6e82596-8001-4521-ae64-8466ddbed4c1	5341c4e9-6e96-4f54-820e-f140c2f2b343	31	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+b6b6c6d7-742d-4341-9682-483185fdf4df	5341c4e9-6e96-4f54-820e-f140c2f2b343	32	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+208c943f-6fef-4fa9-a205-03dd602d48c8	5341c4e9-6e96-4f54-820e-f140c2f2b343	33	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+a83fcce4-4666-4b54-ae22-a95e4704117c	5341c4e9-6e96-4f54-820e-f140c2f2b343	34	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+870063d9-1604-415c-a9ce-dc9f47547c2f	5341c4e9-6e96-4f54-820e-f140c2f2b343	35	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+defd4e56-33ce-4891-9d20-7602b94fb9d5	5341c4e9-6e96-4f54-820e-f140c2f2b343	36	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	trip	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07
+bb037b98-fb57-45ff-b0f4-4acc7a4265cb	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	1	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+c6dcef9d-8167-4de4-8474-5c6e470bb772	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	2	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+cbb7b2ef-0129-46aa-8051-1d955575030f	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	3	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+0085e8d1-04b7-4c03-9e6f-84d5e652ee49	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	4	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+859bf2d6-c73c-455e-ac20-147424faf35c	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	5	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+083a8bd9-6801-4262-b91b-beb19adea538	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	6	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+3fa6482c-fe2a-474e-b29f-2cbf94635619	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	7	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+dc79337e-62a2-4d4e-9496-dd91708a5ba2	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	8	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+aea8f92b-8f52-4ab1-8bc3-3da8b6ac8e53	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	9	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+e88fd237-6114-404f-ab13-096f15d91c41	5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	10	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+c8842fff-77b5-459f-8154-4a09156e3923	7726accb-e76d-40a5-a785-08d1334d40dc	1	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+c0eabde4-9d4f-40c1-87e6-ca69d583e828	7726accb-e76d-40a5-a785-08d1334d40dc	2	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+56eba3ec-18e3-433c-af66-c7ec7b943051	7726accb-e76d-40a5-a785-08d1334d40dc	3	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+f1013876-bfe9-40c4-bc8c-e61176b61f56	7726accb-e76d-40a5-a785-08d1334d40dc	4	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+bc9f39be-eb3a-4bed-8f9e-54a578439560	7726accb-e76d-40a5-a785-08d1334d40dc	5	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+d5aedadd-fcb1-4c7e-b118-7a5be450d707	7726accb-e76d-40a5-a785-08d1334d40dc	6	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+4cacd7eb-a251-466d-bf2e-07169e46f739	7726accb-e76d-40a5-a785-08d1334d40dc	7	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+ff488e9c-4750-40e4-a2ea-51da6cd0a1aa	7726accb-e76d-40a5-a785-08d1334d40dc	8	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+fa9f47e6-0b40-4d7d-ba33-f1943a9898f7	7726accb-e76d-40a5-a785-08d1334d40dc	9	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+67218772-b566-4128-b2af-30e734f22cd5	7726accb-e76d-40a5-a785-08d1334d40dc	10	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+e23279b9-9035-4e5c-b357-d5e6e044442b	1cc2fad1-060f-487c-9886-4f83bb82e07a	1	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+6e803fb1-f3d5-4aa4-b2c8-0ca8581ed340	1cc2fad1-060f-487c-9886-4f83bb82e07a	2	f76e1f39-3d7d-4638-9ebb-92d7af2d5290	\N	\N	\N	\N	road	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+acc9048f-b4cd-4878-8f69-36d97354f32a	d84546ed-9e9d-44fa-b7d8-0188940af80b	1	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+8995e155-710e-4f04-8149-8b46bd26ef62	d84546ed-9e9d-44fa-b7d8-0188940af80b	2	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+b1ed8fc8-214d-47e8-98ec-e342e00273d3	d84546ed-9e9d-44fa-b7d8-0188940af80b	3	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+86c5636c-6f35-4ba8-b590-68d1208151ab	d84546ed-9e9d-44fa-b7d8-0188940af80b	4	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+bf297d30-1fd2-46f4-8fc4-d3a640d0622e	d84546ed-9e9d-44fa-b7d8-0188940af80b	5	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+3f73b351-9402-4088-b775-6bb3b658545f	d84546ed-9e9d-44fa-b7d8-0188940af80b	6	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+d6f071b9-8054-4301-b7e2-7f20fad6db2e	d84546ed-9e9d-44fa-b7d8-0188940af80b	7	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+924a3173-247b-43be-97fe-c004e9403008	d84546ed-9e9d-44fa-b7d8-0188940af80b	8	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+678fb78f-44a9-4e8d-9669-e7637c928f3d	d84546ed-9e9d-44fa-b7d8-0188940af80b	9	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+7245b10a-44bf-4bc3-9099-723a240c7310	d84546ed-9e9d-44fa-b7d8-0188940af80b	10	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+93319243-f25e-4178-ac56-a4127d27ce51	d84546ed-9e9d-44fa-b7d8-0188940af80b	11	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+a1197603-985a-4616-9f51-ff2b8bc08296	d84546ed-9e9d-44fa-b7d8-0188940af80b	12	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+a3853a27-2606-4f9a-aeab-60c76e0f03d9	d84546ed-9e9d-44fa-b7d8-0188940af80b	13	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+127cdecb-75b7-4fb1-8bcf-6bfaa092bd6b	d84546ed-9e9d-44fa-b7d8-0188940af80b	14	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+9eb0d87c-8c6a-405b-a963-fbfc306248f9	d84546ed-9e9d-44fa-b7d8-0188940af80b	15	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+8f91a6fd-1909-4864-93e4-33c9565e7fca	d84546ed-9e9d-44fa-b7d8-0188940af80b	16	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+0c13d0de-47cf-4311-9fc9-e02c105f1052	d84546ed-9e9d-44fa-b7d8-0188940af80b	17	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+fc696bc6-d060-40ab-b50d-d8967e6a9cda	d84546ed-9e9d-44fa-b7d8-0188940af80b	18	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+380c3cf4-3252-4eed-88d6-6786f0279fcb	d84546ed-9e9d-44fa-b7d8-0188940af80b	19	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+4a151d65-4b0c-4980-b179-26a92c3d3174	d84546ed-9e9d-44fa-b7d8-0188940af80b	20	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+bd9bbd77-20f3-42b3-925b-bc3ac7b56dfd	d84546ed-9e9d-44fa-b7d8-0188940af80b	21	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+d5be4fe3-2cc7-4c39-bd58-8b391c6df243	d84546ed-9e9d-44fa-b7d8-0188940af80b	22	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+5cca1fc0-026d-4ad4-8df5-c1d230d43891	d84546ed-9e9d-44fa-b7d8-0188940af80b	23	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+35fb461f-e323-4a6d-b5e5-607fdf6eb7c8	d84546ed-9e9d-44fa-b7d8-0188940af80b	24	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+7c8033a2-6b13-42ba-bde5-fa2e74b607fd	d84546ed-9e9d-44fa-b7d8-0188940af80b	25	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+24b1d0f7-06c0-471a-a61a-f61ead16e2fe	d84546ed-9e9d-44fa-b7d8-0188940af80b	26	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+295a0fab-14a2-4b52-b305-4d09f2a4dd15	d84546ed-9e9d-44fa-b7d8-0188940af80b	27	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+d163cd4c-aedf-4d38-8464-703a06d66617	d84546ed-9e9d-44fa-b7d8-0188940af80b	28	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+1fc6d6e4-d173-4a8d-b380-1af1fdc9178a	d84546ed-9e9d-44fa-b7d8-0188940af80b	29	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:22:13.162861-07	2026-05-01 21:22:13.162861-07
+2b381cca-f307-4fff-a0eb-99055c388163	6a5f6e24-d68a-47ef-98f0-00f017de7435	1	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+ae05ef5c-d57d-40ac-9d15-eb3eb266f2ff	6a5f6e24-d68a-47ef-98f0-00f017de7435	2	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+1feaeefb-c272-4370-b6a7-93af7b7a0c9f	6a5f6e24-d68a-47ef-98f0-00f017de7435	3	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+f4b4c0ca-25ea-4ef4-ad4e-be7383d85865	6a5f6e24-d68a-47ef-98f0-00f017de7435	4	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+14edd312-3a5e-49e6-90fa-b6e91119c855	6a5f6e24-d68a-47ef-98f0-00f017de7435	5	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+f04c2c0d-0158-48de-99e5-dd07c5cc90e3	6a5f6e24-d68a-47ef-98f0-00f017de7435	6	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+75694953-f147-4d1c-8ed3-4e574bfaedea	6a5f6e24-d68a-47ef-98f0-00f017de7435	7	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+7b124bd7-40a1-4eff-b990-d4c1ae372273	6a5f6e24-d68a-47ef-98f0-00f017de7435	8	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+6e83062f-4976-4565-9aa0-fab302e0cfe0	6a5f6e24-d68a-47ef-98f0-00f017de7435	9	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+7e550516-ff3e-4452-ad59-0de9f489e7e9	6a5f6e24-d68a-47ef-98f0-00f017de7435	10	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+e699dbd9-5f88-45c6-8f12-0050fb8f1a7d	6a5f6e24-d68a-47ef-98f0-00f017de7435	11	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+39cd69ad-ac85-49d2-9a15-35743d1e97d6	6a5f6e24-d68a-47ef-98f0-00f017de7435	12	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+5df159ae-5009-43f2-94e1-226f5d9905af	6a5f6e24-d68a-47ef-98f0-00f017de7435	13	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+95256662-ff61-4baf-96e4-55f8df00f46b	6a5f6e24-d68a-47ef-98f0-00f017de7435	14	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+42cdbc47-0386-4fe5-b858-24d7dbaaf717	6a5f6e24-d68a-47ef-98f0-00f017de7435	15	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+df1461f1-b642-4d64-9110-35650116d51e	6a5f6e24-d68a-47ef-98f0-00f017de7435	16	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+625ee0dc-eae3-4956-9047-308d37c0956f	6a5f6e24-d68a-47ef-98f0-00f017de7435	17	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+ecf2d539-df96-425d-a51c-419396e4ad7e	6a5f6e24-d68a-47ef-98f0-00f017de7435	18	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+cd3ac017-4982-4d63-b685-515890a2b2ba	6a5f6e24-d68a-47ef-98f0-00f017de7435	19	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+e3777c38-d31c-4eed-a16c-da6695165b65	6a5f6e24-d68a-47ef-98f0-00f017de7435	20	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+5ceb1c4c-2efd-4043-9de3-682dedc59ef4	6a5f6e24-d68a-47ef-98f0-00f017de7435	21	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+7932616f-f3b2-4800-b35a-8acff3b48281	6a5f6e24-d68a-47ef-98f0-00f017de7435	22	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+0b2635c8-73a9-43ed-ae9e-da1ed2090f05	6a5f6e24-d68a-47ef-98f0-00f017de7435	23	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+8faeb679-2141-4991-a288-2aa51613eeff	6a5f6e24-d68a-47ef-98f0-00f017de7435	24	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+c126b510-e9ee-47c8-ae68-af8c98fdf241	6a5f6e24-d68a-47ef-98f0-00f017de7435	25	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+8d7e8930-581d-4253-9ae3-aa39c7739cd7	6a5f6e24-d68a-47ef-98f0-00f017de7435	26	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+084f3b28-31d8-4524-b4f0-3cf1e09f4128	6a5f6e24-d68a-47ef-98f0-00f017de7435	27	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+c8d2959b-35a6-48af-80be-10cb08480488	6a5f6e24-d68a-47ef-98f0-00f017de7435	28	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+4418ae1e-7e5e-468e-b6af-5a98cd0f5235	6a5f6e24-d68a-47ef-98f0-00f017de7435	29	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+ef9819fb-f466-4a58-bb9f-232ff2cc76fb	6a5f6e24-d68a-47ef-98f0-00f017de7435	30	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+9c4bf078-b3cc-4065-b23d-24408803618f	6a5f6e24-d68a-47ef-98f0-00f017de7435	31	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+3c0aa259-59d3-4237-b7c1-5ee8e9d5a508	6a5f6e24-d68a-47ef-98f0-00f017de7435	32	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+6935b6a4-2812-4256-ad78-1d769178dcb0	6a5f6e24-d68a-47ef-98f0-00f017de7435	33	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+a0217378-59ac-4112-8c40-b54ca97c2272	6a5f6e24-d68a-47ef-98f0-00f017de7435	34	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+9786c228-a06b-495b-8103-0f4b3e796543	6a5f6e24-d68a-47ef-98f0-00f017de7435	35	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+9945103b-420f-4ed2-b2cb-9dc4127e84a7	6a5f6e24-d68a-47ef-98f0-00f017de7435	36	4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	\N	\N	\N	\N	no kings march	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:24:31.261199-07	2026-05-01 21:24:31.261199-07
+7a65d250-8eb0-4cd1-896a-636bee16a6ef	303b7e9d-442d-454b-b7b4-4b3bbf92e889	1	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+a820fcae-af82-4e87-b01c-5c5bda509b97	303b7e9d-442d-454b-b7b4-4b3bbf92e889	2	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+a470b118-c5b0-4a49-9e35-89e55204c482	303b7e9d-442d-454b-b7b4-4b3bbf92e889	3	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+59383008-8f26-427f-8364-778c9acc1d2b	303b7e9d-442d-454b-b7b4-4b3bbf92e889	4	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+bc25905c-8b1e-426e-9bb6-5ea83efa2189	303b7e9d-442d-454b-b7b4-4b3bbf92e889	5	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+3d975269-a615-4a95-8f10-f2d87dedb1da	303b7e9d-442d-454b-b7b4-4b3bbf92e889	6	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+6fef74f2-e585-4e0b-8764-286fa96e8178	303b7e9d-442d-454b-b7b4-4b3bbf92e889	7	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+e6383a1e-0576-4a0c-81d0-64c520b25c2d	303b7e9d-442d-454b-b7b4-4b3bbf92e889	8	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+c9a43753-5072-4a8c-a40b-079301d5631d	303b7e9d-442d-454b-b7b4-4b3bbf92e889	9	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+396104c0-b501-4b61-8ab7-b7d40c7c4d17	303b7e9d-442d-454b-b7b4-4b3bbf92e889	10	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+deddcecd-aaff-4a0e-9eb4-08705bc642a2	303b7e9d-442d-454b-b7b4-4b3bbf92e889	11	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+ea122b29-8d59-4541-b1d7-34e868ee2d45	303b7e9d-442d-454b-b7b4-4b3bbf92e889	12	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+b7e2cc4a-107d-43e7-974b-534173b4d342	303b7e9d-442d-454b-b7b4-4b3bbf92e889	13	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+7d7abd3e-62a0-4ff9-a31c-6ea7302ebd89	303b7e9d-442d-454b-b7b4-4b3bbf92e889	14	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+472503a6-7050-41f2-97bc-7805065d36cf	303b7e9d-442d-454b-b7b4-4b3bbf92e889	15	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+77ab4822-c52b-4298-921a-6a543cb78417	303b7e9d-442d-454b-b7b4-4b3bbf92e889	16	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+63df8de9-479c-4d78-8be2-173d90398212	303b7e9d-442d-454b-b7b4-4b3bbf92e889	17	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+c4f7d9c7-060a-4004-8525-2bc6de97aa6b	303b7e9d-442d-454b-b7b4-4b3bbf92e889	18	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+b671f57c-f583-4ed7-a648-d8291b2fe673	303b7e9d-442d-454b-b7b4-4b3bbf92e889	19	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+651b311e-3c4b-46be-884d-a0c4222bb792	303b7e9d-442d-454b-b7b4-4b3bbf92e889	20	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+e926985d-2bf8-4d06-a1aa-4827401f2051	303b7e9d-442d-454b-b7b4-4b3bbf92e889	21	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+0527339a-d931-4cdd-8163-d7154c997906	303b7e9d-442d-454b-b7b4-4b3bbf92e889	22	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+2be5ec9a-7e03-4305-98bc-154d7b6e9cf7	303b7e9d-442d-454b-b7b4-4b3bbf92e889	23	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+66b3e954-1adf-4709-9e48-1133c0fa1688	303b7e9d-442d-454b-b7b4-4b3bbf92e889	24	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+2b6f3c9c-3ef1-44cb-9b27-094ddb503c86	303b7e9d-442d-454b-b7b4-4b3bbf92e889	25	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+206b181e-9a6c-4905-9577-ccd774a005b0	303b7e9d-442d-454b-b7b4-4b3bbf92e889	26	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+e5362a8e-5834-4a4c-9c17-b97042d6a222	303b7e9d-442d-454b-b7b4-4b3bbf92e889	27	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+2631c154-4190-4406-a4ab-571a9a95c710	303b7e9d-442d-454b-b7b4-4b3bbf92e889	28	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+3b231bf3-8712-4671-99c3-1cf40c6e157d	303b7e9d-442d-454b-b7b4-4b3bbf92e889	29	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+2837b91a-9c4c-4781-9ba4-15da3a0f378a	303b7e9d-442d-454b-b7b4-4b3bbf92e889	30	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+bfed3359-266b-463e-84ce-b2d1170e79ee	303b7e9d-442d-454b-b7b4-4b3bbf92e889	31	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+85ed4965-c7fa-465a-aaf2-45d5d11d0479	303b7e9d-442d-454b-b7b4-4b3bbf92e889	32	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+ae63eefb-5e2e-4770-ad27-d703416b56b9	303b7e9d-442d-454b-b7b4-4b3bbf92e889	33	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+cbde71b0-dbe0-4464-8eef-39ab8b1d31f1	303b7e9d-442d-454b-b7b4-4b3bbf92e889	34	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+326284c6-fbba-4a96-854c-97f96dabe311	303b7e9d-442d-454b-b7b4-4b3bbf92e889	35	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+350937a1-1d0b-4db6-b801-438d087df217	303b7e9d-442d-454b-b7b4-4b3bbf92e889	36	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+facce38d-a8f8-45b8-911e-0e774706b1de	c8803073-6f93-4c42-ac5d-d87268742ed6	1	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+1573682e-8bb8-47d7-b0f0-29b6239d33f9	c8803073-6f93-4c42-ac5d-d87268742ed6	2	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+3ba0bd47-96ff-4ec1-a204-428a7e1a33cb	c8803073-6f93-4c42-ac5d-d87268742ed6	3	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+dbe3f77a-06cf-49c4-a4c3-edfd3654d16c	c8803073-6f93-4c42-ac5d-d87268742ed6	4	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+f5cbebec-ac6d-4485-b6a6-eb08d6f70527	c8803073-6f93-4c42-ac5d-d87268742ed6	5	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+f4f12e19-c9fb-4e25-8274-b747aeb931d8	c8803073-6f93-4c42-ac5d-d87268742ed6	6	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+aa803a0c-dbed-43b1-b382-2ae5e29031d2	c8803073-6f93-4c42-ac5d-d87268742ed6	7	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+3ca7aab2-41d6-4907-9d1a-d8f57fad17c9	c8803073-6f93-4c42-ac5d-d87268742ed6	8	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+9fe4c59e-20d7-4352-a01c-5f72c80c6b41	c8803073-6f93-4c42-ac5d-d87268742ed6	9	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+23ef4c6b-682d-4f49-a214-c9ffb438285e	c8803073-6f93-4c42-ac5d-d87268742ed6	10	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+eeb44e74-5f40-4749-abe9-6e3db65b13df	c8803073-6f93-4c42-ac5d-d87268742ed6	11	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+18b745c6-580b-42c6-823c-e9122751ae95	c8803073-6f93-4c42-ac5d-d87268742ed6	12	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+44aaa43a-cb02-439e-84be-0833668fdc81	c8803073-6f93-4c42-ac5d-d87268742ed6	13	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+9fd7f171-2d3e-4556-aad2-331757df2abb	c8803073-6f93-4c42-ac5d-d87268742ed6	14	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+8c2005b0-11a4-4e56-89d0-f0b0c2fa03e5	c8803073-6f93-4c42-ac5d-d87268742ed6	15	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+955246c9-83cf-48dc-b7ae-b95a27560f8d	c8803073-6f93-4c42-ac5d-d87268742ed6	16	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+edb318be-19e8-4bac-8f86-dc2a977afde8	c8803073-6f93-4c42-ac5d-d87268742ed6	17	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+6ffc488f-8de5-460c-b2f8-49774e1a519d	c8803073-6f93-4c42-ac5d-d87268742ed6	18	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+ec5e3f1c-a440-4b20-bc9d-8aa43a5f1af3	c8803073-6f93-4c42-ac5d-d87268742ed6	19	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+092747dc-7d4d-4401-8fd1-e3c1be2d2eab	c8803073-6f93-4c42-ac5d-d87268742ed6	20	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+67611ce5-b85c-49be-8586-a6367e59f90a	c8803073-6f93-4c42-ac5d-d87268742ed6	21	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+dda4321e-feb7-4dcf-a4d1-117fe53e238c	c8803073-6f93-4c42-ac5d-d87268742ed6	22	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+4788efea-006f-409e-b060-069cfdc3e646	c8803073-6f93-4c42-ac5d-d87268742ed6	23	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+f8b6992b-0e3f-4355-a845-489405515c22	c8803073-6f93-4c42-ac5d-d87268742ed6	24	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+55c60a46-de5f-426a-8224-0df317ff3afc	c8803073-6f93-4c42-ac5d-d87268742ed6	25	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+3689a960-04a1-4929-bcd3-86c9963c1158	c8803073-6f93-4c42-ac5d-d87268742ed6	26	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+7e690e68-044a-49e9-a6a0-8e2a80d720fa	c8803073-6f93-4c42-ac5d-d87268742ed6	27	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+e9d0ef30-807f-4902-86ca-d449367e5d20	c8803073-6f93-4c42-ac5d-d87268742ed6	28	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+c95b55b8-d220-4de2-86ff-e05bf2d8f627	c8803073-6f93-4c42-ac5d-d87268742ed6	29	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+bf61de7e-7ede-48ce-956a-8cdedbfd0ee8	c8803073-6f93-4c42-ac5d-d87268742ed6	30	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+9569afde-0904-4cbd-b47e-89b0ba4bc62c	c8803073-6f93-4c42-ac5d-d87268742ed6	31	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+02ef660d-b9be-4aba-af9e-737a3897329d	c8803073-6f93-4c42-ac5d-d87268742ed6	32	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+775cf361-8ac1-4b38-a0f4-4add5f2d35f8	c8803073-6f93-4c42-ac5d-d87268742ed6	33	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+9f556757-3627-4734-bb5c-11674cda6f98	c8803073-6f93-4c42-ac5d-d87268742ed6	34	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+f59694eb-c851-4faa-b6bf-e7c90db8a2ff	c8803073-6f93-4c42-ac5d-d87268742ed6	35	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+6f9c33fd-dc5b-4c47-9e86-a0c691dde6e8	c8803073-6f93-4c42-ac5d-d87268742ed6	36	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	Portland	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07
+9d4656c5-6bcf-4e72-a349-c9ae1ce96059	8bee5acb-65c4-4306-85b8-b5a519709741	1	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+5a5a87ab-e75d-4904-b226-8e7f6050ebd2	8bee5acb-65c4-4306-85b8-b5a519709741	2	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+f95b462e-0188-43f5-b4fb-abecb59ab777	8bee5acb-65c4-4306-85b8-b5a519709741	3	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+7a299919-834c-4a47-89b9-2de0e52ffa8b	8bee5acb-65c4-4306-85b8-b5a519709741	4	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+921ae7ff-f224-4293-8f7b-be80382083a2	8bee5acb-65c4-4306-85b8-b5a519709741	5	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+c83f795e-d12d-4cf3-ba0b-fbc3c78bd48f	8bee5acb-65c4-4306-85b8-b5a519709741	6	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+b122943f-9c73-41a1-9953-835019d61120	8bee5acb-65c4-4306-85b8-b5a519709741	7	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+429da9ef-5282-43d7-9c5a-ea049bd6b66a	8bee5acb-65c4-4306-85b8-b5a519709741	8	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+fcf1c008-d44d-4b67-a04b-6f0b40f87e9b	8bee5acb-65c4-4306-85b8-b5a519709741	9	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+3249a78d-eb83-4cef-92df-c6b7004e5a1d	8bee5acb-65c4-4306-85b8-b5a519709741	10	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+814079b7-728c-4eaa-903d-fb45ecd2dce4	8bee5acb-65c4-4306-85b8-b5a519709741	11	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+97b3de2b-06be-48c9-8d02-67ec1906ae2e	8bee5acb-65c4-4306-85b8-b5a519709741	12	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+545e469c-6388-4032-84c6-165807db1294	8bee5acb-65c4-4306-85b8-b5a519709741	13	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+85139b27-06c5-405a-8752-84806b9d0ab9	8bee5acb-65c4-4306-85b8-b5a519709741	14	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+86d784e2-9ecf-48d1-8245-5325818fb4c2	8bee5acb-65c4-4306-85b8-b5a519709741	15	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+2d5c0125-e278-4021-b7a4-e6261144396f	8bee5acb-65c4-4306-85b8-b5a519709741	16	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+116d115c-2e4a-42b5-b125-81c910cc1f66	8bee5acb-65c4-4306-85b8-b5a519709741	17	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+6be45212-b3d9-4728-98b1-7a0f01e44c86	8bee5acb-65c4-4306-85b8-b5a519709741	18	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+8107a3c4-64e8-4958-8187-4316f808a522	8bee5acb-65c4-4306-85b8-b5a519709741	19	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+301ac25e-2643-46fa-85b3-46d02d9f6ae8	8bee5acb-65c4-4306-85b8-b5a519709741	20	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+965c48a7-f5ef-4f07-ad79-527d30e561af	8bee5acb-65c4-4306-85b8-b5a519709741	21	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+6825ea9d-0972-4519-8745-3067899573ee	8bee5acb-65c4-4306-85b8-b5a519709741	22	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+422f095a-095d-4c7b-8163-69077efb6848	8bee5acb-65c4-4306-85b8-b5a519709741	23	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+95092d78-c357-47ad-a78c-a0d82426bbce	8bee5acb-65c4-4306-85b8-b5a519709741	24	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+f017590a-ee29-4cd3-9d54-ee61c632cd9e	8bee5acb-65c4-4306-85b8-b5a519709741	25	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+9ab409b8-b3f6-4ea1-a805-d9151bb3da49	8bee5acb-65c4-4306-85b8-b5a519709741	26	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+d0904ca3-837f-4832-8507-acd298174cf0	8bee5acb-65c4-4306-85b8-b5a519709741	27	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+4995f24e-2340-400f-9ee2-7184d4291bac	8bee5acb-65c4-4306-85b8-b5a519709741	28	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+54a9d8e5-060c-4447-814a-72db768ddac0	8bee5acb-65c4-4306-85b8-b5a519709741	29	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+68b164ee-99bb-4b03-b1cc-d2475194f0bf	8bee5acb-65c4-4306-85b8-b5a519709741	30	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+b4c7da0d-3c25-4bd3-8889-d80ad2f9553b	8bee5acb-65c4-4306-85b8-b5a519709741	31	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+700aee9e-6ac4-469b-8b6f-88082c5289b1	8bee5acb-65c4-4306-85b8-b5a519709741	32	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+61b88e5b-900b-4c71-a6d6-561806c2d191	8bee5acb-65c4-4306-85b8-b5a519709741	33	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+8055a849-722c-46d9-bc22-ceb249b3665b	8bee5acb-65c4-4306-85b8-b5a519709741	34	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+0120e6c8-2881-45a1-a97d-40070b3f64b7	8bee5acb-65c4-4306-85b8-b5a519709741	35	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+76c66c83-a3bb-444d-aae8-83e7e8a26815	8bee5acb-65c4-4306-85b8-b5a519709741	36	0b3d2996-d8e0-4c06-acb4-739a08714409	\N	\N	\N	\N	hood canal	\N	\N	\N	\N	\N	{}	\N	f	2026-05-01 21:51:55.712688-07	2026-05-01 21:51:55.712688-07
+\.
+
+
+--
+-- Data for Name: lenses; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.lenses (id, user_id, make, model, focal_length_mm, max_aperture, serial_number, notes, is_active, created_at, updated_at) FROM stdin;
+2bfe90b8-f4e1-4e12-9f08-88c2318a8703	d43eded1-69f1-427d-a695-70dbe56b69ef	Leica	Summicron V3	50	2	\N	\N	t	2026-03-30 19:20:46.446001-07	2026-03-30 19:20:46.446001-07
+0b3d2996-d8e0-4c06-acb4-739a08714409	d43eded1-69f1-427d-a695-70dbe56b69ef	Voigtlander	Nokton	40	1.4	\N	\N	t	2026-03-30 19:20:46.466937-07	2026-03-30 19:20:46.466937-07
+4d5f5f5b-fbba-4248-833f-0aa6c6da76d7	d43eded1-69f1-427d-a695-70dbe56b69ef	Voigtlander	Color Skopar	28	2.8	\N	\N	t	2026-03-30 19:20:46.473649-07	2026-03-30 19:21:33.8-07
+f76e1f39-3d7d-4638-9ebb-92d7af2d5290	d43eded1-69f1-427d-a695-70dbe56b69ef	Mamiya	N 80mm f/4 L	80	\N	\N	\N	t	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07
+\.
+
+
+--
+-- Data for Name: notes; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.notes (id, user_id, roll_id, frame_id, type, content, file_key, file_url, thumbnail_url, duration_seconds, mime_type, file_size_bytes, latitude, longitude, created_at, updated_at) FROM stdin;
+f5050099-8e14-4117-8940-97ae3d27638b	d43eded1-69f1-427d-a695-70dbe56b69ef	75d7392f-160b-438f-a3ac-906279481685	\N	text	Bloedel Barn — f/32 1/20. Date approximate.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:12:44.526003-07	2026-05-02 14:12:44.526003-07
+e1489091-d7e5-431b-a8c5-1118727e7936	d43eded1-69f1-427d-a695-70dbe56b69ef	28a42f0f-4735-44c1-a64c-fb2e2fe8ac26	\N	text	Manor house (Bloedel) — f/11 1/25. Date approximate.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:12:44.561401-07	2026-05-02 14:12:44.561401-07
+a92af577-0826-416c-b213-4dc2a1b19796	d43eded1-69f1-427d-a695-70dbe56b69ef	a2225c3a-ae5d-4fd5-ae52-9c15015fc75c	\N	text	CR Gorge — f/16 1/30. Field ID 20250506.7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:19:47.795835-07	2026-05-02 14:19:47.795835-07
+f1282a5b-33cc-4c34-bda0-6ef43ff13bfb	d43eded1-69f1-427d-a695-70dbe56b69ef	57720c28-12ce-4e01-91ad-d648b6c8937a	\N	text	Bus (graffiti bus, eastern WA / ID border area). Field ID 20250506.8 (unmarked sheet, second in holder with the CR Gorge sheet).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:19:53.596721-07	2026-05-02 14:19:53.596721-07
+98c7399c-3b01-4424-b539-bf410bc8e0af	d43eded1-69f1-427d-a695-70dbe56b69ef	a8e03609-8617-44f7-85f7-ae4d74b02e82	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:38.825945-07	2026-05-02 14:29:38.825945-07
+8b174b75-9eb4-4ffd-84b8-96c601716caa	d43eded1-69f1-427d-a695-70dbe56b69ef	fcce6f89-0a70-4587-a3b6-ec7d297b8025	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:42.43863-07	2026-05-02 14:29:42.43863-07
+cd0cd151-a08e-432d-a57c-7cc50e23f2bf	d43eded1-69f1-427d-a695-70dbe56b69ef	25bcbe4b-8ec0-48a3-8f6b-274556c39650	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:46.185471-07	2026-05-02 14:29:46.185471-07
+ee9b68dc-39f0-40ad-8a34-f3007861b7bd	d43eded1-69f1-427d-a695-70dbe56b69ef	19845053-ae70-4283-a001-7bae89048432	\N	text	Stickered "R" for Rodinal in fridge bag.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:29:49.621481-07	2026-05-02 14:29:49.621481-07
+a305665d-d7a7-485c-8788-9a2125e764e8	d43eded1-69f1-427d-a695-70dbe56b69ef	da9b566f-5686-47f3-8ea4-52c867980f2e	\N	text	Stickered "R" for Rodinal in fridge bag. Old roll.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:31:14.102022-07	2026-05-02 14:31:14.102022-07
+b112fa94-e5bd-4926-8257-bad964f21d79	d43eded1-69f1-427d-a695-70dbe56b69ef	3c3b1e42-84e1-4bc6-8277-a4c770e58ebd	\N	text	Mystery roll — no sticker, no date, no camera. Assumed box speed 400.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:33:03.629769-07	2026-05-02 14:33:03.629769-07
+0c3c6faf-87f5-49bf-827a-61cb43763cae	d43eded1-69f1-427d-a695-70dbe56b69ef	c4b36c60-ac0a-42a3-8410-905a0b4ed7ed	\N	text	Mystery roll — no sticker, no date, no camera. Assumed box speed 200.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:33:07.099768-07	2026-05-02 14:33:07.099768-07
+89540fde-2c46-4271-ba3a-59330a749f08	d43eded1-69f1-427d-a695-70dbe56b69ef	abfd9c68-931e-4dfb-b457-9c2674031c9a	\N	text	Cheyenne, WY. Banded with 20250501.01.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:01.949379-07	2026-05-02 14:38:01.949379-07
+60f7432d-84f2-4479-9feb-171f599fde87	d43eded1-69f1-427d-a695-70dbe56b69ef	b72945e9-f198-4d6d-bb34-59b51ff62e70	\N	text	Banded with 20250502.02.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:05.442242-07	2026-05-02 14:38:05.442242-07
+7e73d2e5-dd0e-4075-8215-f76a91eaf668	d43eded1-69f1-427d-a695-70dbe56b69ef	3a096e05-2791-4f92-93f6-2cc4987e8680	\N	text	Banded with 20250426.01.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:09.125858-07	2026-05-02 14:38:09.125858-07
+2fd69e14-1ae7-474a-8c34-6a8d30a846c5	d43eded1-69f1-427d-a695-70dbe56b69ef	50e58948-1b92-4d17-8b23-c953dabab882	\N	text	Rated at ISO 800 (pulled 2 stops from 3200). Banded with 20250426.03.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:38:13.294619-07	2026-05-02 14:38:13.294619-07
+3e07e9a1-17a9-4b74-a9ab-a20f06dba052	d43eded1-69f1-427d-a695-70dbe56b69ef	1d39b928-b43a-42f4-ad68-4408dc551127	\N	text	Dev shorthand from label: HC110 E10.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:48:55.747689-07	2026-05-02 14:48:55.747689-07
+6ccfcc30-8b7a-4c05-af61-ae9d5dd78fda	d43eded1-69f1-427d-a695-70dbe56b69ef	954a6c5d-0a00-4bcb-ae32-a79ee09227df	\N	text	Dev shorthand from label: HC110 E8. Bend → SLC, Colorado trip.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 14:49:01.896383-07	2026-05-02 14:49:01.896383-07
+eba42012-fa75-46f6-a21b-4e1e23152ffb	d43eded1-69f1-427d-a695-70dbe56b69ef	1c40b068-55af-48f1-af00-a5ccd9e46acb	\N	text	Physical label: xxxx.0503.01 (year unknown, May 3). Dev shorthand from label: HC110 E5.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:30:45.97166-07	2026-05-02 15:30:45.97166-07
+e1e094b2-fa8f-4806-9b0a-aa3e601579fa	d43eded1-69f1-427d-a695-70dbe56b69ef	d9d16c4c-7f8b-4335-9d3e-210210263df0	\N	text	Dev shorthand from label: HC110 E7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:31:54.201346-07	2026-05-02 15:31:54.201346-07
+69d1e7b6-d187-45cc-8380-d49c602153a5	d43eded1-69f1-427d-a695-70dbe56b69ef	33d7009b-257d-4f0a-aa5e-a79170ec309d	\N	text	Dev shorthand from bag: HC110 E7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:34:22.400955-07	2026-05-02 15:34:22.400955-07
+8151c4d9-387c-4710-a382-c657da8341c2	d43eded1-69f1-427d-a695-70dbe56b69ef	eecad1f2-7960-4fd3-b906-5db2f70b3072	\N	text	Dev shorthand from bag: HC110 E7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:34:25.916448-07	2026-05-02 15:34:25.916448-07
+20b2b223-dc0e-4898-83e0-76e4ff00ffb5	d43eded1-69f1-427d-a695-70dbe56b69ef	3d199f8f-1412-48c5-9c6a-3a73a3c2e4bb	\N	text	Dev shorthand from bag: HC110 E7. Rated at box 400.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:34:29.646681-07	2026-05-02 15:34:29.646681-07
+3d502385-88ee-4810-adb6-c93290055658	d43eded1-69f1-427d-a695-70dbe56b69ef	8f7bbbca-a9ea-4053-81c5-9d55aecb17fb	\N	text	Astoria, OR. Dev shorthand from bag: HC110 E7.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:35:01.313303-07	2026-05-02 15:35:01.313303-07
+2650f1c8-b619-4261-8a59-c161ec382998	d43eded1-69f1-427d-a695-70dbe56b69ef	78aa8889-4c2f-4788-9e0b-129af33998c8	\N	text	Physical label: 2025xxxx.xx (date unknown within 2025). Camera uncertain (m6?). Rated 800 — Hector's recommendation, well above box 250. Dev shorthand from label: HC110 B12.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:36:18.52959-07	2026-05-02 15:36:18.52959-07
+0e088253-09b6-4e24-94bd-fc4b7d491380	d43eded1-69f1-427d-a695-70dbe56b69ef	42583cc3-b9c1-47ab-be00-918464eb54b2	\N	text	24-exposure short roll. Dev shorthand from label: HC110 B6.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:37:56.924788-07	2026-05-02 15:37:56.924788-07
+27c36701-301a-47e6-8aa0-25b94cf8b04f	d43eded1-69f1-427d-a695-70dbe56b69ef	e5bda611-34e2-410f-b470-18391d89f9eb	\N	text	Physical label: xxxx.0923.3 (year unknown, Sept 23). 24-exp short cassette. Yellow filter used. Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:41:18.163214-07	2026-05-02 15:41:18.163214-07
+aec673cd-8a3a-4416-bf41-f8684f3948fd	d43eded1-69f1-427d-a695-70dbe56b69ef	3bb9a6a3-242e-4bfd-be4d-2c79a1bdd3d2	\N	text	Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:41:49.707042-07	2026-05-02 15:41:49.707042-07
+cb16a255-711c-4fa2-9529-36a64a0ef1f7	d43eded1-69f1-427d-a695-70dbe56b69ef	37495718-7bb3-4403-b9a7-84b872c393b8	\N	text	Physical label: xxxx.0503.2 (year unknown, May 3, seq 2). No camera or other details on label. Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:42:15.916261-07	2026-05-02 15:42:15.916261-07
+770f76f9-aaab-4ed0-8018-a8af66a394a4	d43eded1-69f1-427d-a695-70dbe56b69ef	27ae8905-1407-4f79-b3e3-584833071ac0	\N	text	Physical label: xxxx.0727.1 (year unknown, Jul 27). Expired 1995 (~30+ years), rated at ISO 50 (down ~1.3 stops from box 125). Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:43:37.715881-07	2026-05-02 15:43:37.715881-07
+d088c481-25af-4760-abe2-8a43cfc16d22	d43eded1-69f1-427d-a695-70dbe56b69ef	0a0e69b5-1750-4cb8-bfb0-6e42b294856e	\N	text	24-exp short cassette. Dev shorthand from bag: HC110 B7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:44:23.84108-07	2026-05-02 15:44:23.84108-07
+d739c2ee-e18f-42a8-abcc-e7788eba0029	d43eded1-69f1-427d-a695-70dbe56b69ef	978b46fe-c138-4bed-bb76-c73253cc38e0	\N	text	Pulled 2 stops from box 3200. Dev shorthand from label: HC110 B8.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:46:39.46389-07	2026-05-02 15:46:39.46389-07
+48ddb925-7954-4efe-9d24-042dd2bb51b2	d43eded1-69f1-427d-a695-70dbe56b69ef	c2a84735-351b-46fd-b036-f997cff49b88	\N	text	Dev shorthand from label: HC110 B9.25.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:48:05.173397-07	2026-05-02 15:48:05.173397-07
+008a16e9-b3ab-4338-a26f-2687a7acb898	d43eded1-69f1-427d-a695-70dbe56b69ef	d5185e98-d5ca-4dc4-b529-bcf27eb89628	\N	text	Pushed 2 stops from box 400. Dev shorthand from label: HC110 B11.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:48:49.014258-07	2026-05-02 15:48:49.014258-07
+f241b04f-b8f5-4e0d-bb92-e46f39952fd4	d43eded1-69f1-427d-a695-70dbe56b69ef	30f94527-fba6-456d-a1d8-fd34b0184b0d	\N	text	Dev shorthand from label: HC110 B14.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:50:16.615203-07	2026-05-02 15:50:16.615203-07
+22a2be44-619e-4dbd-bdc4-c87074a71cbb	d43eded1-69f1-427d-a695-70dbe56b69ef	8b14fc65-7168-4173-81e6-a74b9a324a4b	\N	text	Physical label: xxxxxxxx.xx (date completely unknown). Camera uncertain (m6?). Dev shorthand from label: HC110 A4.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:53:29.895654-07	2026-05-02 15:53:29.895654-07
+eb470db5-15eb-4199-bac9-90f39c985b03	d43eded1-69f1-427d-a695-70dbe56b69ef	23cd91b1-497e-4289-b488-8166e4b4bc60	\N	text	Pushed ~1 stop from box 320. Dev shorthand from label: HC110 H14 (note: H = 1+63 dilution).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:54:15.762628-07	2026-05-02 15:54:15.762628-07
+5765bf36-4b73-406c-a648-3e8b6e26cbe6	d43eded1-69f1-427d-a695-70dbe56b69ef	5e451701-dc49-42ad-b9f3-0376f18a4ac9	\N	text	Dev shorthand from label: HC110 H8.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:55:33.240226-07	2026-05-02 15:55:33.240226-07
+86538f9b-c7af-4beb-96d0-6f95ae19e7ce	d43eded1-69f1-427d-a695-70dbe56b69ef	dd062fa4-6445-494c-80da-869b1f3eca7f	\N	text	SFO. Pushed 2 stops from box 400. Dev shorthand from label: HC110 A7.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:56:28.454516-07	2026-05-02 15:56:28.454516-07
+396457d8-7044-42ed-bd65-7c908d357595	d43eded1-69f1-427d-a695-70dbe56b69ef	5bc2a5e6-80a8-48e0-94a5-6acae194fa5f	\N	text	Pushed 3 stops from box 400. Dev shorthand from bag: HC110 A9.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:59:26.659649-07	2026-05-02 15:59:26.659649-07
+9371a60a-a6e7-415b-b4af-5c904e58d249	d43eded1-69f1-427d-a695-70dbe56b69ef	812ebcaf-b866-4a17-a303-c803c46402b8	\N	text	Physical label: xxxx.0721.2 (year unknown, Jul 21 seq 2). Pushed 3 stops from box 400. Dev shorthand from bag: HC110 A9.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:59:31.260187-07	2026-05-02 15:59:31.260187-07
+572567e8-eeaa-4c8e-b646-dbaf62338cae	d43eded1-69f1-427d-a695-70dbe56b69ef	43fe1928-54ef-4789-a4af-2ddb78317cf1	\N	text	Pushed 3 stops from box 400. Dev shorthand from bag: HC110 A9.5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 15:59:35.244641-07	2026-05-02 15:59:35.244641-07
+75df624a-0ae7-4da6-8733-67c94ce5d02e	d43eded1-69f1-427d-a695-70dbe56b69ef	5bc2a5e6-80a8-48e0-94a5-6acae194fa5f	\N	text	Plan: dev at HC110 A 13min (MDC Delta 400 @3200 time). Bag was labeled A9.5 but that is too short for Delta 400 @3200 per MDC.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:02:26.202033-07	2026-05-02 16:02:26.202033-07
+332f561a-2685-4022-82a4-862fa8a5108d	d43eded1-69f1-427d-a695-70dbe56b69ef	812ebcaf-b866-4a17-a303-c803c46402b8	\N	text	Plan: dev at HC110 A 13min (MDC Delta 400 @3200 time). Bag was labeled A9.5 but that is too short for Delta 400 @3200 per MDC.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:02:26.211387-07	2026-05-02 16:02:26.211387-07
+9e8a55be-2626-44e5-aa8d-4c5b7ec85b27	d43eded1-69f1-427d-a695-70dbe56b69ef	43fe1928-54ef-4789-a4af-2ddb78317cf1	\N	text	Plan: dev at HC110 A 13min (MDC Delta 400 @3200 time). Bag was labeled A9.5 but that is too short for Delta 400 @3200 per MDC.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:02:26.218158-07	2026-05-02 16:02:26.218158-07
+6f3bc12e-ac46-4cae-8065-0e8b2202e4ea	d43eded1-69f1-427d-a695-70dbe56b69ef	b482ed53-e950-40d2-b07b-6824d58f0d48	\N	text	No camera or other markings on label.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:14.792956-07	2026-05-02 16:07:14.792956-07
+688ef0c2-c617-46d4-97a4-1f9514d835ea	d43eded1-69f1-427d-a695-70dbe56b69ef	075f5008-6b26-476d-aec4-e145ea9ef5de	\N	text	Physical label: XXXX.1118.1 (year unknown, Nov 18, seq 1). No camera markings.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:19.184991-07	2026-05-02 16:07:19.184991-07
+b1545060-a1f6-4fd2-806c-e84e82d3e8d1	d43eded1-69f1-427d-a695-70dbe56b69ef	f2ddde28-88ba-479a-98ca-b930559aa1c9	\N	text	Physical label: xxxx.0226.1 (year unknown, Feb 26, seq 1). No camera markings.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:22.809384-07	2026-05-02 16:07:22.809384-07
+b2995006-927d-4c77-8ffe-fc007adc5321	d43eded1-69f1-427d-a695-70dbe56b69ef	e8a5e1fc-70af-4f41-913a-19a84d0b37eb	\N	text	From Thomas. Physical label: 20230916.THOMAS2 (no numeric seq).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:07:44.850754-07	2026-05-02 16:07:44.850754-07
+1e3eec47-5b2b-42e4-9f90-9037de8f5ef2	d43eded1-69f1-427d-a695-70dbe56b69ef	d117fe45-7e2a-4e21-a0b1-c4e6a21a7a5d	\N	text	Physical label: xxxx.1102.3 (year unknown, Nov 2, seq 3). No camera markings.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:08:41.989828-07	2026-05-02 16:08:41.989828-07
+0239f50a-7142-4ee2-b160-711c6907a669	d43eded1-69f1-427d-a695-70dbe56b69ef	020c63b2-1c96-49a6-9f9f-925029eaca2e	\N	text	Ferry. "Fat rolled" / "Unrolled at?" — physical wind irregular. Dev shorthand from old sheet: HC110 F9.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:10:10.755638-07	2026-05-02 16:10:10.755638-07
+c6128ea9-043d-400e-9430-4b8475e1f4f7	d43eded1-69f1-427d-a695-70dbe56b69ef	94dd2e01-81a5-4ec1-a11f-db6cb1e3be3a	\N	text	C&C/FoF/B&C. Dev shorthand from old sheet: Rodinal 1:100 / 60 min (stand).	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:10:39.837313-07	2026-05-02 16:10:39.837313-07
+50875bca-7db3-4acb-b308-f0ce91f7a3d2	d43eded1-69f1-427d-a695-70dbe56b69ef	b1467792-f5e2-4e99-bdac-fa4f777404ad	\N	text	Ferry. Dev shorthand from old sheet: HC110 B5.75.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:11:12.681115-07	2026-05-02 16:11:12.681115-07
+8006a364-db51-47a2-8a54-ea304333bb10	d43eded1-69f1-427d-a695-70dbe56b69ef	9270dbe9-bc20-4f48-b8db-4cfee2a63521	\N	text	From Thomas. Physical label: 20230916.THOMAS1 (no numeric seq). Dev shorthand from old sheet: HC110 B5.	\N	\N	\N	\N	\N	\N	\N	\N	2026-05-02 16:12:15.007146-07	2026-05-02 16:12:15.007146-07
+5d2b6b04-1d30-47f7-82bf-ae925968b0db	d43eded1-69f1-427d-a695-70dbe56b69ef	6753b216-aab3-45a4-918a-9a7aa1b8984c	\N	text	Shot on the train to Haneda on the way home from Japan trip.	\N	\N	\N	\N	\N	\N	\N	\N	2026-06-05 11:38:57.946419-07	2026-06-05 11:38:57.946419-07
+424becc0-e830-4189-8d35-dfe810bb5ed3	d43eded1-69f1-427d-a695-70dbe56b69ef	155e9121-12d8-44cd-bb1e-6934c3e4ab27	\N	text	Tokyo.	\N	\N	\N	\N	\N	\N	\N	\N	2026-06-05 11:46:41.444368-07	2026-06-05 11:46:41.444368-07
+\.
+
+
+--
+-- Data for Name: rolls; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.rolls (id, user_id, camera_id, film_stock_id, status, loaded_at, rated_iso, push_pull_stops, frame_count, title, description, tags, created_at, updated_at, format, form, unloaded_at, display_id, dev_session_id, intended_developer, intended_dilution, intended_dilution_raw, intended_dev_time_seconds, dev_date, dev_seq) FROM stdin;
+1cc2fad1-060f-487c-9886-4f83bb82e07a	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-20 11:09:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N	\N	\N
+9a48fe91-34a3-4d71-bf3b-638aad97f3dd	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	developed	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.01	0a5382f0-599d-4e0d-bba8-f55c7dda4477	HC-110	H	H 11:30	690	2026-05-12	721
+b51caa5b-f511-4594-bef6-3dc01d5d8778	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-04-12 19:16:54.149-07	100	\N	1	\N	\N	{}	2026-04-12 19:16:54.149393-07	2026-04-12 19:16:54.149393-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+0aac1606-5a2d-4347-8e04-5820ffcf4986	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-04-12 19:16:54.168-07	100	\N	1	\N	\N	{}	2026-04-12 19:16:54.168696-07	2026-04-12 19:16:54.168696-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+c3f00efa-4224-4776-8be7-96f220497e39	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-12 19:16:54.188-07	400	\N	1	\N	\N	{}	2026-04-12 19:16:54.188955-07	2026-04-12 19:16:54.188955-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+40416e6b-f769-4b38-8976-1db2856db869	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	loaded	2026-04-12 19:16:54.21-07	400	\N	1	\N	\N	{}	2026-04-12 19:16:54.210708-07	2026-04-12 19:16:54.210708-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+4cfe53b2-cfbc-4dfa-a458-ac99b09dd3e6	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+379caf8e-32bd-418c-8035-5c47fc292fc4	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+88ee7100-bed6-45b4-bffa-7c5b133d04f5	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+70292ad2-1a0c-4d23-864e-db4f5788ef3b	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+d9a2f1b2-7012-4928-a279-e1156cf3c1e9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+b20f7bb4-7531-4a50-abfc-0155f7232f0d	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+05038e1b-9aa2-4a83-96e2-657fb318654a	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	loaded	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	\N	\N	\N	\N	\N	\N	\N	\N	\N
+d228c9da-af9e-4260-9046-1e850955d026	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	loaded	2026-05-01 20:31:06.312896-07	5	\N	29	\N	\N	{}	2026-05-01 20:31:06.312896-07	2026-05-01 20:31:06.312896-07	35mm	factory_roll	\N	\N	\N	\N	\N	\N	\N	\N	\N
+5341c4e9-6e96-4f54-820e-f140c2f2b343	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	shot	2026-04-16 10:25:00-07	50	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 20:52:37.93144-07	35mm	factory_roll	2026-04-16 10:28:00-07	20260416.02	\N	\N	\N	\N	\N	\N	\N
+5f9d581a-7e7a-4ed8-8e4b-b0c1ddd8dc91	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	2026-04-20 09:00:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	2026-04-20 11:09:00-07	20260420.02	\N	\N	\N	\N	\N	\N	\N
+7726accb-e76d-40a5-a785-08d1334d40dc	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	2026-04-20 09:00:00-07	400	\N	10	\N	\N	{}	2026-05-01 21:00:24.806215-07	2026-05-01 21:00:24.806215-07	120	factory_roll	2026-04-20 11:09:00-07	20260420.03	\N	\N	\N	\N	\N	\N	\N
+399a2c05-8c32-477c-8b7c-64b2eb6e27bf	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	2026-04-15 09:46:00-07	100	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 21:02:03.646349-07	35mm	factory_roll	2026-04-16 10:25:00-07	20260416.01	\N	\N	\N	\N	\N	\N	\N
+5ca74b64-05a1-45a7-b243-dc297e4a22d9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	42f44ce0-b4a1-45f4-835d-7845d983bb2b	shot	\N	3200	\N	36	\N	found exposed; camera/load/unload dates unknown — develop blind	{}	2026-05-01 21:13:37.65157-07	2026-05-01 21:13:37.65157-07	35mm	factory_roll	\N	20260501.05	\N	\N	\N	\N	\N	\N	\N
+f49bef4e-800f-44f8-87c4-bb0873e71a30	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	badc259c-4762-45b3-9017-cfeabffdd00d	developed	2026-03-28 14:32:00-07	400	\N	36	\N	\N	{}	2026-05-01 20:52:37.93144-07	2026-05-01 21:18:04.381586-07	35mm	factory_roll	2026-04-15 09:46:00-07	20260415.01	09250c14-5cd4-45d2-ac2d-f9fdc8c66e00	\N	\N	\N	\N	2026-05-12	733
+167302f3-f2ff-4a66-b015-ae2c4f39a0d7	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	developed	2026-04-12 19:11:15.148-07	100	\N	1	\N	\N	{}	2026-04-12 19:11:15.148541-07	2026-05-02 10:36:36.917533-07	4x5	sheet	2026-04-12 19:11:15.186-07	20260412.01	d057d615-0b45-4330-b54c-e3c53f5d3dc5	HC-110	H	H 11:30	690	2026-05-12	719
+f3c1eee9-8a7a-485f-9413-c7c170c7b278	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	developed	2026-04-12 19:11:15.207-07	100	\N	1	\N	\N	{}	2026-04-12 19:11:15.207969-07	2026-05-02 10:36:36.917533-07	4x5	sheet	2026-04-12 19:11:15.247-07	20260412.02	d057d615-0b45-4330-b54c-e3c53f5d3dc5	HC-110	H	H 11:30	690	2026-05-12	720
+da9b566f-5686-47f3-8ea4-52c867980f2e	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	7b7f1a95-29d3-496f-b154-7bddfc8afcea	shot	\N	25	\N	20	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:31:14.100415-07	2026-05-02 14:31:44.598258-07	35mm	factory_roll	2023-09-16 05:00:00-07	20230916.02	\N	\N	\N	\N	\N	\N	\N
+4ee18a92-4938-4ee2-b177-5452946c3ac9	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	c6b4d18a-c0a3-4420-80e4-ab6e57b9739c	shot	2026-04-20 12:00:00-07	80	\N	36	\N	\N	{}	2026-05-01 20:28:59.936075-07	2026-05-01 20:28:59.936075-07	35mm	factory_roll	2026-05-01 12:47:00-07	20260501.04	\N	\N	\N	\N	\N	\N	\N
+da250e1e-fb73-4263-b6d2-25ed81106fb0	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	f228f76e-d873-4eb5-8bac-cbe79fa0d422	shot	2026-04-19 18:09:00-07	100	\N	36	\N	\N	{}	2026-05-01 20:40:37.523105-07	2026-05-01 20:41:34.712355-07	35mm	factory_roll	2026-04-20 13:19:00-07	20260420.01	\N	\N	\N	\N	\N	\N	\N
+56751a94-2af4-40c5-838d-8c7b9988a551	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	shot	\N	400	1.0	36	\N	second Kentmere Pan 200 cassette of unknown origin — possibly swappable with 20260328.02; will develop as if shot at 400 (+1 push)	{}	2026-05-01 21:28:46.454428-07	2026-05-01 21:29:38.402967-07	35mm	factory_roll	\N	20260501.06	\N	\N	\N	\N	\N	\N	\N
+7f960c4b-3a9c-4f54-8682-612ee1962284	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	\N	100	\N	36	\N	found exposed, pre-trip; camera/load/unload dates unknown	{}	2026-05-01 21:39:13.184191-07	2026-05-01 21:39:13.184191-07	35mm	factory_roll	\N	20260501.07	\N	\N	\N	\N	\N	\N	\N
+303b7e9d-442d-454b-b7b4-4b3bbf92e889	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	36	\N	load date unknown	{}	2026-05-01 21:46:48.961918-07	2026-05-01 21:46:48.961918-07	35mm	factory_roll	2026-02-21 16:23:00-08	20260221.01	\N	\N	\N	\N	\N	\N	\N
+8bee5acb-65c4-4306-85b8-b5a519709741	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81cf5142-c23e-4f7e-b7ff-3754e0f344ed	shot	\N	400	\N	36	\N	lens and subject uncertain	{}	2026-05-01 21:47:52.704463-07	2026-05-01 21:51:55.712688-07	35mm	factory_roll	2026-02-15 11:49:00-08	20260215.01	\N	\N	\N	\N	\N	\N	\N
+c8803073-6f93-4c42-ac5d-d87268742ed6	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	a30739bc-efc7-479f-a250-1f093df8f73b	shot	2026-02-22 14:23:00-08	400	\N	36	\N	Portland trip; 2026-02-22 14:23 snap could be load or unload — exact timing unclear; tag aligned with HP5 (.01)	{}	2026-05-01 21:46:48.961918-07	2026-05-01 21:53:25.890364-07	35mm	factory_roll	\N	20260221.02	\N	\N	\N	\N	\N	\N	\N
+a8e03609-8617-44f7-85f7-ae4d74b02e82	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	shot	\N	5	\N	29	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:38.823349-07	2026-05-02 14:29:38.823349-07	35mm	factory_roll	2025-06-14 05:00:00-07	20250614.05	\N	\N	\N	\N	\N	\N	\N
+fcce6f89-0a70-4587-a3b6-ec7d297b8025	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	shot	\N	5	\N	29	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:42.437734-07	2026-05-02 14:29:42.437734-07	35mm	factory_roll	2025-05-10 05:00:00-07	20250510.01	\N	\N	\N	\N	\N	\N	\N
+25bcbe4b-8ec0-48a3-8f6b-274556c39650	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	shot	\N	50	\N	36	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:46.184406-07	2026-05-02 14:29:46.184406-07	35mm	factory_roll	2024-09-23 05:00:00-07	20240923.02	\N	\N	\N	\N	\N	\N	\N
+19845053-ae70-4283-a001-7bae89048432	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	79fad1b7-75b1-42c2-a934-4b6557f2d2c3	shot	\N	50	\N	36	\N	\N	{fridge-backlog,rodinal-bag}	2026-05-02 14:29:49.620329-07	2026-05-02 14:29:49.620329-07	35mm	factory_roll	2024-06-29 05:00:00-07	20240629.01	\N	\N	\N	\N	\N	\N	\N
+3c3b1e42-84e1-4bc6-8277-a4c770e58ebd	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	36	\N	\N	{fridge-backlog,mystery}	2026-05-02 14:33:03.627292-07	2026-05-02 14:33:03.627292-07	35mm	factory_roll	\N	\N	\N	\N	\N	\N	\N	\N	\N
+c4b36c60-ac0a-42a3-8410-905a0b4ed7ed	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	shot	\N	200	\N	36	\N	\N	{fridge-backlog,mystery}	2026-05-02 14:33:07.098733-07	2026-05-02 14:33:07.098733-07	35mm	factory_roll	\N	\N	\N	\N	\N	\N	\N	\N	\N
+3a096e05-2791-4f92-93f6-2cc4987e8680	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	10	\N	Freeway Park, Seattle	{fridge-backlog,freeway-park,seattle}	2026-05-02 14:38:09.12429-07	2026-05-02 14:39:49.249-07	120	factory_roll	2025-04-26 05:00:00-07	20250426.03	\N	\N	\N	\N	\N	\N	\N
+50e58948-1b92-4d17-8b23-c953dabab882	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	42f44ce0-b4a1-45f4-835d-7845d983bb2b	shot	\N	800	\N	10	\N	Freeway Park, Seattle	{fridge-backlog,freeway-park,seattle}	2026-05-02 14:38:13.286166-07	2026-05-02 14:39:49.212-07	120	factory_roll	2025-04-26 05:00:00-07	20250426.01	\N	\N	\N	\N	\N	\N	\N
+abfd9c68-931e-4dfb-b457-9c2674031c9a	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	f228f76e-d873-4eb5-8bac-cbe79fa0d422	shot	\N	100	\N	10	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:38:01.946368-07	2026-05-02 14:41:13.278272-07	120	factory_roll	2025-05-02 05:00:00-07	20250502.02	\N	\N	\N	\N	\N	\N	\N
+b72945e9-f198-4d6d-bb34-59b51ff62e70	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	b28883e1-0938-4b04-b060-545bc4d21f66	shot	\N	100	\N	10	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:38:05.439834-07	2026-05-02 14:41:13.278272-07	120	factory_roll	2025-05-01 05:00:00-07	20250501.01	\N	\N	\N	\N	\N	\N	\N
+33d7009b-257d-4f0a-aa5e-a79170ec309d	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag}	2026-05-02 15:34:22.399657-07	2026-05-02 16:23:21.515568-07	35mm	factory_roll	2024-08-01 05:00:00-07	20240801.02	\N	HC-110	E	E7	420	\N	\N
+6a5f6e24-d68a-47ef-98f0-00f017de7435	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	developed	2026-03-28 09:00:00-07	400	1.0	36	\N	physical mapping uncertain — two Kentmere Pan 200 cassettes recovered; subjects/identity cross-check vs 20260501.06 at dev time	{}	2026-05-01 21:24:31.261199-07	2026-05-01 21:28:46.454428-07	35mm	factory_roll	2026-03-28 13:34:00-07	20260328.02	258dad40-9f12-4fae-b16e-6d8028e6dc4a	\N	\N	\N	\N	2026-05-12	724
+1c40b068-55af-48f1-af00-a5ccd9e46acb	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	shot	\N	50	\N	72	\N	\N	{fridge-backlog,hc110-prepicked,unknown-year}	2026-05-02 15:30:45.966519-07	2026-05-02 16:23:21.515023-07	35mm	factory_roll	\N	\N	\N	HC-110	E	E5.5	330	\N	\N
+954a6c5d-0a00-4bcb-ae32-a79ee09227df	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	9ab33c20-cbbe-4613-9904-d61ee9d1718a	shot	\N	400	\N	72	\N	\N	{fridge-backlog,hc110-prepicked,colorado-2025}	2026-05-02 14:49:01.895403-07	2026-05-02 21:35:03.503207-07	35mm	factory_roll	2025-04-28 05:00:00-07	20250428.01	\N	HC-110	E	E10 (MDC fix)	600	\N	\N
+eecad1f2-7960-4fd3-b906-5db2f70b3072	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	3b66f352-2912-4921-a189-300b8a6bc8cc	developed	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag}	2026-05-02 15:34:25.915581-07	2026-05-02 16:23:21.515741-07	35mm	factory_roll	2024-06-22 05:00:00-07	20240622.01	0245b0e8-1f7c-4b32-b5e0-1b691f50f6f0	HC-110	E	E7	420	2026-05-12	730
+d9d16c4c-7f8b-4335-9d3e-210210263df0	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	81fff50e-94b7-4cc7-9c23-a1c2937bc82a	shot	\N	200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:31:27.702138-07	2026-05-02 21:35:03.501006-07	35mm	factory_roll	2025-06-14 05:00:00-07	20250614.03	\N	HC-110	E	E5:30 (MDC fix)	330	\N	\N
+a2225c3a-ae5d-4fd5-ae52-9c15015fc75c	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	1	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:19:47.792811-07	2026-05-02 14:41:13.278272-07	4x5	sheet	2025-05-06 05:00:00-07	20250506.07	\N	HC-110	E	E 7:30	450	\N	\N
+57720c28-12ce-4e01-91ad-d648b6c8937a	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	1	\N	\N	{fridge-backlog,colorado-2025}	2026-05-02 14:19:53.595592-07	2026-05-02 14:41:13.278272-07	4x5	sheet	2025-05-06 05:00:00-07	20250506.08	\N	HC-110	E	E 7:30	450	\N	\N
+d84546ed-9e9d-44fa-b7d8-0188940af80b	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	developed	2026-03-28 09:00:00-07	5	\N	29	\N	\N	{}	2026-05-01 21:22:13.162861-07	2026-05-01 21:28:46.454428-07	35mm	factory_roll	2026-03-28 13:35:00-07	20260328.01	90f8c757-46f6-48cf-963b-540c790e10d7	\N	\N	\N	\N	2026-05-12	734
+a69124fc-0b51-46c8-a9e5-a3f12dcd42cf	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	developed	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.02	0a5382f0-599d-4e0d-bba8-f55c7dda4477	HC-110	H	H 11:30	690	2026-05-12	722
+27ae8905-1407-4f79-b3e3-584833071ac0	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	a1a136a7-d66a-46cd-9433-ff106fe3f3b9	developed	\N	50	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag,unknown-year,expired}	2026-05-02 15:43:37.713289-07	2026-05-02 16:23:21.518326-07	35mm	factory_roll	\N	\N	020002da-8b44-41ab-aa3a-1a39529be955	HC-110	B	1+31	450	2026-05-12	731
+b482ed53-e950-40d2-b07b-6824d58f0d48	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	03ee0cb0-6259-4872-b69a-94ab31532599	shot	\N	100	\N	10	\N	\N	{fridge-backlog}	2026-05-02 16:07:14.789305-07	2026-05-02 16:07:14.789305-07	120	factory_roll	2023-05-29 05:00:00-07	20230529.03	\N	\N	\N	\N	\N	\N	\N
+075f5008-6b26-476d-aec4-e145ea9ef5de	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	10	\N	\N	{fridge-backlog,unknown-year}	2026-05-02 16:07:19.183845-07	2026-05-02 16:07:19.183845-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N	\N	\N
+f2ddde28-88ba-479a-98ca-b930559aa1c9	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	400	\N	10	\N	\N	{fridge-backlog,unknown-year}	2026-05-02 16:07:22.808502-07	2026-05-02 16:07:22.808502-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N	\N	\N
+e8a5e1fc-70af-4f41-913a-19a84d0b37eb	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	80e2e3eb-fca3-4f45-a9c7-d72ca6aaec17	shot	\N	400	\N	10	\N	\N	{fridge-backlog,thomas}	2026-05-02 16:07:44.848584-07	2026-05-02 16:07:44.848584-07	120	factory_roll	2023-09-16 05:00:00-07	20230916.03	\N	\N	\N	\N	\N	\N	\N
+2e179519-8735-47b7-b9bf-ee786c94fff7	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	b28883e1-0938-4b04-b060-545bc4d21f66	shot	\N	100	\N	10	\N	\N	{fridge-backlog}	2026-05-02 16:08:16.173719-07	2026-05-02 16:08:16.173719-07	120	factory_roll	2024-01-14 04:00:00-08	20240114.01	\N	\N	\N	\N	\N	\N	\N
+d117fe45-7e2a-4e21-a0b1-c4e6a21a7a5d	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	f228f76e-d873-4eb5-8bac-cbe79fa0d422	shot	\N	100	\N	10	\N	\N	{fridge-backlog,unknown-year}	2026-05-02 16:08:41.987934-07	2026-05-02 16:08:41.987934-07	120	factory_roll	\N	\N	\N	\N	\N	\N	\N	\N	\N
+7a6922de-4792-4f41-8eec-b2af21d1dad0	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	400	\N	10	\N	\N	{fridge-backlog}	2026-05-02 16:09:06.852253-07	2026-05-02 16:09:06.852253-07	120	factory_roll	2023-11-11 04:00:00-08	20231111.02	\N	\N	\N	\N	\N	\N	\N
+94dd2e01-81a5-4ec1-a11f-db6cb1e3be3a	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	10	\N	\N	{fridge-backlog,rodinal-stand}	2026-05-02 16:10:39.834981-07	2026-05-02 16:10:39.834981-07	120	factory_roll	2024-07-28 05:00:00-07	20240728.02	\N	\N	\N	\N	\N	\N	\N
+1d39b928-b43a-42f4-ad68-4408dc551127	d43eded1-69f1-427d-a695-70dbe56b69ef	b2993b04-6997-47f7-bd0c-29c25158a829	2cf48166-e27e-4d99-8a81-e51279b4e98f	shot	\N	200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 14:48:55.745917-07	2026-05-02 16:23:21.513161-07	35mm	factory_roll	2024-02-25 04:00:00-08	20240225.01	\N	HC-110	E	E10.5	630	\N	\N
+c2a84735-351b-46fd-b036-f997cff49b88	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	e61b27e1-58d6-4647-a738-476e7fe04445	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:48:05.172204-07	2026-05-02 21:35:03.503551-07	35mm	factory_roll	2024-03-22 05:00:00-07	20240322.01	\N	HC-110	B	B10:30 (MDC fix)	630	\N	\N
+43fe1928-54ef-4789-a4af-2ddb78317cf1	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,a9.5-bag}	2026-05-02 15:59:35.243545-07	2026-05-02 21:35:03.503836-07	35mm	factory_roll	2025-01-14 04:00:00-08	20250114.01	\N	HC-110	A	A13 (MDC fix)	780	\N	\N
+78aa8889-4c2f-4788-9e0b-129af33998c8	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	9ab33c20-cbbe-4613-9904-d61ee9d1718a	shot	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,unknown-date,uncertain-camera}	2026-05-02 15:36:18.527878-07	2026-05-02 16:23:21.516558-07	35mm	factory_roll	\N	\N	\N	HC-110	B	B12.5	750	\N	\N
+42583cc3-b9c1-47ab-be00-918464eb54b2	d43eded1-69f1-427d-a695-70dbe56b69ef	79861fa3-9cbf-4181-9562-99492f069e80	9ab33c20-cbbe-4613-9904-d61ee9d1718a	shot	\N	400	\N	24	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:37:56.922867-07	2026-05-02 16:23:21.517077-07	35mm	factory_roll	2023-12-21 04:00:00-08	20231221.01	\N	HC-110	B	B6.5	390	\N	\N
+e5bda611-34e2-410f-b470-18391d89f9eb	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	800	\N	24	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag,unknown-year}	2026-05-02 15:41:18.161267-07	2026-05-02 16:23:21.51744-07	35mm	factory_roll	\N	\N	\N	HC-110	B	B7.5	450	\N	\N
+3bb9a6a3-242e-4bfd-be4d-2c79a1bdd3d2	d43eded1-69f1-427d-a695-70dbe56b69ef	8e9e496e-283e-481a-8822-d19f64eef741	aee798ee-c90b-43dd-a85a-57b795d33dfd	developed	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag}	2026-05-02 15:41:49.70533-07	2026-05-02 16:23:21.517746-07	35mm	factory_roll	2024-08-10 05:00:00-07	20240810.01	258dad40-9f12-4fae-b16e-6d8028e6dc4a	HC-110	B	B7.5	450	2026-05-12	726
+37495718-7bb3-4403-b9a7-84b872c393b8	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag,unknown-year}	2026-05-02 15:42:15.914206-07	2026-05-02 16:23:21.518063-07	35mm	factory_roll	\N	\N	\N	HC-110	B	B7.5	450	\N	\N
+978b46fe-c138-4bed-bb76-c73253cc38e0	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	e61b27e1-58d6-4647-a738-476e7fe04445	shot	\N	800	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:46:39.462478-07	2026-05-02 16:23:21.519191-07	35mm	factory_roll	2023-12-17 04:00:00-08	20231217.02	\N	HC-110	B	B8.5	510	\N	\N
+5e451701-dc49-42ad-b9f3-0376f18a4ac9	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	a7059048-69e1-473b-8eff-85eff3e99560	shot	\N	25	\N	72	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:55:33.239039-07	2026-05-02 21:35:38.81723-07	35mm	factory_roll	2024-05-06 05:00:00-07	20240506.01	\N	HC-110	D	D7 (MDC fix)	420	\N	\N
+d5185e98-d5ca-4dc4-b529-bcf27eb89628	d43eded1-69f1-427d-a695-70dbe56b69ef	8e9e496e-283e-481a-8822-d19f64eef741	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	1600	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:48:49.01264-07	2026-05-02 16:23:21.519591-07	35mm	factory_roll	2024-02-04 04:00:00-08	20240204.01	\N	HC-110	B	B11	660	\N	\N
+30f94527-fba6-456d-a1d8-fd34b0184b0d	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	42f44ce0-b4a1-45f4-835d-7845d983bb2b	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:50:16.613385-07	2026-05-02 16:23:21.519784-07	35mm	factory_roll	2024-02-24 04:00:00-08	20240224.01	\N	HC-110	B	B14.5	870	\N	\N
+8b14fc65-7168-4173-81e6-a74b9a324a4b	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	7689c7e4-e975-4709-b48a-f6a6a7e149ce	shot	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,unknown-date,uncertain-camera}	2026-05-02 15:53:29.892913-07	2026-05-02 16:23:21.519998-07	35mm	factory_roll	\N	\N	\N	HC-110	A	A4.5	270	\N	\N
+23cd91b1-497e-4289-b488-8166e4b4bc60	d43eded1-69f1-427d-a695-70dbe56b69ef	9ecf345f-0a5f-42bb-bad6-a2a0868c14b9	2cf48166-e27e-4d99-8a81-e51279b4e98f	shot	\N	400	\N	72	\N	\N	{fridge-backlog,hc110-prepicked}	2026-05-02 15:54:15.761155-07	2026-05-02 16:23:21.520202-07	35mm	factory_roll	2025-02-27 04:00:00-08	20250227.01	\N	HC-110	H	H14	840	\N	\N
+dd062fa4-6445-494c-80da-869b1f3eca7f	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	8fa17252-6af5-4a06-a68a-3d5e88643e05	shot	\N	1600	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,sfo}	2026-05-02 15:56:28.452107-07	2026-05-02 16:23:21.520588-07	35mm	factory_roll	2024-05-01 05:00:00-07	20240501.04	\N	HC-110	A	A7.5	450	\N	\N
+5bc2a5e6-80a8-48e0-94a5-6acae194fa5f	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,a9.5-bag}	2026-05-02 15:59:26.656307-07	2026-05-02 16:23:21.520777-07	35mm	factory_roll	2024-12-31 04:00:00-08	20241231.01	\N	HC-110	A	A9.5	570	\N	\N
+812ebcaf-b866-4a17-a303-c803c46402b8	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	3200	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,a9.5-bag,unknown-year}	2026-05-02 15:59:31.259247-07	2026-05-02 16:23:21.520969-07	35mm	factory_roll	\N	\N	\N	HC-110	A	A9.5	570	\N	\N
+020c63b2-1c96-49a6-9f9f-925029eaca2e	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	dafa9ff9-bd57-4a11-b77e-09ffe83f3e78	shot	\N	50	\N	10	\N	\N	{fridge-backlog,hc110-prepicked,ferry}	2026-05-02 16:10:10.753623-07	2026-05-02 16:23:21.521398-07	120	factory_roll	2023-06-17 05:00:00-07	20230617.01	\N	HC-110	F	F9	540	\N	\N
+b1467792-f5e2-4e99-bdac-fa4f777404ad	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	03ee0cb0-6259-4872-b69a-94ab31532599	shot	\N	100	\N	10	\N	\N	{fridge-backlog,hc110-prepicked,ferry}	2026-05-02 16:11:12.67981-07	2026-05-02 16:23:21.521591-07	120	factory_roll	2023-07-30 05:00:00-07	20230730.07	\N	HC-110	B	B5.75	345	\N	\N
+3d199f8f-1412-48c5-9c6a-3a73a3c2e4bb	d43eded1-69f1-427d-a695-70dbe56b69ef	8e9e496e-283e-481a-8822-d19f64eef741	a30739bc-efc7-479f-a250-1f093df8f73b	developed	\N	400	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag}	2026-05-02 15:34:29.644742-07	2026-05-02 16:23:21.51593-07	35mm	factory_roll	2023-12-17 04:00:00-08	20231217.03	0245b0e8-1f7c-4b32-b5e0-1b691f50f6f0	HC-110	E	E7	420	2026-05-12	729
+9270dbe9-bc20-4f48-b8db-4cfee2a63521	d43eded1-69f1-427d-a695-70dbe56b69ef	38f2fbd8-5e3c-4f06-bf1b-09e407fc6f21	3b66f352-2912-4921-a189-300b8a6bc8cc	shot	\N	100	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,thomas}	2026-05-02 16:12:15.004786-07	2026-05-02 16:23:21.521784-07	120	factory_roll	2023-09-16 05:00:00-07	20230916.04	\N	HC-110	B	B5	300	\N	\N
+8f7bbbca-a9ea-4053-81c5-9d55aecb17fb	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	a30739bc-efc7-479f-a250-1f093df8f73b	shot	\N	400	\N	36	\N	\N	{fridge-backlog,hc110-prepicked,e7-bag,astoria}	2026-05-02 15:35:01.311888-07	2026-05-02 16:23:21.516186-07	35mm	factory_roll	2025-05-17 05:00:00-07	20250517.01	\N	HC-110	E	E7	420	\N	\N
+0a0e69b5-1750-4cb8-bfb0-6e42b294856e	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	aee798ee-c90b-43dd-a85a-57b795d33dfd	developed	\N	800	\N	24	\N	\N	{fridge-backlog,hc110-prepicked,b7.5-bag}	2026-05-02 15:44:23.839193-07	2026-05-02 16:23:21.518544-07	35mm	factory_roll	2024-03-14 05:00:00-07	20240314.01	258dad40-9f12-4fae-b16e-6d8028e6dc4a	HC-110	B	B7.5	450	2026-05-12	725
+b9aafd8a-89aa-406a-8c1d-df8f8e54617d	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	developed	\N	800	\N	36	\N	HP5+ @800. Physical baggie label "0923.05". Suspected match for old-sheet 20240923.3 (M6/40, yellow filter). Verify against frames.	{}	2026-05-12 14:53:47.02681-07	2026-05-12 14:53:47.02681-07	35mm	factory_roll	\N	20240923.05	9286d1d2-2990-4b27-8070-40de6a481467	HC-110	B	1+31	450	2026-05-12	727
+dc8a3c8b-7b61-4cb4-b137-c97ba10dbfea	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	developed	\N	800	\N	36	\N	HP5+ @800. Physical baggie label "0503.02". Year ambiguous — suspected match for old-sheet 20230503.2 (XA, SF). Verify against frames.	{}	2026-05-12 14:53:47.02681-07	2026-05-12 14:53:47.02681-07	35mm	factory_roll	\N	20240503.02	9286d1d2-2990-4b27-8070-40de6a481467	HC-110	B	1+31	450	2026-05-12	728
+10597249-80a4-45d5-b0e0-fda485529e9e	d43eded1-69f1-427d-a695-70dbe56b69ef	\N	aee798ee-c90b-43dd-a85a-57b795d33dfd	developed	\N	800	\N	24	\N	Mystery HP5+ @800. Pulled from canister labeled "24080102" (which was supposed to be Acros II per DB/old-sheet); peeled tape revealed HP5 ×24 underneath. Source unknown — could match an existing un-logged shoot or be a previously rewound roll. Verify after scan.	{}	2026-05-12 17:01:50.795209-07	2026-05-12 17:01:50.795209-07	35mm	factory_roll	\N	\N	020002da-8b44-41ab-aa3a-1a39529be955	HC-110	B	1+31	450	2026-05-12	732
+7099e680-3cdf-4da0-b790-f6630c94b851	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	bce2b5c9-2d4c-467c-9352-de43c2ee7023	developed	\N	5	\N	29	\N	load date unknown	{}	2026-05-01 20:44:30.971997-07	2026-05-01 20:44:30.971997-07	35mm	factory_roll	2026-04-19 18:03:00-07	20260419.01	90f8c757-46f6-48cf-963b-540c790e10d7	\N	\N	\N	\N	2026-05-12	735
+75d7392f-160b-438f-a3ac-906279481685	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	developed	\N	100	\N	1	\N	\N	{fridge-backlog,bloedel}	2026-05-02 14:12:44.525026-07	2026-05-02 14:12:44.525026-07	4x5	sheet	2025-06-07 05:00:00-07	20250607.01	d057d615-0b45-4330-b54c-e3c53f5d3dc5	HC-110	H	H 11:30	690	2026-05-12	717
+28a42f0f-4735-44c1-a64c-fb2e2fe8ac26	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	developed	\N	100	\N	1	\N	\N	{fridge-backlog,bloedel}	2026-05-02 14:12:44.560876-07	2026-05-02 14:12:44.560876-07	4x5	sheet	2025-06-07 05:00:00-07	20250607.02	d057d615-0b45-4330-b54c-e3c53f5d3dc5	HC-110	H	H 11:30	690	2026-05-12	718
+f0f11095-d728-4b74-b051-f31cd5aecd20	d43eded1-69f1-427d-a695-70dbe56b69ef	10424cc8-84ad-492a-a8e1-1171d3bd6c80	02c35ea6-8d7d-42a6-bb27-84c80678f4b5	developed	2026-05-01 20:19:47.417292-07	100	\N	1	\N	\N	{}	2026-05-01 20:19:47.417292-07	2026-05-01 20:19:47.417292-07	4x5	sheet	2026-05-01 20:19:47.417292-07	20260501.03	0a5382f0-599d-4e0d-bba8-f55c7dda4477	HC-110	H	H 11:30	690	2026-05-12	723
+6753b216-aab3-45a4-918a-9a7aa1b8984c	d43eded1-69f1-427d-a695-70dbe56b69ef	3916c853-860d-425c-a436-8560756da3cd	aee798ee-c90b-43dd-a85a-57b795d33dfd	shot	\N	400	\N	10	\N	\N	{japan-2026}	2026-06-05 11:38:57.935737-07	2026-06-05 11:38:57.935737-07	120	factory_roll	2026-06-04 05:00:00-07	20260604.02	\N	\N	\N	\N	\N	\N	\N
+155e9121-12d8-44cd-bb1e-6934c3e4ab27	d43eded1-69f1-427d-a695-70dbe56b69ef	ecf85b27-a4e7-4233-b94e-06321e569c7f	fb2a27c9-a6c1-4fe6-b17b-9809520a0474	shot	\N	100	\N	36	\N	\N	{japan-2026}	2026-06-05 11:46:41.439492-07	2026-06-05 11:51:11.004-07	35mm	factory_roll	2026-05-28 05:00:00-07	20260528.01	\N	\N	\N	\N	\N	\N	\N
+\.
+
+
+--
+-- Data for Name: scanners; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.scanners (id, user_id, make, model, notes, is_active, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: scans; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.scans (id, frame_id, scanner_id, file_key, file_url, thumbnail_url, original_filename, mime_type, file_size_bytes, width_px, height_px, dpi, bit_depth, color_space, post_processing_notes, is_primary, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.users (id, email, password_hash, display_name, created_at, updated_at) FROM stdin;
+c0fe3ff9-a993-4021-95f0-3f782e4038e0	stout@filmlog.dev	$2b$12$3ve.p3RX1Cm2V6RlZ1vgF.T8c/uG14fg5ni8B3ouhZTuZH42L2iaK	\N	2026-03-30 18:17:30.236254-07	2026-03-30 18:17:30.236254-07
+d43eded1-69f1-427d-a695-70dbe56b69ef	stout@tomu.dev	$2b$12$0uzDMOV.tLarK79KT7lXs.byUUPy4nkwjEohORUWKsyIYoVp6yM3.	\N	2026-03-30 18:59:03.790743-07	2026-03-30 18:59:03.790743-07
+\.
+
+
+--
+-- Name: camera_lenses camera_lenses_camera_id_lens_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.camera_lenses
+    ADD CONSTRAINT camera_lenses_camera_id_lens_id_unique UNIQUE (camera_id, lens_id);
+
+
+--
+-- Name: cameras cameras_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cameras
+    ADD CONSTRAINT cameras_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dev_recipes dev_recipes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dev_recipes
+    ADD CONSTRAINT dev_recipes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dev_sessions dev_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dev_sessions
+    ADD CONSTRAINT dev_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: film_inventory film_inventory_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.film_inventory
+    ADD CONSTRAINT film_inventory_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: film_stocks film_stocks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.film_stocks
+    ADD CONSTRAINT film_stocks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: frames frames_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.frames
+    ADD CONSTRAINT frames_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: frames frames_roll_id_frame_number_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.frames
+    ADD CONSTRAINT frames_roll_id_frame_number_unique UNIQUE (roll_id, frame_number);
+
+
+--
+-- Name: lenses lenses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lenses
+    ADD CONSTRAINT lenses_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notes notes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notes
+    ADD CONSTRAINT notes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rolls rolls_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rolls
+    ADD CONSTRAINT rolls_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: scanners scanners_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.scanners
+    ADD CONSTRAINT scanners_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: scans scans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.scans
+    ADD CONSTRAINT scans_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_email_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_unique UNIQUE (email);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: film_inventory_user_display_id_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX film_inventory_user_display_id_unique ON public.film_inventory USING btree (user_id, display_id) WHERE (display_id IS NOT NULL);
+
+
+--
+-- Name: idx_dev_recipes_developer; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dev_recipes_developer ON public.dev_recipes USING btree (developer);
+
+
+--
+-- Name: idx_dev_recipes_stock_iso; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dev_recipes_stock_iso ON public.dev_recipes USING btree (film_stock_id, asa_iso);
+
+
+--
+-- Name: rolls_user_id_dev_seq_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX rolls_user_id_dev_seq_unique ON public.rolls USING btree (user_id, dev_seq) WHERE (dev_seq IS NOT NULL);
+
+
+--
+-- Name: camera_lenses camera_lenses_camera_id_cameras_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.camera_lenses
+    ADD CONSTRAINT camera_lenses_camera_id_cameras_id_fk FOREIGN KEY (camera_id) REFERENCES public.cameras(id) ON DELETE CASCADE;
+
+
+--
+-- Name: camera_lenses camera_lenses_lens_id_lenses_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.camera_lenses
+    ADD CONSTRAINT camera_lenses_lens_id_lenses_id_fk FOREIGN KEY (lens_id) REFERENCES public.lenses(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cameras cameras_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cameras
+    ADD CONSTRAINT cameras_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: dev_recipes dev_recipes_film_stock_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dev_recipes
+    ADD CONSTRAINT dev_recipes_film_stock_id_fkey FOREIGN KEY (film_stock_id) REFERENCES public.film_stocks(id) ON DELETE SET NULL;
+
+
+--
+-- Name: dev_sessions dev_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dev_sessions
+    ADD CONSTRAINT dev_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: film_inventory film_inventory_film_stock_id_film_stocks_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.film_inventory
+    ADD CONSTRAINT film_inventory_film_stock_id_film_stocks_id_fk FOREIGN KEY (film_stock_id) REFERENCES public.film_stocks(id) ON DELETE CASCADE;
+
+
+--
+-- Name: film_inventory film_inventory_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.film_inventory
+    ADD CONSTRAINT film_inventory_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: film_stocks film_stocks_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.film_stocks
+    ADD CONSTRAINT film_stocks_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: frames frames_lens_id_lenses_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.frames
+    ADD CONSTRAINT frames_lens_id_lenses_id_fk FOREIGN KEY (lens_id) REFERENCES public.lenses(id);
+
+
+--
+-- Name: frames frames_roll_id_rolls_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.frames
+    ADD CONSTRAINT frames_roll_id_rolls_id_fk FOREIGN KEY (roll_id) REFERENCES public.rolls(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lenses lenses_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lenses
+    ADD CONSTRAINT lenses_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: notes notes_frame_id_frames_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notes
+    ADD CONSTRAINT notes_frame_id_frames_id_fk FOREIGN KEY (frame_id) REFERENCES public.frames(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notes notes_roll_id_rolls_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notes
+    ADD CONSTRAINT notes_roll_id_rolls_id_fk FOREIGN KEY (roll_id) REFERENCES public.rolls(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notes notes_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notes
+    ADD CONSTRAINT notes_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: rolls rolls_camera_id_cameras_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rolls
+    ADD CONSTRAINT rolls_camera_id_cameras_id_fk FOREIGN KEY (camera_id) REFERENCES public.cameras(id);
+
+
+--
+-- Name: rolls rolls_dev_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rolls
+    ADD CONSTRAINT rolls_dev_session_id_fkey FOREIGN KEY (dev_session_id) REFERENCES public.dev_sessions(id) ON DELETE SET NULL;
+
+
+--
+-- Name: rolls rolls_film_stock_id_film_stocks_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rolls
+    ADD CONSTRAINT rolls_film_stock_id_film_stocks_id_fk FOREIGN KEY (film_stock_id) REFERENCES public.film_stocks(id);
+
+
+--
+-- Name: rolls rolls_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rolls
+    ADD CONSTRAINT rolls_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: scanners scanners_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.scanners
+    ADD CONSTRAINT scanners_user_id_users_id_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: scans scans_frame_id_frames_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.scans
+    ADD CONSTRAINT scans_frame_id_frames_id_fk FOREIGN KEY (frame_id) REFERENCES public.frames(id) ON DELETE CASCADE;
+
+
+--
+-- Name: scans scans_scanner_id_scanners_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.scans
+    ADD CONSTRAINT scans_scanner_id_scanners_id_fk FOREIGN KEY (scanner_id) REFERENCES public.scanners(id);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict fZmALyTclo2bMdIlXoeqotcn4xoKLXHajVh84kLBmu50BJBNQgCI6P5RIMdoLrf
+
