@@ -39,7 +39,7 @@ npm run db:migrate                   # Run migrations
 npm run db:studio                    # Open Drizzle Studio
 ```
 
-Connection string: `DATABASE_URL` env var (default: `postgres://tomu:tomu@localhost:5432/tomu`)
+Connection string: `DATABASE_URL` env var (default: `postgres://filmlog:filmlog@localhost:5432/filmlog`). The dev server auto-loads `.env` at the repo root if present (`tsx --env-file-if-exists`).
 
 ## MCP Server
 

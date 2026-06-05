@@ -230,7 +230,7 @@ server.tool(
     } else {
       for (const items of byStock.values()) {
         const first = items[0];
-        lines.push(`- **${first.manufacturer} ${first.stockName}** (ISO ${first.iso}, ${first.filmType})`);
+        lines.push(`- **${displayStock(first.manufacturer, first.stockName)}** (ISO ${first.iso}, ${first.filmType})`);
         for (const item of items) {
           const loc = item.storageLocation !== "fridge" ? ` [${item.storageLocation}]` : "";
           const exp = item.expirationDate ? ` — exp ${item.expirationDate}` : "";
@@ -242,7 +242,7 @@ server.tool(
     if (data.expiringSoon.length > 0) {
       lines.push(`\n### Expiring Soon`);
       for (const item of data.expiringSoon) {
-        lines.push(`- ${item.manufacturer} ${item.stockName}: ${describeItem(item)}, expires ${item.expirationDate}`);
+        lines.push(`- ${displayStock(item.manufacturer, item.stockName)}: ${describeItem(item)}, expires ${item.expirationDate}`);
       }
     }
 
@@ -332,7 +332,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `Added ${summary} of **${stock.manufacturer} ${stock.name}** (${fmt}, ISO ${stock.iso}).${expirationDate ? ` Expires ${expirationDate}.` : ""}`,
+        text: `Added ${summary} of **${displayStock(stock.manufacturer, stock.name)}** (${fmt}, ISO ${stock.iso}).${expirationDate ? ` Expires ${expirationDate}.` : ""}`,
       }],
     };
   }
@@ -506,7 +506,7 @@ async function pickActiveRoll(cameraHint?: string): Promise<{ roll?: ActiveRoll;
   }
   if (candidates.length > 1) {
     return {
-      error: `Multiple active rolls — specify a camera. Active: ${candidates.map((r) => `${r.cameraMake} ${r.cameraModel} (${r.manufacturer} ${r.stockName})`).join(", ")}`,
+      error: `Multiple active rolls — specify a camera. Active: ${candidates.map((r) => `${r.cameraMake} ${r.cameraModel} (${displayStock(r.manufacturer, r.stockName)})`).join(", ")}`,
     };
   }
   return { roll: candidates[0] };
@@ -514,7 +514,7 @@ async function pickActiveRoll(cameraHint?: string): Promise<{ roll?: ActiveRoll;
 
 function describeRoll(r: ActiveRoll): string {
   const cam = r.cameraMake ? `${r.cameraMake} ${r.cameraModel}` : "no camera";
-  return `${r.manufacturer} ${r.stockName} (${r.format}) in ${cam} — ${r.framesShot}/${r.frameCount} frames`;
+  return `${displayStock(r.manufacturer, r.stockName)} (${r.format}) in ${cam} — ${r.framesShot}/${r.frameCount} frames`;
 }
 
 // ── Tool: tomu_load ───────────────────────────────────────────────────
@@ -540,7 +540,7 @@ server.tool(
     const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
     const stock = bestMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
     if (!stock) {
-      return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. Known stocks: ${stocks.map((s) => `${s.manufacturer} ${s.name}`).join(", ") || "none"}.` }] };
+      return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. Known stocks: ${stocks.map((s) => displayStock(s.manufacturer, s.name)).join(", ") || "none"}.` }] };
     }
 
     // Resolve camera
@@ -584,7 +584,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `Loaded **${stock.manufacturer} ${stock.name}** (${loaded.data.format}, ${loaded.data.form.replace("_", " ")}, ${isoText}) into **${cam.make} ${cam.model}** — ${loaded.data.frameCount} frames.${note ? ` Note saved.` : ""}`,
+        text: `Loaded **${displayStock(stock.manufacturer, stock.name)}** (${loaded.data.format}, ${loaded.data.form.replace("_", " ")}, ${isoText}) into **${cam.make} ${cam.model}** — ${loaded.data.frameCount} frames.${note ? ` Note saved.` : ""}`,
       }],
     };
   }
@@ -642,7 +642,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `Frame ${f.frameNumber}/${roll.frameCount} logged on ${roll.manufacturer} ${roll.stockName} in ${roll.cameraMake} ${roll.cameraModel}${settings ? ` — ${settings}` : ""}${subject ? ` — ${subject}` : ""}.`,
+        text: `Frame ${f.frameNumber}/${roll.frameCount} logged on ${displayStock(roll.manufacturer, roll.stockName)} in ${roll.cameraMake} ${roll.cameraModel}${settings ? ` — ${settings}` : ""}${subject ? ` — ${subject}` : ""}.`,
       }],
     };
   }
@@ -674,7 +674,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `Unloaded **${roll.manufacturer} ${roll.stockName}** from ${roll.cameraMake} ${roll.cameraModel}. ID: **${data.displayId}** (${roll.framesShot} frames logged).${note ? " Note saved." : ""}`,
+        text: `Unloaded **${displayStock(roll.manufacturer, roll.stockName)}** from ${roll.cameraMake} ${roll.cameraModel}. ID: **${data.displayId}** (${roll.framesShot} frames logged).${note ? " Note saved." : ""}`,
       }],
     };
   }
@@ -701,8 +701,8 @@ server.tool(
     await api(path, { method: "POST", body: JSON.stringify({ content }) });
 
     const target = frameNumber
-      ? `frame ${frameNumber} of ${roll.manufacturer} ${roll.stockName}`
-      : `${roll.manufacturer} ${roll.stockName} in ${roll.cameraMake} ${roll.cameraModel}`;
+      ? `frame ${frameNumber} of ${displayStock(roll.manufacturer, roll.stockName)}`
+      : `${displayStock(roll.manufacturer, roll.stockName)} in ${roll.cameraMake} ${roll.cameraModel}`;
     return { content: [{ type: "text" as const, text: `Note added to ${target}.` }] };
   }
 );
@@ -730,7 +730,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `Undid load of ${roll.manufacturer} ${roll.stockName} in ${roll.cameraMake} ${roll.cameraModel}. Inventory restored.${warn}`,
+        text: `Undid load of ${displayStock(roll.manufacturer, roll.stockName)} in ${roll.cameraMake} ${roll.cameraModel}. Inventory restored.${warn}`,
       }],
     };
   }
@@ -756,7 +756,7 @@ server.tool(
     for (const r of data) {
       const id = r.displayId ?? "unassigned";
       const cam = r.cameraMake ? `${r.cameraMake} ${r.cameraModel}` : "—";
-      lines.push(`- **${id}** — ${r.manufacturer} ${r.stockName} (${r.format}) in ${cam} [${r.status}] — ${r.framesShot}/${r.frameCount}`);
+      lines.push(`- **${id}** — ${displayStock(r.manufacturer, r.stockName)} (${r.format}) in ${cam} [${r.status}] — ${r.framesShot}/${r.frameCount}`);
     }
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
@@ -795,14 +795,14 @@ server.tool(
     let stock: { id: string; manufacturer: string; name: string; iso: number } | null = null;
     if (m.kind === "single") stock = m.item;
     else if (m.kind === "tied") {
-      return { content: [{ type: "text" as const, text: `Film "${film}" is ambiguous. Tied: ${m.items.map((s) => `${s.manufacturer} ${s.name}`).join(", ")}. Be more specific.` }] };
+      return { content: [{ type: "text" as const, text: `Film "${film}" is ambiguous. Tied: ${m.items.map((s) => displayStock(s.manufacturer, s.name)).join(", ")}. Be more specific.` }] };
     } else {
       if (!manufacturer || !iso) {
         return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. To create it on the fly, pass manufacturer + iso (+ optional type).` }] };
       }
       const created = await api<{ data: { id: string; manufacturer: string; name: string; iso: number } }>("/film-stocks", {
         method: "POST",
-        body: JSON.stringify({ manufacturer, name: film, iso, type: type || "bw" }),
+        body: JSON.stringify({ manufacturer, name: cleanStockName(film, manufacturer), iso, type: type || "bw" }),
       });
       stock = created.data;
     }
@@ -850,7 +850,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `Logged ${idLabel}: ${stock.manufacturer} ${stock.name} (${fmt}, ${isoText})${cameraLabel}. Status: shot.`,
+        text: `Logged ${idLabel}: ${displayStock(stock.manufacturer, stock.name)} (${fmt}, ${isoText})${cameraLabel}. Status: shot.`,
       }],
     };
   }
@@ -870,12 +870,13 @@ interface CandidateRoll {
 
 interface CandidateGroup {
   recipeKey: string;
-  tier: "intended" | "history" | "stock-iso";
+  tier: "intended" | "history" | "mdc" | "stock-iso";
   recipe: {
     developer: string | null;
     dilution: string | null;
     devTimeSeconds: number | null;
     temperatureC: string | null;
+    mdcAsaIso?: number | null;
   } | null;
   rolls: CandidateRoll[];
 }
@@ -887,9 +888,40 @@ function formatTime(seconds: number | null): string {
   return s === 0 ? `${m}min` : `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** A, B, …, Z, AA, AB, …, AZ, BA, … — Excel-style group labels. */
+function groupLabel(i: number): string {
+  let s = "";
+  let n = i;
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
+}
+
+/** Strip a leading manufacturer token from a stock name so create-on-the-fly
+ *  doesn't produce "Kentmere Kentmere Pan 400". */
+function cleanStockName(name: string, manufacturer: string): string {
+  const n = name.trim();
+  const m = manufacturer.trim();
+  if (!m) return n;
+  const prefix = m.toLowerCase() + " ";
+  if (n.toLowerCase().startsWith(prefix)) return n.slice(prefix.length).trim();
+  return n;
+}
+
+/** "Kentmere Pan 100" not "Kentmere Kentmere Pan 100" when name already starts with mfg. */
+function displayStock(manufacturer: string, stockName: string): string {
+  const n = stockName.trim();
+  const m = manufacturer.trim();
+  if (n.toLowerCase().startsWith(m.toLowerCase() + " ")) return n;
+  if (n.toLowerCase() === m.toLowerCase()) return n;
+  return `${m} ${n}`;
+}
+
 server.tool(
   "tomu_dev_candidates",
-  "List rolls awaiting development, grouped by recipe. Tier 1: explicit intended-dev (from labels). Tier 2: matched against past sessions. Tier 3: clustered by stock+ISO when no recipe is known.",
+  "List rolls awaiting development, grouped by recipe. Tier 1: explicit intended-dev (from labels). Tier 2: matched against past sessions. Tier 3: MDC recipe lookup by stock+ISO. Tier 4: clustered by stock+ISO when no recipe exists anywhere.",
   {},
   async () => {
     const { data: groups } = await api<{ data: CandidateGroup[] }>("/dev-sessions/candidates");
@@ -900,50 +932,42 @@ server.tool(
 
     function rollLine(roll: CandidateRoll): string {
       const iso = roll.ratedIso && roll.ratedIso !== roll.stockIso ? `@ ${roll.ratedIso} ` : "";
-      return `- **${roll.displayId ?? roll.id.slice(0, 8)}** ${roll.manufacturer} ${roll.stockName} ${iso}(${roll.format})`;
+      return `- **${roll.displayId ?? roll.id.slice(0, 8)}** ${displayStock(roll.manufacturer, roll.stockName)} ${iso}(${roll.format})`;
     }
     function recipeLabel(r: CandidateGroup["recipe"]): string {
       if (!r) return "—";
       const dev = r.developer ?? "?";
       const dil = r.dilution ?? "—";
-      return `${dev} ${dil} ${formatTime(r.devTimeSeconds)}${r.temperatureC ? ` @ ${r.temperatureC}°C` : ""}`;
+      const asa = r.mdcAsaIso != null ? ` [MDC ISO ${r.mdcAsaIso}]` : "";
+      return `${dev} ${dil} ${formatTime(r.devTimeSeconds)}${r.temperatureC ? ` @ ${r.temperatureC}°C` : ""}${asa}`;
     }
 
     const intended = groups.filter((g) => g.tier === "intended");
     const history = groups.filter((g) => g.tier === "history");
+    const mdc = groups.filter((g) => g.tier === "mdc");
     const stockIso = groups.filter((g) => g.tier === "stock-iso");
 
     const lines: string[] = ["## Dev candidates\n"];
     let i = 0;
 
-    if (intended.length) {
-      lines.push(`### Tier 1 — intended (from labels)\n`);
-      for (const g of intended) {
-        lines.push(`**Group ${String.fromCharCode(65 + i++)}** — ${recipeLabel(g.recipe)}  (${g.rolls.length})`);
+    function emit(title: string, gs: CandidateGroup[], headerFor: (g: CandidateGroup) => string) {
+      if (!gs.length) return;
+      lines.push(`### ${title}\n`);
+      for (const g of gs) {
+        lines.push(`**Group ${groupLabel(i++)}** — ${headerFor(g)}  (${g.rolls.length})`);
         for (const r of g.rolls) lines.push(rollLine(r));
         lines.push("");
       }
     }
 
-    if (history.length) {
-      lines.push(`### Tier 2 — historical recipe match\n`);
-      for (const g of history) {
-        lines.push(`**Group ${String.fromCharCode(65 + i++)}** — ${recipeLabel(g.recipe)}  (${g.rolls.length})`);
-        for (const r of g.rolls) lines.push(rollLine(r));
-        lines.push("");
-      }
-    }
-
-    if (stockIso.length) {
-      lines.push(`### Tier 3 — no recipe yet, clustered by stock+ISO\n`);
-      for (const g of stockIso) {
-        const r0 = g.rolls[0];
-        const iso = r0.ratedIso && r0.ratedIso !== r0.stockIso ? `@ ${r0.ratedIso}` : `@ ${r0.stockIso}`;
-        lines.push(`**Group ${String.fromCharCode(65 + i++)}** — ${r0.manufacturer} ${r0.stockName} ${iso}  (${g.rolls.length})`);
-        for (const r of g.rolls) lines.push(rollLine(r));
-        lines.push("");
-      }
-    }
+    emit("Tier 1 — intended (from labels)", intended, (g) => recipeLabel(g.recipe));
+    emit("Tier 2 — historical recipe match", history, (g) => recipeLabel(g.recipe));
+    emit("Tier 3 — MDC recipe lookup", mdc, (g) => recipeLabel(g.recipe));
+    emit("Tier 4 — no recipe yet, clustered by stock+ISO", stockIso, (g) => {
+      const r0 = g.rolls[0];
+      const iso = r0.ratedIso && r0.ratedIso !== r0.stockIso ? `@ ${r0.ratedIso}` : `@ ${r0.stockIso}`;
+      return `${displayStock(r0.manufacturer, r0.stockName)} ${iso}`;
+    });
 
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
@@ -985,7 +1009,7 @@ server.tool(
       }
       const created = await api<{ data: { id: string; manufacturer: string; name: string; iso: number } }>("/film-stocks", {
         method: "POST",
-        body: JSON.stringify({ manufacturer, name: film, iso, type: type || "bw" }),
+        body: JSON.stringify({ manufacturer, name: cleanStockName(film, manufacturer), iso, type: type || "bw" }),
       });
       stock = created.data;
     }
