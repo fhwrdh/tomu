@@ -99,6 +99,7 @@ export const createRollSchema = z.object({
 
 export const updateRollSchema = z.object({
   cameraId: uuid.optional(),
+  filmStockId: uuid.optional(),
   frameCount: z.number().int().positive().optional(),
   ratedIso: z.number().int().positive().optional(),
   pushPullStops: z.number().optional(),

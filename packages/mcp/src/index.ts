@@ -83,6 +83,37 @@ function score(query: string, fields: string[]): number {
   return matchScore - extra * 0.1;
 }
 
+/**
+ * Stricter stock match: requires every query token to appear as an *exact* token
+ * in the candidate. Returns a single winner, ambiguous tied set, or none —
+ * never silently picks a partial-token match (which is how "Kodak Ektapan"
+ * once resolved to "Kodak Technical Pan").
+ */
+function strictStockMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]): MatchResult<T> {
+  const qTokens = tokens(query);
+  if (qTokens.length === 0) return { kind: "none" };
+
+  let bestScore = -1;
+  let bestItems: T[] = [];
+  for (const item of items) {
+    const cTokens = fieldsOf(item).flatMap(tokens);
+    const cSet = new Set(cTokens);
+    if (!qTokens.every((qt) => cSet.has(qt))) continue;
+    const extra = Math.max(0, cTokens.length - qTokens.length);
+    const s = qTokens.length * 2 - extra * 0.1;
+    if (s > bestScore) {
+      bestScore = s;
+      bestItems = [item];
+    } else if (s === bestScore) {
+      bestItems.push(item);
+    }
+  }
+
+  if (bestItems.length === 0) return { kind: "none" };
+  if (bestItems.length === 1) return { kind: "single", item: bestItems[0], score: bestScore };
+  return { kind: "tied", items: bestItems, score: bestScore };
+}
+
 /** Pick the single best candidate from a list; null if none score above 0. */
 function bestMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]): T | null {
   let best: T | null = null;
@@ -752,14 +783,28 @@ server.tool(
     tags: z.array(z.string()).optional().describe("Tags (e.g. ['fridge-backlog', '2025-road-trip'])"),
     form: z.string().optional().describe("Override form: 'factory_roll' (default), 'bulk_roll', 'sheet'"),
     frameCount: z.number().int().positive().optional().describe("Override frame count"),
+    manufacturer: z.string().optional().describe("If the stock doesn't exist yet, providing manufacturer + iso (+ optional type) creates it on the fly."),
+    iso: z.number().int().positive().optional().describe("Box ISO for stock auto-creation."),
+    type: z.string().optional().describe("Film type for auto-creation: 'bw' (default), 'color_negative', 'color_positive'."),
   },
-  async ({ film, format, camera, ratedIso, shotDate, fieldSeq, intendedDeveloper, devShorthand, note, tags, form, frameCount }) => {
+  async ({ film, format, camera, ratedIso, shotDate, fieldSeq, intendedDeveloper, devShorthand, note, tags, form, frameCount, manufacturer, iso, type }) => {
     const fmt = format || "35mm";
 
     const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
-    const stock = bestMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
-    if (!stock) {
-      return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. Add it first via tomu_add_inventory or check tomu_inventory.` }] };
+    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
+    let stock: { id: string; manufacturer: string; name: string; iso: number } | null = null;
+    if (m.kind === "single") stock = m.item;
+    else if (m.kind === "tied") {
+      return { content: [{ type: "text" as const, text: `Film "${film}" is ambiguous. Tied: ${m.items.map((s) => `${s.manufacturer} ${s.name}`).join(", ")}. Be more specific.` }] };
+    } else {
+      if (!manufacturer || !iso) {
+        return { content: [{ type: "text" as const, text: `Film stock "${film}" not found. To create it on the fly, pass manufacturer + iso (+ optional type).` }] };
+      }
+      const created = await api<{ data: { id: string; manufacturer: string; name: string; iso: number } }>("/film-stocks", {
+        method: "POST",
+        body: JSON.stringify({ manufacturer, name: film, iso, type: type || "bw" }),
+      });
+      stock = created.data;
     }
 
     let cameraId: string | undefined;
@@ -901,6 +946,61 @@ server.tool(
     }
 
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+  }
+);
+
+// ── Tool: tomu_correct_roll ───────────────────────────────────────────
+
+server.tool(
+  "tomu_correct_roll",
+  "Fix a roll that was logged against the wrong film stock. Identify the roll by displayId (e.g. '20260528.01'). " +
+    "If the right stock isn't in the DB yet, pass manufacturer + iso (+ optional type) to create it on the fly. " +
+    "Updates the roll's filmStockId and re-rates ISO to the new stock's box ISO unless ratedIso is passed.",
+  {
+    displayId: z.string().describe("Display ID of the roll to correct (e.g. '20260528.01')"),
+    film: z.string().describe("Correct film stock name (e.g. 'Kodak Ektapan')"),
+    manufacturer: z.string().optional().describe("Manufacturer if creating new stock"),
+    iso: z.number().int().positive().optional().describe("Box ISO if creating new stock"),
+    type: z.string().optional().describe("Film type if creating new stock: 'bw' (default), 'color_negative', 'color_positive'"),
+    ratedIso: z.number().int().positive().optional().describe("Override rated ISO (defaults to new stock's box ISO)"),
+  },
+  async ({ displayId, film, manufacturer, iso, type, ratedIso }) => {
+    // Find roll by displayId (scan all statuses)
+    const { data: allRolls } = await api<{ data: Array<{ id: string; displayId: string | null }> }>("/rolls?status=all");
+    const roll = allRolls.find((r) => r.displayId === displayId);
+    if (!roll) {
+      return { content: [{ type: "text" as const, text: `No roll with displayId "${displayId}".` }] };
+    }
+
+    // Resolve or create stock
+    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number }> }>("/film-stocks");
+    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
+    let stock: { id: string; manufacturer: string; name: string; iso: number } | null = null;
+    if (m.kind === "single") stock = m.item;
+    else if (m.kind === "tied") {
+      return { content: [{ type: "text" as const, text: `Film "${film}" is ambiguous. Tied: ${m.items.map((s) => `${s.manufacturer} ${s.name}`).join(", ")}.` }] };
+    } else {
+      if (!manufacturer || !iso) {
+        return { content: [{ type: "text" as const, text: `Stock "${film}" not found. Pass manufacturer + iso to create it.` }] };
+      }
+      const created = await api<{ data: { id: string; manufacturer: string; name: string; iso: number } }>("/film-stocks", {
+        method: "POST",
+        body: JSON.stringify({ manufacturer, name: film, iso, type: type || "bw" }),
+      });
+      stock = created.data;
+    }
+
+    const patch: Record<string, unknown> = { filmStockId: stock.id };
+    patch.ratedIso = ratedIso ?? stock.iso;
+
+    await api(`/rolls/${roll.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Roll **${displayId}** repointed to **${stock.manufacturer} ${stock.name}** (ISO ${patch.ratedIso}).`,
+      }],
+    };
   }
 );
 
