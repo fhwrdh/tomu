@@ -269,8 +269,9 @@ server.tool(
     expirationDate: z.string().optional().describe("Expiration date (YYYY-MM-DD)"),
     storageLocation: z.string().optional().describe("Storage: 'fridge' (default), 'freezer', 'room_temp'"),
     costPerRoll: z.number().optional().describe("Cost per roll/sheet in dollars"),
+    source: z.string().optional().describe("Where acquired — vendor/retailer/free-text (e.g. 'amazon.com', 'Glazer's')"),
   },
-  async ({ film, format, form, quantity, lengthFt, manufacturer, iso, type, expirationDate, storageLocation, costPerRoll }) => {
+  async ({ film, format, form, quantity, lengthFt, manufacturer, iso, type, expirationDate, storageLocation, costPerRoll, source }) => {
     const fmt = format || "35mm";
     const frm = (form || "factory_roll") as "factory_roll" | "bulk_roll" | "sheet";
 
@@ -322,6 +323,7 @@ server.tool(
     }
     if (expirationDate) body.expirationDate = expirationDate;
     if (costPerRoll != null) body.costPerRoll = costPerRoll;
+    if (source) body.source = source;
 
     await api("/inventory", { method: "POST", body: JSON.stringify(body) });
 
@@ -333,6 +335,133 @@ server.tool(
       content: [{
         type: "text" as const,
         text: `Added ${summary} of **${displayStock(stock.manufacturer, stock.name)}** (${fmt}, ISO ${stock.iso}).${expirationDate ? ` Expires ${expirationDate}.` : ""}`,
+      }],
+    };
+  }
+);
+
+// ── Tool: tomu_edit_inventory ─────────────────────────────────────────
+
+/**
+ * Normalize a loose expiration string to YYYY-MM-DD. Film boxes print month
+ * precision ("2027.12" / "2027-12") or just a year; we store the *last day* of
+ * that month/year so the stock counts as good through the printed period and
+ * string-compares correctly against the expiring-soon cutoff.
+ */
+function coerceExpiration(input: string): string {
+  const s = input.trim().replace(/[./]/g, "-");
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  const ym = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (ym) {
+    const [, y, m] = ym;
+    const lastDay = new Date(Number(y), Number(m), 0).getDate();
+    return `${y}-${m.padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  }
+  const yOnly = s.match(/^(\d{4})$/);
+  if (yOnly) return `${yOnly[1]}-12-31`;
+  return input; // leave anything unexpected untouched
+}
+
+interface InventoryRow {
+  id: string;
+  displayId?: string | null;
+  filmStockId: string;
+  manufacturer: string;
+  stockName: string;
+  iso: number;
+  format: string;
+  form: "factory_roll" | "bulk_roll" | "sheet";
+  quantity: number;
+  expirationDate?: string | null;
+  storageLocation: string;
+  costPerRoll?: string | number | null;
+  source?: string | null;
+}
+
+server.tool(
+  "tomu_edit_inventory",
+  "Patch an existing inventory lot in place (does NOT add a new one). Use to fix or fill in " +
+    "expiration, source/vendor, cost, storage, or quantity on film you already logged. " +
+    "Identify the lot by film name (fuzzy) plus optional format/form to disambiguate, or by its " +
+    "displayId (e.g. 'R001'). If more than one lot matches, the tool lists them so you can narrow it down.",
+  {
+    film: z.string().optional().describe("Film stock name to locate the lot (fuzzy: 'shanghai', 'hp5'). Omit if using displayId."),
+    displayId: z.string().optional().describe("Lot display ID if it has one (e.g. 'R001'). Takes precedence over film/format/form."),
+    format: z.string().optional().describe("Disambiguate by format: '35mm', '120', '4x5', '8x10'"),
+    form: z.string().optional().describe("Disambiguate by form: 'factory_roll', 'bulk_roll', 'sheet'"),
+    expirationDate: z.string().optional().describe("Set expiration (YYYY-MM-DD, or 'YYYY-MM' / 'YYYY' — coerced to a date)"),
+    source: z.string().optional().describe("Set source/vendor (e.g. 'amazon.com')"),
+    costPerRoll: z.number().positive().optional().describe("Set cost per roll/sheet in dollars"),
+    storageLocation: z.string().optional().describe("Set storage: 'fridge', 'freezer', 'room_temp', 'other'"),
+    quantity: z.number().int().min(0).optional().describe("Set quantity (rolls/sheets). Use to correct miscounts."),
+    notes: z.string().optional().describe("Set notes (replaces existing notes)"),
+  },
+  async ({ film, displayId, format, form, expirationDate, source, costPerRoll, storageLocation, quantity, notes }) => {
+    // Build the patch first so we can refuse no-op calls early.
+    const patch: Record<string, unknown> = {};
+    if (expirationDate !== undefined) patch.expirationDate = coerceExpiration(expirationDate);
+    if (source !== undefined) patch.source = source;
+    if (costPerRoll !== undefined) patch.costPerRoll = costPerRoll;
+    if (storageLocation !== undefined) patch.storageLocation = storageLocation;
+    if (quantity !== undefined) patch.quantity = quantity;
+    if (notes !== undefined) patch.notes = notes;
+
+    if (Object.keys(patch).length === 0) {
+      return { content: [{ type: "text" as const, text: "Nothing to change — pass at least one field (expirationDate, source, costPerRoll, storageLocation, quantity, notes)." }] };
+    }
+    if (!film && !displayId) {
+      return { content: [{ type: "text" as const, text: "Identify the lot: pass `film` (+ optional format/form) or `displayId`." }] };
+    }
+
+    const { data: rows } = await api<{ data: InventoryRow[] }>("/inventory");
+
+    // Resolve candidate lot(s)
+    let candidates: InventoryRow[];
+    if (displayId) {
+      candidates = rows.filter((r) => r.displayId === displayId);
+      if (candidates.length === 0) {
+        return { content: [{ type: "text" as const, text: `No inventory lot with displayId "${displayId}".` }] };
+      }
+    } else {
+      const m = rankedMatch(film!, rows, (r) => [`${r.manufacturer} ${r.stockName}`, r.stockName, r.manufacturer]);
+      if (m.kind === "none") {
+        return { content: [{ type: "text" as const, text: `No inventory lot matching "${film}".` }] };
+      }
+      candidates = m.kind === "single" ? [m.item] : m.items;
+      // Narrow by format/form when provided
+      if (format) candidates = candidates.filter((r) => r.format === format);
+      if (form) candidates = candidates.filter((r) => r.form === form);
+    }
+
+    if (candidates.length === 0) {
+      return { content: [{ type: "text" as const, text: `Matched the stock, but no lot with that format/form. Drop the format/form filter to see options.` }] };
+    }
+    if (candidates.length > 1) {
+      const lines = candidates.map((r) => {
+        const id = r.displayId ? `[${r.displayId}] ` : `[${r.id.slice(0, 8)}] `;
+        const exp = r.expirationDate ? `, exp ${r.expirationDate}` : "";
+        const src = r.source ? `, src ${r.source}` : "";
+        return `- ${id}${displayStock(r.manufacturer, r.stockName)} — ${describeItem(r as unknown as InventoryItem)}${exp}${src}`;
+      });
+      return { content: [{ type: "text" as const, text: `Multiple lots match — narrow with format/form (or displayId):\n${lines.join("\n")}` }] };
+    }
+
+    const lot = candidates[0];
+    const updated = await api<{ data: InventoryRow }>(`/inventory/${lot.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    const u = updated.data;
+
+    const changes = Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(", ");
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Updated **${displayStock(u.manufacturer, u.stockName)}** (${u.format}, ${describeItem(u as unknown as InventoryItem)}): ${changes}.`,
       }],
     };
   }

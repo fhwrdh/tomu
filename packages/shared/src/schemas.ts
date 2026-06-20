@@ -68,6 +68,7 @@ export const createFilmInventorySchema = z.object({
   storageLocation: z.enum(STORAGE_LOCATIONS).default("fridge"),
   purchaseDate: z.string().optional(),
   costPerRoll: z.number().positive().optional(),
+  source: z.string().max(200).optional(),
   notes: z.string().max(2000).optional(),
 });
 
@@ -78,7 +79,9 @@ export const updateFilmInventorySchema = z.object({
   remainingLengthFt: z.number().min(0).optional(),
   expirationDate: z.string().optional(),
   storageLocation: z.enum(STORAGE_LOCATIONS).optional(),
+  purchaseDate: z.string().optional(),
   costPerRoll: z.number().positive().optional(),
+  source: z.string().max(200).optional(),
   notes: z.string().max(2000).optional(),
 });
 

@@ -102,6 +102,8 @@ export const filmInventory = pgTable("film_inventory", {
   storageLocation: text("storage_location").notNull().default("fridge"),
   purchaseDate: text("purchase_date"),
   costPerRoll: numeric("cost_per_roll", { precision: 8, scale: 2 }),
+  /** Where this lot was acquired — vendor/retailer/free-text (e.g. "amazon.com", "Glazer's", "brandy trade"). */
+  source: text("source"),
   notes: text("notes"),
   ...timestamps,
 });

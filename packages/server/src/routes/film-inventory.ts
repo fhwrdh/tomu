@@ -37,6 +37,7 @@ export async function filmInventoryRoutes(fastify: FastifyInstance) {
         storageLocation: filmInventory.storageLocation,
         purchaseDate: filmInventory.purchaseDate,
         costPerRoll: filmInventory.costPerRoll,
+        source: filmInventory.source,
         notes: filmInventory.notes,
         createdAt: filmInventory.createdAt,
         updatedAt: filmInventory.updatedAt,
