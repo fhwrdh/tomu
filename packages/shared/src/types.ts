@@ -79,6 +79,8 @@ export interface FilmInventoryItem extends Timestamps {
   storageLocation: StorageLocation;
   purchaseDate?: string;
   costPerRoll?: number;
+  /** Where this lot was acquired — vendor/retailer/free-text (e.g. "amazon.com"). */
+  source?: string;
   notes?: string;
 }
 
@@ -216,10 +218,10 @@ export type CreateFilmStock = Pick<FilmStock, "manufacturer" | "name" | "iso" | 
 export type UpdateFilmStock = Partial<CreateFilmStock & Pick<FilmStock, "isActive">>;
 
 export type CreateFilmInventoryItem = Pick<FilmInventoryItem, "filmStockId" | "format" | "form"> &
-  Partial<Pick<FilmInventoryItem, "quantity" | "frameCount" | "ratedIso" | "remainingLengthFt" | "originalLengthFt" | "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "notes">>;
+  Partial<Pick<FilmInventoryItem, "quantity" | "frameCount" | "ratedIso" | "remainingLengthFt" | "originalLengthFt" | "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "source" | "notes">>;
 
 export type UpdateFilmInventoryItem = Partial<
-  Pick<FilmInventoryItem, "quantity" | "frameCount" | "ratedIso" | "remainingLengthFt" | "expirationDate" | "storageLocation" | "costPerRoll" | "notes">
+  Pick<FilmInventoryItem, "quantity" | "frameCount" | "ratedIso" | "remainingLengthFt" | "expirationDate" | "storageLocation" | "purchaseDate" | "costPerRoll" | "source" | "notes">
 >;
 
 /** Input for loading a roll into a camera. Server records loadedAt and decrements inventory. */
