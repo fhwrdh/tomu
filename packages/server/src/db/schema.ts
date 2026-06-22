@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -142,7 +143,15 @@ export const rolls = pgTable(
     devSeq: integer("dev_seq"),
     ...timestamps,
   },
-  (t) => [unique().on(t.userId, t.devSeq)]
+  // Partial unique index (NULLs excluded): dev_seq is unique per user once
+  // assigned, but undeveloped rolls (dev_seq NULL) don't collide. Declared as a
+  // partial index to match what's actually in the database — a plain unique()
+  // constraint reads as drift against this and makes db:push prompt every run.
+  (t) => [
+    uniqueIndex("rolls_user_id_dev_seq_unique")
+      .on(t.userId, t.devSeq)
+      .where(sql`dev_seq IS NOT NULL`),
+  ]
 );
 
 // ── Frames ──
