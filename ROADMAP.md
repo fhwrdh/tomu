@@ -2,6 +2,19 @@
 
 Running backlog of ideas, follow-ups, and known issues. Not prioritized unless noted. Add freely; prune as things ship.
 
+## North star (stated 2026-07-07)
+
+**Tomu is a "pit of success" for the photography — not just a log or a database. An everything.**
+
+The correct action should be the path of least resistance. Test every feature against this: does it make the right thing happen by default, or does it just record what happened? Concretely:
+
+- **Identity is automatic.** Dev Ids, display ids, session ids — assigned by the app at the moment the real-world event happens (tank time, unload time). The human never hand-tracks a counter again.
+- **Knowledge lives in code, not memory.** Dilution tables, tank volumes, conventions (min-syrup, sub-5-min, expired-at-box). If getting it wrong once cost film, it becomes a constant or a warning.
+- **The app catches mistakes before they cost film.** Warnings at pour time, verification at log time, conflicts surfaced instead of silently absorbed.
+- **History answers questions.** Every past roll, dev, and scan is queryable — "what did I develop that day", "how did I dev this stock last time". Recipes come from your own history first.
+- **Capture is frictionless everywhere.** MCP in a chat, field log on Drive, retro-logging from labels/photos — meeting the work where it happens, reconciling later.
+- **The loop closes.** Shoot → dev → scan → catalog is one pipeline, not four tools. Anything that leaves a manual gap between stages is unfinished.
+
 ## Conventions (authoritative)
 
 Standing rules to follow when planning dev / scan workflows. These belong here, not in chat memory.
