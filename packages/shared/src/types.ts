@@ -110,6 +110,17 @@ export interface Roll extends Timestamps {
   title?: string;
   description?: string;
   tags: string[];
+  devSessionId?: string;
+  /** Intended dev recipe — captured from bag/canister labels or pre-planned. */
+  intendedDeveloper?: string;
+  intendedDilution?: string;
+  intendedDevTimeSeconds?: number;
+  /** Local date the roll was developed. Pairs with devSeq to form the Dev Id. */
+  devDate?: string;
+  /** Cumulative lifetime dev sequence number. Never resets. Unique per user. */
+  devSeq?: number;
+  /** Formatted Dev Id `YYYYMMDD.NNNN` — derived from devDate + devSeq, null until developed. */
+  devId?: string;
 }
 
 export interface Frame extends Timestamps {

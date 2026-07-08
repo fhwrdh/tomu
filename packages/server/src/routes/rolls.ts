@@ -1,10 +1,12 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import {
   createFrameSchema,
   createNoteSchema,
   createRollSchema,
+  formatDevId,
   logShotRollSchema,
+  parseDevSeqRange,
   parseDevShorthand,
   unloadRollSchema,
   updateRollSchema,
@@ -125,8 +127,51 @@ async function computeDisplayId(
 export async function rollsRoutes(fastify: FastifyInstance) {
   // ── List rolls ─────────────────────────────────────────────────────────
   // Query: ?status=active (default: loaded+shooting) | all | <any RollStatus>
-  fastify.get<{ Querystring: { status?: string } }>("/", async (request) => {
-    const status = request.query.status ?? "active";
+  //        ?dev_seq=721            exact Dev Id seq
+  //        ?dev_seq_range=717-735  inclusive seq range (also accepts a single number)
+  //        ?dev_date_from=YYYY-MM-DD / ?dev_date_to=YYYY-MM-DD
+  //        ?developed_between=YYYY-MM-DD,YYYY-MM-DD (shorthand for from+to)
+  // Any dev filter implies status=all unless status is passed explicitly.
+  fastify.get<{
+    Querystring: {
+      status?: string;
+      dev_seq?: string;
+      dev_seq_range?: string;
+      dev_date_from?: string;
+      dev_date_to?: string;
+      developed_between?: string;
+    };
+  }>("/", async (request, reply) => {
+    const q = request.query;
+
+    const devFilters = [];
+    if (q.dev_seq != null) {
+      const n = Number(q.dev_seq);
+      if (!Number.isInteger(n)) {
+        return reply.status(400).send({ error: `Invalid dev_seq: ${q.dev_seq}` });
+      }
+      devFilters.push(eq(rolls.devSeq, n));
+    }
+    if (q.dev_seq_range) {
+      const range = parseDevSeqRange(q.dev_seq_range);
+      if (!range) {
+        return reply.status(400).send({ error: `Invalid dev_seq_range: ${q.dev_seq_range}` });
+      }
+      devFilters.push(gte(rolls.devSeq, range[0]), lte(rolls.devSeq, range[1]));
+    }
+    let devDateFrom = q.dev_date_from;
+    let devDateTo = q.dev_date_to;
+    if (q.developed_between) {
+      const [from, to] = q.developed_between.split(",").map((s) => s.trim());
+      devDateFrom = devDateFrom ?? from;
+      devDateTo = devDateTo ?? (to || from);
+    }
+    if (devDateFrom) devFilters.push(gte(rolls.devDate, devDateFrom));
+    if (devDateTo) devFilters.push(lte(rolls.devDate, devDateTo));
+
+    // Dev-scoped queries are about history — don't hide developed rolls
+    // behind the active-only default.
+    const status = q.status ?? (devFilters.length ? "all" : "active");
     const statusFilter =
       status === "active"
         ? inArray(rolls.status, ["loaded", "shooting"])
@@ -134,9 +179,11 @@ export async function rollsRoutes(fastify: FastifyInstance) {
           ? undefined
           : eq(rolls.status, status);
 
-    const where = statusFilter
-      ? and(eq(rolls.userId, request.userId), statusFilter)
-      : eq(rolls.userId, request.userId);
+    const where = and(
+      eq(rolls.userId, request.userId),
+      ...(statusFilter ? [statusFilter] : []),
+      ...devFilters,
+    );
 
     const rows = await db
       .select({
@@ -154,6 +201,12 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         title: rolls.title,
         description: rolls.description,
         tags: rolls.tags,
+        devSessionId: rolls.devSessionId,
+        intendedDeveloper: rolls.intendedDeveloper,
+        intendedDilution: rolls.intendedDilution,
+        intendedDevTimeSeconds: rolls.intendedDevTimeSeconds,
+        devDate: rolls.devDate,
+        devSeq: rolls.devSeq,
         createdAt: rolls.createdAt,
         updatedAt: rolls.updatedAt,
         manufacturer: filmStocks.manufacturer,
@@ -167,24 +220,32 @@ export async function rollsRoutes(fastify: FastifyInstance) {
       .innerJoin(filmStocks, eq(rolls.filmStockId, filmStocks.id))
       .leftJoin(cameras, eq(rolls.cameraId, cameras.id))
       .where(where)
-      .orderBy(desc(rolls.loadedAt));
+      .orderBy(devFilters.length ? asc(rolls.devSeq) : desc(rolls.loadedAt));
 
-    // Frame counts per roll (number of frames actually logged)
-    const countMap = new Map<string, number>();
+    // Per-roll frame aggregates: count logged + first/last shot timestamps
+    const aggMap = new Map<string, { shot: number; firstShot: string | null; lastShot: string | null }>();
     if (rows.length) {
-      const counts = await db
+      const aggs = await db
         .select({
           rollId: frames.rollId,
           shot: sql<number>`count(*)::int`,
+          firstShot: sql<string | null>`min(${frames.shotAt})`,
+          lastShot: sql<string | null>`max(${frames.shotAt})`,
         })
         .from(frames)
         .where(inArray(frames.rollId, rows.map((r) => r.id)))
         .groupBy(frames.rollId);
-      for (const c of counts) countMap.set(c.rollId, c.shot);
+      for (const a of aggs) aggMap.set(a.rollId, { shot: a.shot, firstShot: a.firstShot, lastShot: a.lastShot });
     }
 
     return {
-      data: rows.map((r) => ({ ...r, framesShot: countMap.get(r.id) ?? 0 })),
+      data: rows.map((r) => ({
+        ...r,
+        devId: formatDevId(r.devDate, r.devSeq),
+        framesShot: aggMap.get(r.id)?.shot ?? 0,
+        firstShot: aggMap.get(r.id)?.firstShot ?? null,
+        lastShot: aggMap.get(r.id)?.lastShot ?? null,
+      })),
     };
   });
 
@@ -206,6 +267,12 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         title: rolls.title,
         description: rolls.description,
         tags: rolls.tags,
+        devSessionId: rolls.devSessionId,
+        intendedDeveloper: rolls.intendedDeveloper,
+        intendedDilution: rolls.intendedDilution,
+        intendedDevTimeSeconds: rolls.intendedDevTimeSeconds,
+        devDate: rolls.devDate,
+        devSeq: rolls.devSeq,
         createdAt: rolls.createdAt,
         updatedAt: rolls.updatedAt,
         manufacturer: filmStocks.manufacturer,
@@ -249,6 +316,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
     return {
       data: {
         ...roll,
+        devId: formatDevId(roll.devDate, roll.devSeq),
         frames: rollFrames,
         notes: rollNotes,
         frameNotes,

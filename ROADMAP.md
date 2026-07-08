@@ -14,6 +14,7 @@ Standing rules to follow when planning dev / scan workflows. These belong here, 
 - **HC-110 dilution letters → ratios (Kodak canonical):** A=1+15, B=1+31, C=1+19, D=1+39, E=1+47, F=1+79, G=1+119, H=1+63. **Always verify against `data/mdc/hc110.txt` before quoting.**
 - **Batch dev days:** user loads many tanks one day, develops the next (may split across multiple nights). Plan as multi-tank sequences, not one-offs.
 - **MCP-first field input:** in the field, the MCP tools are the primary input path; the UI is for later review.
+- **Field fallback when MCP not reachable:** when away from a Claude Code session with `tomu_*` tools (e.g. travel, no laptop), use a Google Drive doc as the durable field log instead of relying on chat history. Mobile Claude app + Drive connector append timestamped entries to a per-trip doc following the format embedded at the top of the doc. Transcribed into Tomu via MCP on return. Active doc for the upcoming trip: "Tomu Field Log — Japan 2026" (Drive id `1ogZZbmcIA7NLviizKqodYmQeaikTbHYxjw_GsPswuqo`). Reason chat-as-log is unsafe: context window compression has lost important details in past sessions.
 
 ## Gear inventory
 
@@ -36,10 +37,13 @@ Authoritative kit summary. Update when gear changes.
 
 ## Data model
 
-- **Dev Id surfacing** — `dev_date` + `dev_seq` columns added to `rolls` (2026-05-12). Expose throughout the stack: shared types, API serializer, UI, MCP. Format on output as `YYYYMMDD.NNNN`.
-- **Dev Id backfill** — Import pre-Tomu Google Sheet (https://docs.google.com/spreadsheets/d/101B1WmsPQm08E3ewJp-vQzVK6YYPhwx-tyUTUp3Bjb0/) to populate `dev_seq` for the 86 existing rolls. New rolls continue from `max(imported) + 1`. Current state: only the 2026-05-12 batch (seq 717–735) is populated.
+- ~~**Dev Id surfacing**~~ Done 2026-07-07: `devDate`/`devSeq`/`devId` (formatted `YYYYMMDD.NNNN`) in shared types, rolls API (list + single), and `tomu_rolls`. API filters: `?dev_seq=`, `?dev_seq_range=`, `?dev_date_from/to=`, `?developed_between=`. UI still pending.
+- ~~**Dev Id backfill**~~ Done 2026-07-07, but as a **full historical import**, not a backfill: all developed Tomu rolls already had seqs (717–735), so the sheet (0367–0716) + LR keywords (0001–0716) were imported as 693 new `archived` rolls + 232 dev sessions, tagged `pre-tomu-import`. Script: `packages/server/scripts/import-history.ts`; sources + full report: `data/history/`. Seq span is now 0001–0735, unique, queryable via the dev filters. New dev sessions continue from 736.
+  - Historical double-assignments (0421, 0443, 0444a, 0624, 0674) adjudicated against LR scans; losers imported seq-less with explanatory notes. 5 field-id collisions with existing rolls left displayId unset (noted). ~157 early rolls have the placeholder stock `Unknown | Pre-Tomu unidentified` — refine opportunistically from LR when scans surface.
+  - The seq remains the real identifier; LR dates are import dates (decided 2026-06-07). Match/join on seq, never on date.
 - **Tank as gear** — Model dev tanks like `cameras` / `lenses` with capacity (sheets, reels, format mode), inversion vs rotation, working volumes. Today `dev_sessions.tank` is free text. Inventory: Stearman SP-445 (4× 4x5), MOD54 (6× 4x5), 1× Paterson 3-reel, 3× Paterson 2-reel, 2× Jobo 1520 (2-reel size, inversion).
 - **Display id for orphan rolls** — At least one roll (`27ae8905…` FP4) has no `display_id`. Either backfill at first dev, or treat dev_seq as the primary handle when display_id is null.
+- **Reference image attachments** — Phone snaps of scene/box/notes. Roll-level for 35mm/120 (one or a few per roll, frame # often unknown until scan). Frame-level (really sheet-level) for LF, where each sheet is logged individually. Storage: DO Spaces. MCP path: image included in message → tool extracts + uploads → attached to roll/frame.
 
 ## API / MCP
 
@@ -63,7 +67,8 @@ Authoritative kit summary. Update when gear changes.
 ## Scanning
 
 - **LF (4x5) scan path** — No working route today. Valoi rig handles 35/120 only. Options: V850 flatbed, or DSLR tile-stitch. Decide before 2026-06-22 LF class.
-- **Lightroom handoff** — End of pipeline is import to Lightroom. Tomu should support: consistent file naming (likely `{dev_id}_{frame:02}.ext`), per-frame metadata sidecar (XMP) with film/ISO/dev/camera/lens/location so it auto-populates LR fields, and ideally a manifest export per dev_session.
+- **Lightroom handoff** — End of pipeline is import to Lightroom Classic (today). Tomu should support: consistent file naming (likely `{dev_id}_{frame:02}.ext`), per-frame metadata sidecar (XMP) with film/ISO/dev/camera/lens/location so it auto-populates LR fields, and ideally a manifest export per dev_session.
+- **Cataloger-agnostic export** — User intends to migrate off Adobe eventually (darktable / digiKam / capture one / other). Keep the handoff layer cataloger-agnostic: rely on standard XMP + filesystem conventions, avoid LR-specific sidecar quirks where possible. Sync-back importers (LR catalog reader, etc.) should be plugin-shaped, not the only path.
 
 ## Field / techniques (reference, not code)
 
@@ -74,14 +79,14 @@ Authoritative kit summary. Update when gear changes.
 Date ranges for tag suggestion. Suggest by frame date — don't auto-apply.
 
 - **colorado-2025** — 2025-04-27 to 2025-05-06
-- **japan-2026** — 2026-05-25 to 2026-06-04 (upcoming)
+- **japan-2026** — 2026-05-25 to 2026-06-04 (completed; 18 rolls logged + reconciled 2026-07-04, 4 rolls pending canister check — see memory)
 
 ## Calendar / deadlines
 
-- **LF class** — 2026-06-22. LF dev + scan workflow must be working by then.
-- **Japan trip** — 2026-05-25 to 2026-06-04. Not a hard Tomu deadline, but features that aid trip review (fast frame log, location tagging) get priority through May.
+- *(none upcoming — LF class 2026-06-22 and Japan trip 2026-05-25→06-04 have passed)*
+- Current driver instead of a date: **77 rolls in `shot`** awaiting development — dev-pipeline tooling is the priority (2026-07-07).
 
 ## Bugs / nits
 
-- **Drizzle push** — `db:push` reads `postgres://tomu:tomu@…` default; project actually uses `filmlog`/`filmlog`. Either fix the default in `drizzle.config.ts`, or always source from `.env`.
-- **`db:push` is interactive** — Adding constraints on populated tables prompts for truncate/keep. Need a non-interactive flag for scripted use.
+- ~~**Drizzle push** — wrong default URL~~ Fixed 2026-07-07: `drizzle.config.ts` default now `filmlog:filmlog@…/filmlog`; `DATABASE_URL` still wins when set.
+- ~~**`db:push` is interactive**~~ Root cause was schema drift (plain `unique()` vs the DB's partial index) — fixed 2026-07-05 (commit 2d097eb). Push is now prompt-free; `--force` exists for scripted use if a real destructive change ever comes up.

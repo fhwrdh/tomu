@@ -869,23 +869,59 @@ server.tool(
 
 server.tool(
   "tomu_rolls",
-  "List rolls. Defaults to active (loaded or shooting); pass status='all' or any specific RollStatus (shot, developing, developed, scanning, complete, archived).",
+  "List rolls. Defaults to active (loaded or shooting); pass status='all' or any specific RollStatus (shot, developing, developed, scanning, complete, archived). " +
+    "Dev Id filters answer history questions like 'what were Dev Ids 0727–0732' (devSeqRange) or 'rolls developed 2026-05-12' (devDate) — using any of them defaults status to 'all'.",
   {
     status: z.string().optional().describe("'active' (default), 'all', or RollStatus: loaded | shooting | shot | developing | developed | scanning | complete | archived"),
+    devSeq: z.number().int().optional().describe("Exact Dev Id sequence number (e.g. 721)"),
+    devSeqRange: z.string().optional().describe("Inclusive Dev Id seq range, e.g. '717-735' (single number works too)"),
+    devDate: z.string().optional().describe("Rolls developed on this local date (YYYY-MM-DD)"),
+    devDateFrom: z.string().optional().describe("Developed on or after (YYYY-MM-DD)"),
+    devDateTo: z.string().optional().describe("Developed on or before (YYYY-MM-DD)"),
   },
-  async ({ status }) => {
-    const q = status ? `?status=${encodeURIComponent(status)}` : "";
-    const { data } = await api<{ data: Array<ActiveRoll & { displayId: string | null; unloadedAt: string | null }> }>(`/rolls${q}`);
+  async ({ status, devSeq, devSeqRange, devDate, devDateFrom, devDateTo }) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (devSeq != null) params.set("dev_seq", String(devSeq));
+    if (devSeqRange) params.set("dev_seq_range", devSeqRange);
+    if (devDate) {
+      params.set("dev_date_from", devDate);
+      params.set("dev_date_to", devDate);
+    }
+    if (devDateFrom) params.set("dev_date_from", devDateFrom);
+    if (devDateTo) params.set("dev_date_to", devDateTo);
+    const qs = params.toString();
+    const hasDevFilter = devSeq != null || !!devSeqRange || !!devDate || !!devDateFrom || !!devDateTo;
 
+    const { data } = await api<{
+      data: Array<
+        ActiveRoll & {
+          displayId: string | null;
+          unloadedAt: string | null;
+          devId: string | null;
+          devDate: string | null;
+          devSeq: number | null;
+          intendedDeveloper: string | null;
+          intendedDilution: string | null;
+          intendedDevTimeSeconds: number | null;
+        }
+      >;
+    }>(`/rolls${qs ? `?${qs}` : ""}`);
+
+    const scope = hasDevFilter ? "dev filter" : status || "active";
     if (data.length === 0) {
-      return { content: [{ type: "text" as const, text: `No rolls found for status "${status || "active"}".` }] };
+      return { content: [{ type: "text" as const, text: `No rolls found (${scope}).` }] };
     }
 
-    const lines: string[] = [`## Rolls (${status || "active"})\n`];
+    const lines: string[] = [`## Rolls (${scope}: ${data.length})\n`];
     for (const r of data) {
-      const id = r.displayId ?? "unassigned";
+      // display_id is the shooting handle; dev_id is the lifetime dev handle.
+      // Rolls with neither (orphans) fall back to "unassigned".
+      const id = r.displayId ?? r.devId ?? "unassigned";
       const cam = r.cameraMake ? `${r.cameraMake} ${r.cameraModel}` : "—";
-      lines.push(`- **${id}** — ${displayStock(r.manufacturer, r.stockName)} (${r.format}) in ${cam} [${r.status}] — ${r.framesShot}/${r.frameCount}`);
+      const dev = r.devId ? ` — Dev ${r.devId}` : "";
+      const intended = r.intendedDeveloper && !r.devId ? ` — plan: ${r.intendedDeveloper}${r.intendedDilution ? ` ${r.intendedDilution}` : ""}` : "";
+      lines.push(`- **${id}** — ${displayStock(r.manufacturer, r.stockName)} (${r.format}) in ${cam} [${r.status}] — ${r.framesShot}/${r.frameCount}${dev}${intended}`);
     }
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
