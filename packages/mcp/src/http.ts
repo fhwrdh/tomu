@@ -19,7 +19,7 @@
  */
 
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server.js";
 
@@ -32,17 +32,31 @@ if (!TOKEN && !PATH_SECRET) {
   process.exit(1);
 }
 
+/** Constant-time string comparison — secrets must not leak length/prefix timing. */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+function pathSecretSegment(url: string): string {
+  // "/<secret>/mcp" → "<secret>"; anything else → ""
+  const m = url.split("?")[0].match(/^\/([^/]+)\/mcp$/);
+  return m ? m[1] : "";
+}
+
 function authorized(req: IncomingMessage): boolean {
-  const auth = req.headers.authorization;
-  if (TOKEN && auth === `Bearer ${TOKEN}`) return true;
-  if (PATH_SECRET && (req.url ?? "").startsWith(`/${PATH_SECRET}/mcp`)) return true;
+  const auth = req.headers.authorization ?? "";
+  if (TOKEN && auth.startsWith("Bearer ") && safeEqual(auth.slice(7), TOKEN)) return true;
+  if (PATH_SECRET && safeEqual(pathSecretSegment(req.url ?? ""), PATH_SECRET)) return true;
   return false;
 }
 
 /** Path is /mcp or /<secret>/mcp; anything else 404s. */
 function isMcpPath(url: string): boolean {
   const path = url.split("?")[0];
-  return path === "/mcp" || (PATH_SECRET !== "" && path === `/${PATH_SECRET}/mcp`);
+  return path === "/mcp" || (PATH_SECRET !== "" && safeEqual(pathSecretSegment(path), PATH_SECRET));
 }
 
 function readBody(req: IncomingMessage): Promise<unknown> {
