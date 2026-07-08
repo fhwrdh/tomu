@@ -47,19 +47,21 @@ Authoritative kit summary. Update when gear changes.
 
 ## API / MCP
 
-- **Rolls response** — Surface: `dev_date`, `dev_seq` (formatted Dev Id), aggregate `first_shot` / `last_shot` from frames, frame count, intended-dev fields.
-- **Rolls filters** — `?dev_seq=`, `?dev_seq_range=`, `?dev_date_from/to=`, `?developed_between=`, `?status=`.
-- **`tomu_rolls` MCP** — Mirror the new filters and fields so questions like "show me rolls developed 2026-05-12" or "what were Dev Ids 0727–0732" work without SQL.
-- **`tomu_dev_session` MCP** — Create + complete dev sessions and bulk-update roll status. Currently a SQL-only path.
-- **Dev candidates grouping bug** — `tomu_dev_candidates` groups by literal recipe string, so "HC-110 B 7:30" and "HC-110 1+31 7:30" come back as separate buckets even though they're chemistry-equivalent. Normalize on `(developer, parsed_ratio, time, temp)`.
+All shipped 2026-07-07:
+
+- ~~**Rolls response**~~ `devDate`/`devSeq`/`devId`, `firstShot`/`lastShot` aggregates, `framesShot`, intended-dev fields.
+- ~~**Rolls filters**~~ `?dev_seq=`, `?dev_seq_range=`, `?dev_date_from/to=`, `?developed_between=`, `?status=`.
+- ~~**`tomu_rolls` MCP**~~ Mirrors the filters; shows Dev Ids; uses devId as handle when display_id is null.
+- ~~**`tomu_dev_session` MCP**~~ create/complete/list. Create assigns lifetime Dev Ids (continues from all-time max, currently 0735), flips rolls to `developing`, returns tank mix volumes + sub-5-min warnings; complete flips to `developed`.
+- ~~**Dev candidates grouping bug**~~ Buckets now normalize via `normalizeDilution` — "B" and "1+31" merge. History tier is live now that 232 historical sessions exist.
 
 ## Dev workflow
 
-- **Dilution constants in code** — Codify HC-110 letter→ratio table (A=1+15, B=1+31, C=1+19, D=1+39, E=1+47, F=1+79, G=1+119, H=1+63) as a shared constant. Memory has been wrong before (had H as 1+119) and cost a 4-sheet LF batch a rescue calc on 2026-05-12. Source of truth must be the codebase, not memory.
-- **Dilution helper** — Compute syrup/water from `(developer, dilution_letter_or_ratio, target_volume)`; flag minimum-syrup warnings (e.g. Rodinal 10ml/roll). Surface in UI and MCP.
-- **Recipe verification at log time** — Cross-check `intended_dev_*` against MDC for the rated ISO; warn on outliers before pour.
-- **Recipe rules engine** — Encode the standing conventions (see Conventions section above) so they're enforced in the app, not remembered by humans.
-- **Tank volume defaults** — Lookup table by tank model × reel count × format, sourced from the Gear inventory section above. Used by the dilution helper.
+- ~~**Dilution constants in code**~~ Done 2026-07-07: `packages/shared/src/dilution.ts` — HC-110 letter table (H=1+63), min-concentrate rules (HC-110 6 ml/roll, Rodinal 10 ml/roll), tank specs. The code is the source of truth now.
+- ~~**Dilution helper**~~ Done: `computeDilution()` + `tomu_dilution` MCP tool; also runs inline in `tomu_dev_session` create. Min-syrup warnings reproduce the 10/510 Rodinal convention. UI surfacing still pending.
+- ~~**Tank volume defaults**~~ Done: `TANKS` in shared, fuzzy `findTank()`.
+- **Recipe verification at log time** — Partially done: session create warns on sub-5-min (hard) and sub-7-min (preference) times. Full MDC cross-check (compare intended vs devRecipes for the rated ISO) still to do.
+- **Recipe rules engine** — Remaining conventions to encode: expired-at-box-ISO, push-at-rated-ISO, recency preference in candidate subsetting.
 - **Batch dev day UI** — Support a "dev session plan" spanning multiple `dev_sessions`, with chem-reuse grouping by recipe family.
 - **Old-sheet roll reconciliation** — Several physical rolls dev'd in 2026-05-12 batch (0727, 0728) suspected to match old-sheet entries (`20240923.3`, `20230503.2`). Need a reconciliation flow: merge or link.
 - **Mystery canister tracking** — `27ae8905` canister labeled "24080102" contained HP5 not Acros II. Track canister-label vs film-truth discrepancies as a first-class concept, not just descriptions. Also: `20240801.2` DB/sheet says Acros, canister had HP5 — same class of issue.

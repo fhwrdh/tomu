@@ -3,12 +3,15 @@ import type { FastifyInstance } from "fastify";
 import {
   completeDevSessionSchema,
   createDevSessionSchema,
+  formatDevId,
+  normalizeDilution,
   parseDevShorthand,
 } from "@tomu/shared";
 import { db } from "../db/client.js";
 import { devRecipes, devSessions, filmStocks, rolls } from "../db/schema.js";
 
-/** Compute display ID `YYYYMMDD.NN` for a new dev session. */
+/** Compute display ID `YYYYMMDD.NN` for a new dev session. Max-based so it
+ * survives sparse/imported sequences on the same date. */
 async function computeSessionDisplayId(userId: string, localDate?: string): Promise<string> {
   const date = localDate ?? new Date().toISOString().slice(0, 10);
   const ymd = date.replace(/-/g, "");
@@ -22,8 +25,12 @@ async function computeSessionDisplayId(userId: string, localDate?: string): Prom
         sql`${devSessions.displayId} LIKE ${prefix + "%"}`,
       ),
     );
-  const n = existing.length + 1;
-  return `${ymd}.${String(n).padStart(2, "0")}`;
+  let maxSeq = 0;
+  for (const r of existing) {
+    const m = r.displayId?.match(/\.(\d+)$/);
+    if (m && Number(m[1]) > maxSeq) maxSeq = Number(m[1]);
+  }
+  return `${ymd}.${String(maxSeq + 1).padStart(2, "0")}`;
 }
 
 export async function devSessionsRoutes(fastify: FastifyInstance) {
@@ -162,7 +169,7 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
       // Tier 1: explicit intended dev on the roll
       if (r.intendedDilution != null || r.intendedDevTimeSeconds != null) {
         const dev = r.intendedDeveloper ?? "?";
-        const key = `intended|${dev}|${r.intendedDilution ?? ""}|${r.intendedDevTimeSeconds ?? ""}`;
+        const key = `intended|${dev}|${normalizeDilution(r.intendedDeveloper, r.intendedDilution)}|${r.intendedDevTimeSeconds ?? ""}`;
         bucket(key, "intended", {
           developer: r.intendedDeveloper,
           dilution: r.intendedDilution,
@@ -175,7 +182,7 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
       // Tier 2: historical recipe for this (stock, ratedIso)
       const hist = recipeByStockIso.get(`${r.filmStockId}|${r.ratedIso ?? ""}`);
       if (hist) {
-        const key = `history|${hist.developer}|${hist.dilution ?? ""}|${hist.devTimeSeconds ?? ""}|${hist.temperatureC ?? ""}`;
+        const key = `history|${hist.developer}|${normalizeDilution(hist.developer, hist.dilution)}|${hist.devTimeSeconds ?? ""}|${hist.temperatureC ?? ""}`;
         bucket(key, "history", {
           developer: hist.developer,
           dilution: hist.dilution,
@@ -194,7 +201,7 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
             : r.format === "4x5" || r.format === "8x10"
               ? mdc.timeSheetSec
               : mdc.time35mmSec;
-        const key = `mdc|${mdc.developer}|${mdc.dilution}|${time ?? ""}|${mdc.temperatureC ?? ""}|${mdc.asaIso}`;
+        const key = `mdc|${mdc.developer}|${normalizeDilution(mdc.developer, mdc.dilution)}|${time ?? ""}|${mdc.temperatureC ?? ""}|${mdc.asaIso}`;
         bucket(key, "mdc", {
           developer: mdc.developer,
           dilution: mdc.dilution,
@@ -239,6 +246,8 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
         status: rolls.status,
         format: rolls.format,
         ratedIso: rolls.ratedIso,
+        devDate: rolls.devDate,
+        devSeq: rolls.devSeq,
         manufacturer: filmStocks.manufacturer,
         stockName: filmStocks.name,
         stockIso: filmStocks.iso,
@@ -248,7 +257,12 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
       .where(eq(rolls.devSessionId, session.id))
       .orderBy(asc(rolls.displayId));
 
-    return { data: { ...session, rolls: memberRolls } };
+    return {
+      data: {
+        ...session,
+        rolls: memberRolls.map((r) => ({ ...r, devId: formatDevId(r.devDate, r.devSeq) })),
+      },
+    };
   });
 
   // ── Create session ───────────────────────────────────────────────────
@@ -284,33 +298,55 @@ export async function devSessionsRoutes(fastify: FastifyInstance) {
     }
 
     const displayId = await computeSessionDisplayId(request.userId, body.localDate);
+    const devDate = body.localDate ?? new Date().toISOString().slice(0, 10);
 
-    const [session] = await db
-      .insert(devSessions)
-      .values({
-        userId: request.userId,
-        displayId,
-        developer: body.developer,
-        dilution,
-        dilutionRaw,
-        devTimeSeconds,
-        temperatureC: body.temperatureC != null ? String(body.temperatureC) : null,
-        agitation: body.agitation ?? null,
-        tank: body.tank ?? null,
-        stopBath: body.stopBath ?? null,
-        fixer: body.fixer ?? null,
-        fixerTimeSeconds: body.fixerTimeSeconds ?? null,
-        washMethod: body.washMethod ?? null,
-        wettingAgent: body.wettingAgent ?? null,
-        notes: body.notes ?? null,
-        developedAt: body.developedAt ? new Date(body.developedAt) : new Date(),
-      })
-      .returning();
+    // Lifetime Dev Ids: each roll gets the next devSeq, assigned at tank time
+    // (this is when bag/canister labels get written). Continues from the
+    // all-time max — the pre-Tomu import ended at 0716, live rolls at 0735.
+    const [{ maxSeq }] = await db
+      .select({ maxSeq: sql<number | null>`max(${rolls.devSeq})` })
+      .from(rolls)
+      .where(eq(rolls.userId, request.userId));
 
-    await db
-      .update(rolls)
-      .set({ devSessionId: session.id, status: "developing", updatedAt: new Date() })
-      .where(inArray(rolls.id, body.rollIds));
+    const session = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(devSessions)
+        .values({
+          userId: request.userId,
+          displayId,
+          developer: body.developer,
+          dilution,
+          dilutionRaw,
+          devTimeSeconds,
+          temperatureC: body.temperatureC != null ? String(body.temperatureC) : null,
+          agitation: body.agitation ?? null,
+          tank: body.tank ?? null,
+          stopBath: body.stopBath ?? null,
+          fixer: body.fixer ?? null,
+          fixerTimeSeconds: body.fixerTimeSeconds ?? null,
+          washMethod: body.washMethod ?? null,
+          wettingAgent: body.wettingAgent ?? null,
+          notes: body.notes ?? null,
+          developedAt: body.developedAt ? new Date(body.developedAt) : new Date(),
+        })
+        .returning();
+
+      let seq = maxSeq ?? 0;
+      for (const rollId of body.rollIds) {
+        seq += 1;
+        await tx
+          .update(rolls)
+          .set({
+            devSessionId: created.id,
+            status: "developing",
+            devDate,
+            devSeq: seq,
+            updatedAt: new Date(),
+          })
+          .where(eq(rolls.id, rollId));
+      }
+      return created;
+    });
 
     return reply.status(201).send({ data: session });
   });
