@@ -34,11 +34,9 @@ Standing rules to follow when planning dev / scan workflows. These belong here, 
 Authoritative kit summary. Update when gear changes.
 
 - **Cameras / lenses:** see `cameras` and `lenses` tables in the DB.
-- **Dev tanks:**
-  - Stearman SP-445 — holds 4× 4x5 sheets. Working volume ~475 ml. Inversion.
-  - MOD54 (in Paterson Universal) — holds 6× 4x5 sheets. Working volume ~1000 ml. Inversion.
-  - Paterson Super System 4 — 1× 3-reel (3× 35mm or 2× 120 = 1000 ml), 3× 2-reel (2× 35mm or 1× 120 = 500 ml). Inversion.
-  - Jobo 1520 — used as stacked 2-reel-size tanks, **inversion only** (not rotation). 500 ml standard fill, 10 ml/500 ml convention for Rodinal 1+50.
+- **Dev tanks:** now data — `tanks` table, editable via `tomu_tanks` / `PATCH /tanks/:id`. The DB is authoritative; run `tomu_tanks list` for current fleet. Reel math (owner-confirmed 2026-07-11): 120 reel = 1.5× a 35mm reel on the column, mixed loads legal where units fit.
+  - Seeded 2026-07-11 from the tank-plan spec: 1× Paterson 3-reel (1000 ml), 4× 2-reel (500 ml), 1× 1-reel (290 ml), 1× Jobo 1520 (500 ml, inversion only, Rodinal 10/500 convention), SP-445 (475 ml, 4× 4x5), MOD54 (1000 ml, 6× 4x5).
+  - ⚠️ **Fleet count conflict, owner rundown pending**: this section previously said 3× 2-reel + 2× Jobo (no 1-reel); the spec said 4× 2-reel + 1× Jobo + 1× 1-reel. Seeded the spec's version; owner will give a full rundown to reconcile ("fine for now — fine-tune later").
   - Total Jobo reels: **3** (limits NCS5 batches).
 - **Scanners:** Valoi + camera rig (35/120 only). No LF (4x5) scan path yet — see Scanning section.
 
@@ -54,7 +52,7 @@ Authoritative kit summary. Update when gear changes.
 - ~~**Dev Id backfill**~~ Done 2026-07-07, but as a **full historical import**, not a backfill: all developed Tomu rolls already had seqs (717–735), so the sheet (0367–0716) + LR keywords (0001–0716) were imported as 693 new `archived` rolls + 232 dev sessions, tagged `pre-tomu-import`. Script: `packages/server/scripts/import-history.ts`; sources + full report: `data/history/`. Seq span is now 0001–0735, unique, queryable via the dev filters. New dev sessions continue from 736.
   - Historical double-assignments (0421, 0443, 0444a, 0624, 0674) adjudicated against LR scans; losers imported seq-less with explanatory notes. 5 field-id collisions with existing rolls left displayId unset (noted). ~157 early rolls have the placeholder stock `Unknown | Pre-Tomu unidentified` — refine opportunistically from LR when scans surface.
   - The seq remains the real identifier; LR dates are import dates (decided 2026-06-07). Match/join on seq, never on date.
-- **Tank as gear** — Model dev tanks like `cameras` / `lenses` with capacity (sheets, reels, format mode), inversion vs rotation, working volumes. Today `dev_sessions.tank` is free text. Inventory: Stearman SP-445 (4× 4x5), MOD54 (6× 4x5), 1× Paterson 3-reel, 3× Paterson 2-reel, 2× Jobo 1520 (2-reel size, inversion).
+- ~~**Tank as gear**~~ Done 2026-07-11: `tanks` table (kind roll/sheet, volumeMl, reelUnits/sheetCapacity, quantity, agitation, isActive) + `/tanks` CRUD + `tomu_tanks` MCP. `dev_sessions.tank` stays free text for now; linking sessions to tank rows is a future nicety. Static `TANKS` in shared remains only as the `tomu_dilution` fallback — unify later.
 - **Display id for orphan rolls** — At least one roll (`27ae8905…` FP4) has no `display_id`. Either backfill at first dev, or treat dev_seq as the primary handle when display_id is null.
 - **Reference image attachments** — Phone snaps of scene/box/notes. Roll-level for 35mm/120 (one or a few per roll, frame # often unknown until scan). Frame-level (really sheet-level) for LF, where each sheet is logged individually. Storage: DO Spaces. MCP path: image included in message → tool extracts + uploads → attached to roll/frame.
 
@@ -75,7 +73,8 @@ All shipped 2026-07-07:
 - ~~**Tank volume defaults**~~ Done: `TANKS` in shared, fuzzy `findTank()`.
 - **Recipe verification at log time** — Partially done: session create warns on sub-5-min (hard) and sub-7-min (preference) times. Full MDC cross-check (compare intended vs devRecipes for the rated ISO) still to do.
 - **Recipe rules engine** — Remaining conventions to encode: expired-at-box-ISO, push-at-rated-ISO, recency preference in candidate subsetting.
-- **Batch dev day UI** — Support a "dev session plan" spanning multiple `dev_sessions`, with chem-reuse grouping by recipe family.
+- ~~**Tank planning**~~ Done 2026-07-11 per owner spec (`docs/specs/tank-plan.md`, from Drive): `POST /tanks/plan` + `tomu_tank_plan` MCP. Packs dev-candidate groups (atomic — zero recipe tolerance) into concrete tank loads via best-load greedy (rolls-cleared dominant, includeRolls hard priority, tier as tiebreak); mix volumes + min-syrup/sub-5-min/MDC-provenance warnings per load; remainder listed with reasons, no shooting advice. Params: tanksAvailable/excludeTanks/maxTanks/includeRolls/tags/developer. Grouping extracted to `services/dev-candidates.ts`; packer in `services/tank-plan.ts`. Spec's "3-reel twice" example implies tank *reuse* within a session — current packer consumes each physical tank once per plan (use excludeTanks for wet tanks); revisit with owner.
+- **Batch dev day UI** — Support a "dev session plan" spanning multiple `dev_sessions`, with chem-reuse grouping by recipe family. (Backend half shipped as tank planning above.)
 - **Old-sheet roll reconciliation** — Several physical rolls dev'd in 2026-05-12 batch (0727, 0728) suspected to match old-sheet entries (`20240923.3`, `20230503.2`). Need a reconciliation flow: merge or link.
 - **Mystery canister tracking** — `27ae8905` canister labeled "24080102" contained HP5 not Acros II. Track canister-label vs film-truth discrepancies as a first-class concept, not just descriptions. Also: `20240801.2` DB/sheet says Acros, canister had HP5 — same class of issue.
 

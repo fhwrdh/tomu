@@ -181,6 +181,32 @@ export const frames = pgTable(
   (t) => [unique().on(t.rollId, t.frameNumber)]
 );
 
+// ── Tanks ──
+//
+// The user's developing-tank fleet, as data so it can be edited without a
+// deploy. Capacity model (owner-confirmed 2026-07-11): roll tanks measure
+// capacity in 35mm-reel units where a 120 reel costs 1.5 units (standard
+// Paterson column geometry); sheet tanks hold 4x5 sheets only.
+
+export const tanks = pgTable("tanks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  /** "roll" (35mm/120 on reels, mixable) or "sheet" (4x5 only). */
+  kind: text("kind").notNull(),
+  volumeMl: integer("volume_ml").notNull(),
+  /** Roll tanks: capacity in 35mm-reel units (120 reel = 1.5). */
+  reelUnits: numeric("reel_units", { precision: 4, scale: 1 }),
+  /** Sheet tanks: number of 4x5 sheets per load. */
+  sheetCapacity: integer("sheet_capacity"),
+  /** How many of this tank the user owns (e.g. 4× Paterson 2-reel). */
+  quantity: integer("quantity").notNull().default(1),
+  agitation: text("agitation").notNull().default("inversion"),
+  notes: text("notes"),
+  isActive: boolean("is_active").notNull().default(true),
+  ...timestamps,
+});
+
 // ── Development ──
 //
 // A dev_session represents one tank's worth of rolls developed together.

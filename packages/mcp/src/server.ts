@@ -1453,5 +1453,197 @@ server.tool(
   }
 );
 
+// ── Tool: tomu_tanks ──────────────────────────────────────────────────
+
+interface TankRow {
+  id: string;
+  name: string;
+  kind: "roll" | "sheet";
+  volumeMl: number;
+  reelUnits: string | null;
+  sheetCapacity: number | null;
+  quantity: number;
+  agitation: string;
+  notes: string | null;
+  isActive: boolean;
+}
+
+function tankLine(t: TankRow): string {
+  const cap =
+    t.kind === "sheet"
+      ? `${t.sheetCapacity}× 4x5`
+      : `${Number(t.reelUnits)} reel units (120 = 1.5)`;
+  const qty = t.quantity > 1 ? ` ×${t.quantity}` : "";
+  const inactive = t.isActive ? "" : " [retired]";
+  return `- **${t.name}**${qty}${inactive} — ${t.volumeMl} ml, ${cap}, ${t.agitation}${t.notes ? ` — ${t.notes}` : ""}`;
+}
+
+server.tool(
+  "tomu_tanks",
+  "Manage the developing-tank fleet (stored in Tomu, editable anytime). action='list' shows the fleet; " +
+    "'add' creates a tank (roll tanks need reelUnits — 35mm=1, 120=1.5; sheet tanks need sheetCapacity); " +
+    "'update' edits by fuzzy name (volume, quantity, capacity, notes, retire via isActive=false).",
+  {
+    action: z.enum(["list", "add", "update"]).describe("list | add | update"),
+    name: z.string().optional().describe("Tank name (add: new name; update: fuzzy match on existing)"),
+    kind: z.enum(["roll", "sheet"]).optional().describe("add: roll (35mm/120 reels) or sheet (4x5)"),
+    volumeMl: z.number().int().positive().optional().describe("Working volume in ml"),
+    reelUnits: z.number().positive().optional().describe("Roll tanks: capacity in 35mm-reel units (a 120 reel costs 1.5)"),
+    sheetCapacity: z.number().int().positive().optional().describe("Sheet tanks: 4x5 sheets per load"),
+    quantity: z.number().int().positive().optional().describe("How many of this tank are owned"),
+    agitation: z.enum(["inversion", "rotation"]).optional(),
+    notes: z.string().optional(),
+    isActive: z.boolean().optional().describe("update: false retires a tank without deleting history"),
+    newName: z.string().optional().describe("update: rename the tank"),
+  },
+  async ({ action, name, kind, volumeMl, reelUnits, sheetCapacity, quantity, agitation, notes, isActive, newName }) => {
+    if (action === "list") {
+      const { data } = await api<{ data: TankRow[] }>("/tanks");
+      if (!data.length) return { content: [{ type: "text" as const, text: "No tanks on file." }] };
+      return { content: [{ type: "text" as const, text: ["## Tank fleet\n", ...data.map(tankLine)].join("\n") }] };
+    }
+
+    if (action === "add") {
+      if (!name || !kind || !volumeMl) {
+        return { content: [{ type: "text" as const, text: "add needs name, kind, and volumeMl (plus reelUnits or sheetCapacity)." }] };
+      }
+      const { data } = await api<{ data: TankRow }>("/tanks", {
+        method: "POST",
+        body: JSON.stringify({ name, kind, volumeMl, reelUnits, sheetCapacity, quantity: quantity ?? 1, agitation: agitation ?? "inversion", notes }),
+      });
+      return { content: [{ type: "text" as const, text: `Added:\n${tankLine(data)}` }] };
+    }
+
+    // update
+    if (!name) return { content: [{ type: "text" as const, text: "update needs a name to match." }] };
+    const { data: fleet } = await api<{ data: TankRow[] }>("/tanks");
+    const matches = fleet.filter((t) => fuzzyMatch(name, t.name));
+    if (!matches.length) return { content: [{ type: "text" as const, text: `No tank matching "${name}".` }] };
+    if (matches.length > 1) {
+      return { content: [{ type: "text" as const, text: `"${name}" is ambiguous: ${matches.map((t) => t.name).join(", ")}.` }] };
+    }
+    const patch: Record<string, unknown> = {};
+    if (newName != null) patch.name = newName;
+    if (kind != null) patch.kind = kind;
+    if (volumeMl != null) patch.volumeMl = volumeMl;
+    if (reelUnits != null) patch.reelUnits = reelUnits;
+    if (sheetCapacity != null) patch.sheetCapacity = sheetCapacity;
+    if (quantity != null) patch.quantity = quantity;
+    if (agitation != null) patch.agitation = agitation;
+    if (notes != null) patch.notes = notes;
+    if (isActive != null) patch.isActive = isActive;
+    const { data } = await api<{ data: TankRow }>(`/tanks/${matches[0].id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    return { content: [{ type: "text" as const, text: `Updated:\n${tankLine(data)}` }] };
+  }
+);
+
+// ── Tool: tomu_tank_plan ──────────────────────────────────────────────
+
+interface PlanRoll {
+  id: string;
+  displayId: string | null;
+  format: string;
+  manufacturer: string;
+  stockName: string;
+  ratedIso: number | null;
+  stockIso: number;
+  loadedAt: string | null;
+}
+
+interface PlanLoad {
+  tankName: string;
+  tankVolumeMl: number;
+  tier: "intended" | "history" | "mdc" | "stock-iso";
+  recipe: { developer: string | null; dilution: string | null; devTimeSeconds: number | null; temperatureC: string | null };
+  rolls: PlanRoll[];
+  usedUnits: number;
+  capacityUnits: number;
+  oldestLoadedAt: string | null;
+  mix: { concentrateMl: number; waterMl: number; dilution: string } | null;
+  warnings: string[];
+}
+
+interface PlanResponse {
+  loads: PlanLoad[];
+  remainder: { roll: PlanRoll; reason: string }[];
+  warnings: string[];
+}
+
+const TIER_LABEL: Record<PlanLoad["tier"], string> = {
+  intended: "tier 1: intended (labels)",
+  history: "tier 2: historical",
+  mdc: "tier 3: MDC (community)",
+  "stock-iso": "tier 4: clustered",
+};
+
+server.tool(
+  "tomu_tank_plan",
+  "Plan a dev session: pack the shot-roll backlog into concrete tank loads (one recipe per tank, zero tolerance — " +
+    "groups from tomu_dev_candidates are atomic). Returns ordered loads with mix volumes, recipe provenance, and " +
+    "a waiting list of what didn't pack. Advisory only — create sessions explicitly with tomu_dev_session.",
+  {
+    tanksAvailable: z.array(z.string()).optional().describe("Restrict to these tanks (fuzzy names). Default: full fleet"),
+    excludeTanks: z.array(z.string()).optional().describe("Leave these out (e.g. a tank still wet)"),
+    maxTanks: z.number().int().positive().optional().describe("'I'll run N tanks tonight' — best N loads only"),
+    includeRolls: z.array(z.string()).optional().describe("Roll display ids that MUST be in the plan"),
+    tags: z.array(z.string()).optional().describe("Only rolls carrying any of these tags"),
+    developer: z.string().optional().describe("Only this developer (e.g. 'HC-110')"),
+  },
+  async (params) => {
+    const { data: plan } = await api<{ data: PlanResponse }>("/tanks/plan", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+
+    if (!plan.loads.length && !plan.remainder.length) {
+      return { content: [{ type: "text" as const, text: "Backlog is empty — nothing to plan." }] };
+    }
+
+    const lines: string[] = ["## Tank plan\n"];
+
+    plan.loads.forEach((l, i) => {
+      const r = l.recipe;
+      const temp = r.temperatureC ? ` @ ${r.temperatureC}°C` : "";
+      lines.push(
+        `### Load ${i + 1} — ${l.tankName} — ${r.developer} ${r.dilution ?? "?"} ${formatTime(r.devTimeSeconds)}${temp}  [${TIER_LABEL[l.tier]}]`,
+      );
+      const oldest = l.oldestLoadedAt?.slice(0, 10);
+      for (const roll of l.rolls) {
+        const iso = roll.ratedIso && roll.ratedIso !== roll.stockIso ? ` @ ${roll.ratedIso}` : "";
+        const marker = oldest && roll.loadedAt?.slice(0, 10) === oldest ? `  ← oldest: ${oldest}` : "";
+        lines.push(`- **${roll.displayId ?? roll.id.slice(0, 8)}** ${displayStock(roll.manufacturer, roll.stockName)}${iso} (${roll.format})${marker}`);
+      }
+      lines.push(`- Fill: ${l.usedUnits}/${l.capacityUnits} ${l.rolls[0]?.format === "4x5" ? "sheets" : "reel units"}`);
+      if (l.mix) lines.push(`- Mix: **${l.mix.concentrateMl} ml** ${r.developer} + **${l.mix.waterMl} ml** water (${l.mix.dilution}) in ${l.tankVolumeMl} ml`);
+      for (const w of l.warnings) lines.push(`- ⚠️ ${w}`);
+      lines.push("");
+    });
+
+    if (plan.remainder.length) {
+      lines.push(`### Waiting (${plan.remainder.length})\n`);
+      const byReason = new Map<string, PlanRoll[]>();
+      for (const u of plan.remainder) {
+        if (!byReason.has(u.reason)) byReason.set(u.reason, []);
+        byReason.get(u.reason)!.push(u.roll);
+      }
+      for (const [reason, rollList] of byReason) {
+        lines.push(`**${reason}** (${rollList.length}):`);
+        lines.push(rollList.map((roll) => roll.displayId ?? roll.id.slice(0, 8)).join(", "));
+        lines.push("");
+      }
+    }
+
+    for (const w of plan.warnings) lines.push(`⚠️ ${w}`);
+
+    if (plan.loads.length) {
+      lines.push(
+        `_To run a load: tomu_dev_session action=create with its rolls, developer, dilution/time, and tank._`,
+      );
+    }
+
+    return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+  }
+);
+
 return server;
 }

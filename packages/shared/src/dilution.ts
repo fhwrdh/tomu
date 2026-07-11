@@ -83,6 +83,16 @@ export const TANKS: Record<string, TankSpec> = {
   },
 };
 
+/**
+ * Reel-column units for roll tanks (owner-confirmed 2026-07-11): a 120 reel
+ * occupies 1.5× the column height of a 35mm reel, so a 3-reel Paterson holds
+ * 3×35mm, 2×120, or 1×120 + 1×35mm.
+ */
+export const REEL_UNITS: Record<string, number> = {
+  "35mm": 1,
+  "120": 1.5,
+};
+
 /** 4 sheets of 4x5 ≈ 1 roll-equivalent (80 in²) for chemistry-exhaustion math. */
 export function rollEquivalents(format: string, count: number): number {
   if (format === "4x5") return count / 4;

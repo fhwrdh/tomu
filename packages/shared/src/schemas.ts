@@ -209,6 +209,41 @@ export const completeDevSessionSchema = z.object({
   resultsNotes: z.string().max(2000).optional(),
 });
 
+// ── Tanks ──
+
+export const createTankSchema = z.object({
+  name: z.string().min(1).max(100),
+  kind: z.enum(["roll", "sheet"]),
+  volumeMl: z.number().int().positive(),
+  /** Roll tanks: capacity in 35mm-reel units (a 120 reel costs 1.5). */
+  reelUnits: z.number().positive().optional(),
+  /** Sheet tanks: 4x5 sheets per load. */
+  sheetCapacity: z.number().int().positive().optional(),
+  quantity: z.number().int().positive().default(1),
+  agitation: z.enum(["inversion", "rotation"]).default("inversion"),
+  notes: z.string().max(2000).optional(),
+});
+
+export const updateTankSchema = createTankSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+/** Request a tank plan. All fields optional; bare call = full fleet over whole backlog. */
+export const tankPlanRequestSchema = z.object({
+  /** Restrict to these tanks (fuzzy names). Default: full active fleet. */
+  tanksAvailable: z.array(z.string()).optional(),
+  /** Remove these tanks from the fleet (e.g. one is currently wet). */
+  excludeTanks: z.array(z.string()).optional(),
+  /** "I'll run N tanks tonight" — return the best N loads. */
+  maxTanks: z.number().int().positive().optional(),
+  /** Roll display ids that MUST appear in the plan (hard priority). */
+  includeRolls: z.array(z.string()).optional(),
+  /** Restrict candidate pool to rolls carrying any of these tags. */
+  tags: z.array(z.string()).optional(),
+  /** Restrict to one developer (e.g. only HC-110 tonight). */
+  developer: z.string().max(100).optional(),
+});
+
 // ── Notes ──
 
 /** Input for a note attached to a roll or a frame. Parent ID comes from the route path. */

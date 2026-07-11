@@ -10,6 +10,7 @@ import { filmStocksRoutes } from "./routes/film-stocks.js";
 import { lensesRoutes } from "./routes/lenses.js";
 import { devSessionsRoutes } from "./routes/dev-sessions.js";
 import { rollsRoutes } from "./routes/rolls.js";
+import { tanksRoutes } from "./routes/tanks.js";
 
 const fastify = Fastify({
   logger: {
@@ -30,6 +31,7 @@ await fastify.register(filmStocksRoutes, { prefix: "/api/v1/film-stocks" });
 await fastify.register(filmInventoryRoutes, { prefix: "/api/v1/inventory" });
 await fastify.register(rollsRoutes, { prefix: "/api/v1/rolls" });
 await fastify.register(devSessionsRoutes, { prefix: "/api/v1/dev-sessions" });
+await fastify.register(tanksRoutes, { prefix: "/api/v1/tanks" });
 
 // Health check
 fastify.get("/api/health", async () => ({ status: "ok" }));
