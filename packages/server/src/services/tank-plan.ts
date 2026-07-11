@@ -74,6 +74,16 @@ const TIER_RANK: Record<CandidateGroup["tier"], number> = {
 
 const SUB_5_MIN = 300;
 
+/**
+ * Score penalty for a load whose tank volume can't hold the min-concentrate
+ * floor at the recipe's dilution. Sized to outweigh the utilization term
+ * (max 5) but not the per-roll term (10): the same rolls prefer a bigger,
+ * legal tank when one is free, but a violating load still beats leaving
+ * rolls unplanned — the fix is then the warning's volume bump, never a
+ * dilution change (zero recipe tolerance).
+ */
+const MIN_SYRUP_PENALTY = 6;
+
 /** Column units a roll consumes in its tank class. */
 function unitsOf(roll: CandidateRoll): number | null {
   if (roll.format === "4x5") return 1; // sheets count 1 in sheet tanks
@@ -207,7 +217,8 @@ export function planTanks(
       utilization * 5 +
       (hasInclude ? 1000 : 0) +
       ageDays * 0.02 +
-      TIER_RANK[group.tier];
+      TIER_RANK[group.tier] -
+      (mix?.belowMinConcentrate ? MIN_SYRUP_PENALTY : 0);
 
     return {
       tankName: tank.name,

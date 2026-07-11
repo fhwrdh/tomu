@@ -133,6 +133,8 @@ export interface DilutionResult {
   waterMl: number;
   /** Roll-equivalents this mix must develop, if provided. */
   rollEquivalents?: number;
+  /** True when the concentrate falls below the per-roll floor at this volume. */
+  belowMinConcentrate?: boolean;
   warnings: string[];
 }
 
@@ -157,14 +159,18 @@ export function computeDilution(
   const waterMl = targetVolumeMl - concentrateMl;
 
   const warnings: string[] = [];
+  let belowMinConcentrate = false;
   const minPerRoll = MIN_CONCENTRATE_PER_ROLL_ML[developer] ?? MIN_CONCENTRATE_PER_ROLL_ML[developer.replace(/\s+/g, "-")];
   if (rollEquiv != null && minPerRoll != null) {
     const needed = minPerRoll * rollEquiv;
     if (concentrateMl < needed) {
+      belowMinConcentrate = true;
       const requiredVolume = Math.ceil((needed * parts) / ratio.concentrate / 10) * 10;
+      // Remedy must keep the ratio — a dilution change means a different time
+      // (zero recipe tolerance). Bigger tank / more volume only.
       warnings.push(
         `Only ${concentrateMl.toFixed(1)} ml of ${developer} for ${rollEquiv} roll-equivalent(s) — minimum is ${needed.toFixed(0)} ml (${minPerRoll} ml/roll). ` +
-          `Increase volume to ≥${requiredVolume} ml at ${ratio.concentrate}+${ratio.water}, or use more concentrate (${needed.toFixed(0)} ml + ${(targetVolumeMl - needed).toFixed(0)} ml water ≈ 1+${Math.round((targetVolumeMl - needed) / needed)}).`,
+          `Needs ≥${requiredVolume} ml at ${ratio.concentrate}+${ratio.water} — use a bigger tank; do not change the dilution.`,
       );
     }
   }
@@ -176,6 +182,7 @@ export function computeDilution(
     concentrateMl: Math.round(concentrateMl * 10) / 10,
     waterMl: Math.round(waterMl * 10) / 10,
     rollEquivalents: rollEquiv,
+    belowMinConcentrate,
     warnings,
   };
 }

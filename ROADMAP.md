@@ -24,6 +24,7 @@ Standing rules to follow when planning dev / scan workflows. These belong here, 
 - **Dev time bias:** when MDC offers a range or multiple recipes, prefer 7+ minutes. Avoid sub-5-minute times.
 - **Recency in candidate selection:** when subsetting a candidate group to a tank, prefer the most recently shot rolls. Preference, not a hard rule — and never re-open an already-loaded tank to honor it.
 - **Rodinal 1+50 in Jobo 2-reel (inversion):** standard mix is 10 ml syrup + 500 ml water (510 ml total). Hits the 10 ml/roll-pair minimum without changing the ratio.
+- **Min-syrup remedies never change the dilution** (owner, 2026-07-11): a dilution shift means a different time — zero recipe tolerance. The only legal fixes are a bigger tank or more volume at the same ratio. The tank planner prefers a legal bigger tank automatically (score penalty on violating loads); warnings offer the volume bump only.
 - **HC-110 dilution letters → ratios (Kodak canonical):** A=1+15, B=1+31, C=1+19, D=1+39, E=1+47, F=1+79, G=1+119, H=1+63. **Always verify against `data/mdc/hc110.txt` before quoting.**
 - **Batch dev days:** user loads many tanks one day, develops the next (may split across multiple nights). Plan as multi-tank sequences, not one-offs.
 - **MCP-first field input:** in the field, the MCP tools are the primary input path; the UI is for later review.
