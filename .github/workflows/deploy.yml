@@ -1,0 +1,88 @@
+name: Deploy to production
+
+# Ships to the droplet on every push to main (i.e. when a PR merges).
+# Also runnable manually from the Actions tab, with an optional DB migration.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      migrate:
+        description: "Run DB schema push (drizzle) after deploy"
+        type: boolean
+        default: false
+
+# Never let two deploys overlap; queue instead of cancel so an in-flight deploy finishes.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Build gate: if the tree doesn't build, fail BEFORE touching production.
+      - name: Install & build (gate)
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Rsync source to droplet
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude '.env' \
+            --exclude '.deploy.env' \
+            --exclude 'db-backups' \
+            --exclude 'DEPLOY.md' \
+            --exclude '*.log' \
+            -e "ssh -i ~/.ssh/id_ed25519" \
+            ./ "$TARGET:$DEPLOY_PATH/"
+
+      - name: Build & reload on droplet
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          MIGRATE: ${{ github.event.inputs.migrate || 'false' }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$TARGET" \
+            "DEPLOY_PATH='$DEPLOY_PATH' MIGRATE='$MIGRATE' bash -l -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          echo "--> npm install"
+          npm install --no-audit --no-fund
+          echo "--> clear stale tsbuildinfo"
+          find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete
+          echo "--> build"
+          npm run build
+          if [ "$MIGRATE" = "true" ]; then
+            echo "--> db schema push"
+            npm run db:push -w packages/server
+          fi
+          echo "--> pm2 reload"
+          pm2 startOrReload ecosystem.config.cjs --update-env
+          pm2 save
+          pm2 list
+          REMOTE
