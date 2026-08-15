@@ -2,6 +2,7 @@
   "name": "tomu",
   "version": "0.1.0",
   "private": true,
+  "description": "Self-hostable film-photography management — gear, film inventory, rolls, development, and scans. API-first, with an MCP server so Claude is a first-class client alongside the web UI.",
   "workspaces": [
     "packages/shared",
     "packages/server",
@@ -14,7 +15,9 @@
     "dev": "npm run dev:server & npm run dev:client",
     "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client && npm run build -w packages/mcp",
     "build:shared": "npm run build -w packages/shared",
-    "lint": "npm run lint -w packages/client"
+    "lint": "npm run lint -w packages/client",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:migrate": "bash scripts/deploy.sh --migrate"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.10",
