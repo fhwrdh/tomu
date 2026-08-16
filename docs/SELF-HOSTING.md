@@ -102,12 +102,14 @@ sudo env PATH=$PATH pm2 startup systemd -u deploy --hp /home/deploy   # boot per
 
 ## 6. nginx + TLS
 
-Serve the client build and proxy the two services. Minimal server block:
+Serve the client build and proxy the two services. A ready-to-use source config is
+tracked at [`deploy/nginx/tomu.conf`](../deploy/nginx/tomu.conf) (and the rate-limit
+zone at `deploy/nginx/tomu-ratelimit.conf`). Minimal server block:
 
 ```nginx
 server {
     server_name tomu.example.com;
-    root /home/deploy/filmlog/packages/client/dist;
+    root /home/deploy/tomu/packages/client/dist;
     index index.html;
 
     location /api/ { proxy_pass http://127.0.0.1:3456; proxy_set_header Host $host; }
@@ -120,6 +122,12 @@ server {
         proxy_buffering off;
         proxy_read_timeout 3600s;
     }
+
+    # Return a clean 404 for OAuth discovery so remote MCP clients (e.g. the
+    # claude.ai connector) treat this as a no-OAuth server and connect via the
+    # path secret. Without it, the SPA catch-all below returns 200 HTML here and
+    # the connector's OAuth registration fails. (Until Tomu implements OAuth.)
+    location ^~ /.well-known/oauth { return 404; }
 
     location / { try_files $uri $uri/ /index.html; }
 }
