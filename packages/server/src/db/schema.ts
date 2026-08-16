@@ -322,3 +322,53 @@ export const scans = pgTable("scans", {
   isPrimary: boolean("is_primary").notNull().default(false),
   ...timestamps,
 });
+
+// ── OAuth (MCP authorization server) ──
+// Backs the MCP OAuth flow. Auth codes and tokens are stored HASHED (sha-256);
+// the plaintext is only ever returned to the client once, at issuance.
+
+export const oauthClients = pgTable("oauth_clients", {
+  clientId: text("client_id").primaryKey(),
+  clientSecretHash: text("client_secret_hash"), // null for public (PKCE-only) clients
+  clientName: text("client_name"),
+  redirectUris: text("redirect_uris").array().notNull(),
+  grantTypes: text("grant_types").array().notNull(),
+  scope: text("scope"),
+  tokenEndpointAuthMethod: text("token_endpoint_auth_method").notNull().default("client_secret_post"),
+  clientIdIssuedAt: integer("client_id_issued_at").notNull(), // epoch seconds
+  clientSecretExpiresAt: integer("client_secret_expires_at"), // epoch seconds; null = never
+  ...timestamps,
+});
+
+export const oauthAuthCodes = pgTable("oauth_auth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  codeChallengeMethod: text("code_challenge_method").notNull().default("S256"),
+  scope: text("scope"),
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const oauthTokens = pgTable("oauth_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  kind: text("kind").notNull(), // 'access' | 'refresh'
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  scope: text("scope"),
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

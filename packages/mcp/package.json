@@ -13,11 +13,17 @@
     "start:http": "node dist/http.js"
   },
   "dependencies": {
-    "@tomu/shared": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@tomu/server": "^0.1.0",
+    "@tomu/shared": "*",
+    "drizzle-orm": "^0.38.4",
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.21.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
