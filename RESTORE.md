@@ -1,12 +1,12 @@
 # Backup & Restore
 
 The Tomu database is disposable-infrastructure by design: **the data's home is the
-private `fhwrdh/filmlog-backups` GitHub repo**, not any particular machine.
+private `fhwrdh/tomu-backups` GitHub repo**, not any particular machine.
 Any Postgres 16 box + the latest nightly dump = a working Tomu in minutes.
 
 ## How backups run
 
-- `scripts/db-backup.sh` — pg_dump → gzip → commit+push to `filmlog-backups/nightly/`.
+- `scripts/db-backup.sh` — pg_dump → gzip → commit+push to `tomu-backups/nightly/`.
   Portable: only needs `pg_dump`, `git`, and a `DATABASE_URL`. Refuses to push
   suspiciously small dumps. Local copies pruned after 60 days; git history keeps all.
 - **Laptop**: launchd job `net.fhwrdh.filmlog.backup` (03:00 daily; runs on wake if
@@ -20,8 +20,8 @@ Any Postgres 16 box + the latest nightly dump = a working Tomu in minutes.
 
 ```bash
 # 1. Get the latest dump
-git clone https://github.com/fhwrdh/filmlog-backups.git
-LATEST=$(ls filmlog-backups/nightly/filmlog-*.sql.gz | sort | tail -1)
+git clone https://github.com/fhwrdh/tomu-backups.git
+LATEST=$(ls tomu-backups/nightly/filmlog-*.sql.gz | sort | tail -1)
 
 # 2. Fresh database (any Postgres 16)
 createdb filmlog   # or: CREATE DATABASE filmlog; CREATE USER filmlog ...
