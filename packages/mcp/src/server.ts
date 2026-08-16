@@ -630,8 +630,13 @@ async function pickActiveRoll(cameraHint?: string): Promise<{ roll?: ActiveRoll;
   if (rolls.length === 0) return { error: "No active rolls. Load one first with tomu_load." };
 
   const candidates = cameraHint
-    ? rolls.filter((r) =>
-        fuzzyMatch(cameraHint, r.cameraMake ?? "", r.cameraModel ?? "", `${r.cameraMake ?? ""} ${r.cameraModel ?? ""}`),
+    ? rolls.filter(
+        (r) =>
+          // Must have an actual camera to match a camera hint — otherwise
+          // camera-less rolls (e.g. loaded 4x5 sheets) fuzzy-match every hint
+          // because their empty make/model are trivially "contained" in it.
+          (r.cameraMake || r.cameraModel) &&
+          fuzzyMatch(cameraHint, r.cameraMake ?? "", r.cameraModel ?? "", `${r.cameraMake ?? ""} ${r.cameraModel ?? ""}`),
       )
     : rolls;
 
