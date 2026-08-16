@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Nightly Tomu database backup: pg_dump → gzip → commit+push to the private
-# filmlog-backups repo. Safe to run anytime; used by launchd (laptop) and,
+# tomu-backups repo. Safe to run anytime; used by launchd (laptop) and,
 # post-deploy, cron (droplet).
 #
 # Env (all optional):
 #   DATABASE_URL  postgres URL          (default: postgres://filmlog:filmlog@localhost:5432/filmlog)
-#   BACKUP_REPO   path to backups clone (default: ~/dev/fhwrdh/filmlog-backups)
+#   BACKUP_REPO   path to backups clone (default: ~/dev/fhwrdh/tomu-backups)
 #   RETAIN_DAYS   local retention       (default: 60; git history keeps everything anyway)
 set -euo pipefail
 
 DATABASE_URL="${DATABASE_URL:-postgres://filmlog:filmlog@localhost:5432/filmlog}"
-BACKUP_REPO="${BACKUP_REPO:-$HOME/dev/fhwrdh/filmlog-backups}"
+BACKUP_REPO="${BACKUP_REPO:-$HOME/dev/fhwrdh/tomu-backups}"
 RETAIN_DAYS="${RETAIN_DAYS:-60}"
 HOST_TAG="$(hostname -s)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
