@@ -47,11 +47,13 @@ export async function getCodeChallenge(codePlain: string): Promise<string | unde
     .limit(1);
   return row?.codeChallenge;
 }
-/** Fetch and consume (single-use) a code. Returns undefined if missing or expired. */
+/**
+ * Fetch and consume (single-use) a code atomically. Returns undefined if missing
+ * or expired. The single DELETE ... RETURNING closes the TOCTOU window where two
+ * concurrent redemptions could both read the row before either deletes it.
+ */
 export async function consumeAuthCode(codePlain: string) {
-  const codeHash = sha256(codePlain);
-  const [row] = await db.select().from(oauthAuthCodes).where(eq(oauthAuthCodes.codeHash, codeHash)).limit(1);
-  await db.delete(oauthAuthCodes).where(eq(oauthAuthCodes.codeHash, codeHash));
+  const [row] = await db.delete(oauthAuthCodes).where(eq(oauthAuthCodes.codeHash, sha256(codePlain))).returning();
   if (!row) return undefined;
   if (row.expiresAt.getTime() < Date.now()) return undefined;
   return row;

@@ -17,6 +17,7 @@ import type {
   OAuthTokenRevocationRequest,
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { InvalidGrantError, InvalidScopeError, InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import * as store from "./store.js";
 
 const API_BASE = process.env.TOMU_API_URL || "http://localhost:3456/api/v1";
@@ -173,27 +174,33 @@ export const tomuOAuthProvider: OAuthServerProvider = {
 
   async challengeForAuthorizationCode(_client, authorizationCode): Promise<string> {
     const challenge = await store.getCodeChallenge(authorizationCode);
-    if (!challenge) throw new Error("invalid_grant: unknown authorization code");
+    if (!challenge) throw new InvalidGrantError("unknown authorization code");
     return challenge;
   },
 
   async exchangeAuthorizationCode(client, authorizationCode, _verifier, redirectUri): Promise<OAuthTokens> {
     const row = await store.consumeAuthCode(authorizationCode);
-    if (!row || row.clientId !== client.client_id) throw new Error("invalid_grant");
-    if (redirectUri && row.redirectUri !== redirectUri) throw new Error("invalid_grant: redirect_uri mismatch");
+    if (!row || row.clientId !== client.client_id) throw new InvalidGrantError("invalid grant");
+    if (redirectUri && row.redirectUri !== redirectUri) throw new InvalidGrantError("redirect_uri mismatch");
     return issueTokens(client.client_id, row.userId, row.scope ?? undefined, row.resource ?? undefined);
   },
 
   async exchangeRefreshToken(client, refreshToken, scopes): Promise<OAuthTokens> {
     const row = await store.getValidToken(refreshToken, "refresh");
-    if (!row || row.clientId !== client.client_id) throw new Error("invalid_grant");
-    const scope = scopes?.join(" ") ?? row.scope ?? undefined;
-    return issueTokens(client.client_id, row.userId, scope, row.resource ?? undefined, false);
+    if (!row || row.clientId !== client.client_id) throw new InvalidGrantError("invalid grant");
+    // Requested scopes must be a subset of what was originally granted.
+    const granted = row.scope ? row.scope.split(" ") : [];
+    const requested = scopes && scopes.length ? scopes : granted;
+    if (requested.some((s) => !granted.includes(s))) throw new InvalidScopeError("requested scope exceeds granted scope");
+    const scope = requested.length ? requested.join(" ") : undefined;
+    // Rotate: revoke the presented refresh token and issue a fresh access+refresh pair.
+    await store.revokeToken(refreshToken);
+    return issueTokens(client.client_id, row.userId, scope, row.resource ?? undefined, true);
   },
 
   async verifyAccessToken(token): Promise<AuthInfo> {
     const row = await store.getValidToken(token, "access");
-    if (!row) throw new Error("invalid_token");
+    if (!row) throw new InvalidTokenError("invalid or expired token");
     return {
       token,
       clientId: row.clientId,
