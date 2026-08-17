@@ -123,11 +123,14 @@ server {
         proxy_read_timeout 3600s;
     }
 
-    # Return a clean 404 for OAuth discovery so remote MCP clients (e.g. the
-    # claude.ai connector) treat this as a no-OAuth server and connect via the
-    # path secret. Without it, the SPA catch-all below returns 200 HTML here and
-    # the connector's OAuth registration fails. (Until Tomu implements OAuth.)
-    location ^~ /.well-known/oauth { return 404; }
+    # OAuth 2.1 authorization-server endpoints -> the MCP process. Lets the
+    # claude.ai connector authenticate via OAuth (clean /mcp URL, no path secret).
+    location ^~ /.well-known/oauth { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /authorize     { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /token         { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /register      { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /revoke        { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /oauth/consent { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
 
     location / { try_files $uri $uri/ /index.html; }
 }
