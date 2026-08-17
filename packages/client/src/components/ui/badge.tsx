@@ -11,8 +11,10 @@ const badgeVariants = cva(
         secondary: "border-border bg-secondary text-muted-foreground",
         destructive: "border-transparent bg-danger/15 text-danger",
         outline: "border-border text-muted-foreground",
-        blue: "border-transparent bg-primary/15 text-primary",
-        purple: "border-transparent bg-[#bc8cff]/15 text-[#bc8cff]",
+        // Metadata chips (format, ISO, focal length, aperture) stay monochrome —
+        // amber is reserved for things that actually want attention.
+        blue: "border-border bg-secondary text-foreground",
+        purple: "border-border bg-secondary text-foreground",
         green: "border-transparent bg-success/15 text-success",
         orange: "border-transparent bg-warning/15 text-warning",
       },
