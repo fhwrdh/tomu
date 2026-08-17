@@ -6,8 +6,11 @@ development, and scans through one pipeline: *shoot → develop → scan → cat
 The name is the Japanese **富む (tomu)**, "to be abundant / rich" — for the
 abundance of film and photographs a working photographer accumulates.
 
-> Status: personal project, run in production by its author. Being tidied up so
-> others can self-host. **Not yet open-source-licensed** — see [License](#license).
+> Status: personal project, run in production by its author, and open for others
+> to self-host. MIT-licensed.
+>
+> Built solo, AI-assisted (Claude Code) and human-directed — the architecture and
+> product decisions are the author's; the AI was the pair. Commit trailers reflect that.
 
 ## Screenshots
 
@@ -104,5 +107,4 @@ Project conventions (data model, IDs, developer-chemistry rules) live in
 
 ## License
 
-**No license yet** — all rights reserved for now. A license will be chosen before any
-public open-source release. Until then, please don't redistribute.
+[MIT](LICENSE) © Franklin Henderson. Use it, fork it, run your own instance.
