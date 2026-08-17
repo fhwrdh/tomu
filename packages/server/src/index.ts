@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import Fastify from "fastify";
+import { ZodError } from "zod";
 import { config } from "./config.js";
 import authPlugin from "./plugins/auth.js";
 import { authRoutes } from "./routes/auth.js";
@@ -22,6 +23,21 @@ const fastify = Fastify({
 await fastify.register(cors, { origin: config.CORS_ORIGIN });
 await fastify.register(jwt, { secret: config.JWT_SECRET });
 await fastify.register(authPlugin);
+
+// Map validation errors (routes parse request bodies with Zod `.parse()`) to 400
+// instead of the default unhandled-throw 500. Everything else keeps its status.
+fastify.setErrorHandler((error, request, reply) => {
+  if (error instanceof ZodError) {
+    return reply.status(400).send({
+      error: "Validation failed",
+      details: error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`),
+    });
+  }
+  const e = error as { statusCode?: number; message?: string };
+  const statusCode = e.statusCode ?? 500;
+  if (statusCode >= 500) request.log.error(error);
+  return reply.status(statusCode).send({ error: e.message || "Internal Server Error" });
+});
 
 // Routes
 await fastify.register(authRoutes, { prefix: "/api/v1/auth" });

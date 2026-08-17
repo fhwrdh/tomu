@@ -1367,18 +1367,23 @@ server.tool(
 
 server.tool(
   "tomu_correct_roll",
-  "Fix a roll that was logged against the wrong film stock. Identify the roll by displayId (e.g. '20260528.01'). " +
-    "If the right stock isn't in the DB yet, pass manufacturer + iso (+ optional type) to create it on the fly. " +
-    "Updates the roll's filmStockId and re-rates ISO to the new stock's box ISO unless ratedIso is passed.",
+  "Fix fields on an already-logged roll, found by its CURRENT displayId (e.g. '20260528.01'). " +
+    "Corrects the film stock (pass `film`; if the stock isn't in the DB, add manufacturer + iso to create it) " +
+    "and/or dates: `newDisplayId` fixes a mis-stamped date/sequence (e.g. a server-timezone error), " +
+    "`devDate` (YYYY-MM-DD), `loadedAt`/`unloadedAt` (ISO 8601). Pass only what you want to change.",
   {
-    displayId: z.string().describe("Display ID of the roll to correct (e.g. '20260528.01')"),
-    film: z.string().describe("Correct film stock name (e.g. 'Kodak Ektapan')"),
-    manufacturer: z.string().optional().describe("Manufacturer if creating new stock"),
-    iso: z.number().int().positive().optional().describe("Box ISO if creating new stock"),
-    type: z.string().optional().describe("Film type if creating new stock: 'bw' (default), 'color_negative', 'color_positive'"),
-    ratedIso: z.number().int().positive().optional().describe("Override rated ISO (defaults to new stock's box ISO)"),
+    displayId: z.string().describe("Current display ID of the roll to correct (e.g. '20260528.01')"),
+    film: z.string().optional().describe("Correct film stock name (e.g. 'Kodak Ektapan'). Omit to change only dates."),
+    manufacturer: z.string().optional().describe("Manufacturer if creating a new stock"),
+    iso: z.number().int().positive().optional().describe("Box ISO if creating a new stock"),
+    type: z.string().optional().describe("Film type if creating a new stock: 'bw' (default), 'color_negative', 'color_positive'"),
+    ratedIso: z.number().int().positive().optional().describe("Override rated ISO (defaults to the stock's box ISO when film changes)"),
+    newDisplayId: z.string().optional().describe("Corrected display ID, format YYYYMMDD.N (e.g. fix 20260816.01 -> 20260815.01)"),
+    devDate: z.string().optional().describe("Corrected develop date, YYYY-MM-DD"),
+    loadedAt: z.string().optional().describe("Corrected load timestamp, ISO 8601"),
+    unloadedAt: z.string().optional().describe("Corrected unload timestamp, ISO 8601"),
   },
-  async ({ displayId, film, manufacturer, iso, type, ratedIso }) => {
+  async ({ displayId, film, manufacturer, iso, type, ratedIso, newDisplayId, devDate, loadedAt, unloadedAt }) => {
     // Find roll by displayId (scan all statuses)
     const { data: allRolls } = await api<{ data: Array<{ id: string; displayId: string | null }> }>("/rolls?status=all");
     const roll = allRolls.find((r) => r.displayId === displayId);
@@ -1386,34 +1391,49 @@ server.tool(
       return { content: [{ type: "text" as const, text: `No roll with displayId "${displayId}".` }] };
     }
 
-    // Resolve or create stock
-    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number; aliases?: string[] }> }>("/film-stocks");
-    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer, ...(s.aliases ?? [])]);
-    let stock: { id: string; manufacturer: string; name: string; iso: number } | null = null;
-    if (m.kind === "single") stock = m.item;
-    else if (m.kind === "tied") {
-      return { content: [{ type: "text" as const, text: `Film "${film}" is ambiguous. Tied: ${m.items.map((s) => `${s.manufacturer} ${s.name}`).join(", ")}.` }] };
-    } else {
-      if (!manufacturer || !iso) {
-        return { content: [{ type: "text" as const, text: `Stock "${film}" not found. Pass manufacturer + iso to create it.` }] };
+    const patch: Record<string, unknown> = {};
+    const changed: string[] = [];
+
+    // Optional film-stock correction
+    if (film) {
+      const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number; aliases?: string[] }> }>("/film-stocks");
+      const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer, ...(s.aliases ?? [])]);
+      let stock: { id: string; manufacturer: string; name: string; iso: number } | null = null;
+      if (m.kind === "single") stock = m.item;
+      else if (m.kind === "tied") {
+        return { content: [{ type: "text" as const, text: `Film "${film}" is ambiguous. Tied: ${m.items.map((s) => `${s.manufacturer} ${s.name}`).join(", ")}.` }] };
+      } else {
+        if (!manufacturer || !iso) {
+          return { content: [{ type: "text" as const, text: `Stock "${film}" not found. Pass manufacturer + iso to create it.` }] };
+        }
+        const created = await api<{ data: { id: string; manufacturer: string; name: string; iso: number } }>("/film-stocks", {
+          method: "POST",
+          body: JSON.stringify({ manufacturer, name: cleanStockName(film, manufacturer), iso, type: type || "bw" }),
+        });
+        stock = created.data;
       }
-      const created = await api<{ data: { id: string; manufacturer: string; name: string; iso: number } }>("/film-stocks", {
-        method: "POST",
-        body: JSON.stringify({ manufacturer, name: cleanStockName(film, manufacturer), iso, type: type || "bw" }),
-      });
-      stock = created.data;
+      patch.filmStockId = stock.id;
+      patch.ratedIso = ratedIso ?? stock.iso;
+      changed.push(`stock → ${stock.manufacturer} ${stock.name} (ISO ${patch.ratedIso})`);
+    } else if (ratedIso != null) {
+      patch.ratedIso = ratedIso;
+      changed.push(`rated ISO → ${ratedIso}`);
     }
 
-    const patch: Record<string, unknown> = { filmStockId: stock.id };
-    patch.ratedIso = ratedIso ?? stock.iso;
+    // Optional date corrections
+    if (newDisplayId != null) { patch.displayId = newDisplayId; changed.push(`display ID → ${newDisplayId}`); }
+    if (devDate != null) { patch.devDate = devDate; changed.push(`dev date → ${devDate}`); }
+    if (loadedAt != null) { patch.loadedAt = loadedAt; changed.push(`loaded → ${loadedAt}`); }
+    if (unloadedAt != null) { patch.unloadedAt = unloadedAt; changed.push(`unloaded → ${unloadedAt}`); }
+
+    if (Object.keys(patch).length === 0) {
+      return { content: [{ type: "text" as const, text: `Nothing to change. Pass film and/or a date field (newDisplayId, devDate, loadedAt, unloadedAt).` }] };
+    }
 
     await api(`/rolls/${roll.id}`, { method: "PATCH", body: JSON.stringify(patch) });
 
     return {
-      content: [{
-        type: "text" as const,
-        text: `Roll **${displayId}** repointed to **${stock.manufacturer} ${stock.name}** (ISO ${patch.ratedIso}).`,
-      }],
+      content: [{ type: "text" as const, text: `Roll **${displayId}** corrected: ${changed.join("; ")}.` }],
     };
   }
 );
