@@ -68,9 +68,21 @@ Open http://localhost:5173 and register the first account.
 
 ```bash
 npm run build                 # build all packages (order-aware)
+npm test                      # Vitest — unit suite
+npm run test:coverage         # ...with a coverage report
 npm run lint                  # eslint the client
 npm run -w packages/server db:studio   # Drizzle Studio
 ```
+
+### Testing
+
+The pure domain logic — developer dilution math (HC-110 letter codes, min-syrup
+floors), Dev Id formatting, and dev-shorthand parsing — is unit-tested with
+Vitest (100% function/line coverage on those modules). These are the rules that,
+when wrong, cost real film, so they're the first thing pinned down; the suite
+already caught a fuzzy-matching bug in tank resolution. Tests run in CI on every
+PR and gate the deploy. Integration coverage of the API/MCP mutation paths is
+[tracked next](https://github.com/fhwrdh/tomu/issues/15).
 
 ## Using it from Claude (MCP)
 
