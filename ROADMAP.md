@@ -28,7 +28,7 @@ Standing rules to follow when planning dev / scan workflows. These belong here, 
 - **HC-110 dilution letters → ratios (Kodak canonical):** A=1+15, B=1+31, C=1+19, D=1+39, E=1+47, F=1+79, G=1+119, H=1+63. **Always verify against `data/mdc/hc110.txt` before quoting.**
 - **Batch dev days:** user loads many tanks one day, develops the next (may split across multiple nights). Plan as multi-tank sequences, not one-offs.
 - **MCP-first field input:** in the field, the MCP tools are the primary input path; the UI is for later review.
-- **Field fallback when MCP not reachable:** when away from a Claude Code session with `tomu_*` tools (e.g. travel, no laptop), use a Google Drive doc as the durable field log instead of relying on chat history. Mobile Claude app + Drive connector append timestamped entries to a per-trip doc following the format embedded at the top of the doc. Transcribed into Tomu via MCP on return. Active doc for the upcoming trip: "Tomu Field Log — Japan 2026" (Drive id `1ogZZbmcIA7NLviizKqodYmQeaikTbHYxjw_GsPswuqo`). Reason chat-as-log is unsafe: context window compression has lost important details in past sessions.
+- **Field fallback when MCP not reachable:** when away from a Claude Code session with `tomu_*` tools (e.g. travel, no laptop), use a Google Drive doc as the durable field log instead of relying on chat history. Mobile Claude app + Drive connector append timestamped entries to a per-trip doc following the format embedded at the top of the doc. Transcribed into Tomu via MCP on return. A per-trip doc is kept for the active trip. Reason chat-as-log is unsafe: context window compression has lost important details in past sessions.
 
 ## Gear inventory
 
@@ -43,8 +43,8 @@ Authoritative kit summary. Update when gear changes.
 
 ## External references
 
-- **Pre-Tomu dev log** — Google Sheet at https://docs.google.com/spreadsheets/d/101B1WmsPQm08E3ewJp-vQzVK6YYPhwx-tyUTUp3Bjb0/ — source of truth for Dev Ids 0001–0716. Local cache at `/tmp/filmlog.csv` (transient).
-- **Lightroom catalog** — User has an existing LR catalog with substantial historical photo work. Will be the eventual sync target for scans + a backfill source for historical matches.
+- **Pre-Tomu dev log** — a spreadsheet was the source of truth for Dev Ids 0001–0716; imported into Tomu as historical rolls.
+- **Lightroom catalog** — an existing Lightroom Classic catalog holds the historical photo work; the eventual sync target for scans + a backfill source for historical matches.
 - **Massive Dev Chart dumps** — `data/mdc/hc110.txt`, `data/mdc/rodinal.txt`, `data/mdc/510pyro.txt`. Tab-separated, columns: Film, Developer, Dilution, ASA/ISO, 35mm, 120, Sheet, Temp, Notes.
 
 ## Data model
@@ -91,10 +91,9 @@ All shipped 2026-07-07:
 
 ## Trips
 
-Date ranges for tag suggestion. Suggest by frame date — don't auto-apply.
-
-- **colorado-2025** — 2025-04-27 to 2025-05-06
-- **japan-2026** — 2026-05-25 to 2026-06-04 (completed; 18 rolls logged + reconciled 2026-07-04, 4 rolls pending canister check — see memory)
+Named date ranges drive tag suggestion — a frame shot within a trip's dates is
+offered that trip's tag (suggest by frame date; never auto-apply). Trips are the
+owner's own; not tracked here.
 
 ## Calendar / deadlines
 

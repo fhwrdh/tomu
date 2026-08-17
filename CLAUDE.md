@@ -52,7 +52,7 @@ Tools: `tomu_inventory`, `tomu_add_inventory`, `tomu_gear`, `tomu_summary`
 
 ## Deployment
 
-- **URL**: `film.fhwrdh.net` → DO droplet (157.230.156.132)
+- **URL**: `film.fhwrdh.net` → a DigitalOcean droplet
 - **Backend**: Fastify managed by PM2, behind nginx reverse proxy
 - **Frontend**: Static Vite build served by nginx
 - **Files**: DO Spaces (S3-compatible) for images and scans
