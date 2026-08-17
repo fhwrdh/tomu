@@ -29,9 +29,10 @@ jobs:
           cache: npm
 
       # Build gate: if the tree doesn't build, fail BEFORE touching production.
-      - name: Install & build (gate)
+      - name: Install, test & build (gate)
         run: |
           npm ci
+          npm test
           npm run build
 
       - name: Configure SSH

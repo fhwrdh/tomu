@@ -190,16 +190,23 @@ export function computeDilution(
 /** Resolve a tank by fuzzy name: "sp445", "SP-445", "jobo", "paterson 2-reel"… */
 export function findTank(query: string): TankSpec | null {
   const q = query.toLowerCase().replace(/[^a-z0-9]/g, "");
-  for (const [key, spec] of Object.entries(TANKS)) {
-    const k = key.replace(/[^a-z0-9]/g, "");
-    const n = spec.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (k === q || n.includes(q) || q.includes(k)) return spec;
+  if (!q) return null;
+
+  // 1. Exact key match wins.
+  for (const key of Object.keys(TANKS)) {
+    if (key.replace(/[^a-z0-9]/g, "") === q) return TANKS[key];
   }
-  // Common shorthands
+  // 2. Intent-encoded shorthands — before fuzzy name matching, so "paterson"
+  //    isn't captured by the MOD54's "(Paterson Universal)" in its name.
   if (q.includes("stearman") || q.includes("sp445")) return TANKS["sp-445"];
   if (q.includes("jobo")) return TANKS["jobo-1520"];
   if (q.includes("mod54") || q.includes("mod")) return TANKS.mod54;
   if (q.includes("paterson") && q.includes("3")) return TANKS["paterson-3"];
   if (q.includes("paterson")) return TANKS["paterson-2"];
+  // 3. Fuzzy name match as a last resort.
+  for (const spec of Object.values(TANKS)) {
+    const n = spec.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (n.includes(q) || q.includes(n)) return spec;
+  }
   return null;
 }
