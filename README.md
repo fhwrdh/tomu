@@ -9,6 +9,17 @@ abundance of film and photographs a working photographer accumulates.
 > Status: personal project, run in production by its author. Being tidied up so
 > others can self-host. **Not yet open-source-licensed** — see [License](#license).
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/rolls.png" width="24%" alt="Rolls — the active roll list" />
+  <img src="docs/screenshots/roll.png" width="24%" alt="Roll detail — the per-frame log" />
+  <img src="docs/screenshots/inventory.png" width="24%" alt="Film inventory" />
+  <img src="docs/screenshots/gear.png" width="24%" alt="Gear — cameras and lenses" />
+</p>
+
+<p align="center"><sub>The mobile PWA. A "darkroom" palette — one amber safelight signal, monochrome everywhere else, so a calm screen means nothing needs attention.</sub></p>
+
 ## What makes it different
 
 - **API-first.** Every capability is a REST endpoint. The web UI is just one client.

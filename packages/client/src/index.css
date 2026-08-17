@@ -2,30 +2,44 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* GitHub Dark Mode palette */
+/* Darkroom — a neutral near-black ground under a single amber safelight.
+   Color is load-bearing: amber for anything that wants attention, red for
+   real problems, monochrome everywhere else. A calm screen means nothing
+   needs attention. */
 @theme {
-  --color-background: #0d1117;
-  --color-foreground: #e6edf3;
-  --color-card: #161b22;
-  --color-card-foreground: #e6edf3;
-  --color-popover: #1c2128;
-  --color-popover-foreground: #e6edf3;
-  --color-primary: #58a6ff;
-  --color-primary-foreground: #0d1117;
-  --color-secondary: #21262d;
-  --color-secondary-foreground: #e6edf3;
-  --color-muted: #21262d;
-  --color-muted-foreground: #8b949e;
-  --color-accent: #1f6feb;
-  --color-accent-foreground: #e6edf3;
-  --color-destructive: #f85149;
-  --color-destructive-foreground: #e6edf3;
-  --color-border: #30363d;
-  --color-input: #21262d;
-  --color-ring: #58a6ff;
-  --color-success: #3fb950;
-  --color-warning: #d29922;
-  --color-danger: #f85149;
+  --color-background: #0c0d0e; /* darkroom dark */
+  --color-foreground: #eae7e1; /* warm paper white */
+  --color-card: #15171a;
+  --color-card-foreground: #eae7e1;
+  --color-popover: #1b1e22;
+  --color-popover-foreground: #eae7e1;
+
+  /* The one warm signal — actions, active state, anything worth noticing. */
+  --color-primary: #e0a34a; /* amber safelight */
+  --color-primary-foreground: #0c0d0e;
+
+  --color-secondary: #1b1e22;
+  --color-secondary-foreground: #eae7e1;
+  --color-muted: #191b1e;
+  --color-muted-foreground: #9a9591; /* dim — WCAG AA on the ground */
+  --color-accent: #1b1e22; /* subtle raised surface, not a brand color */
+  --color-accent-foreground: #eae7e1;
+
+  /* Real problems only. */
+  --color-destructive: #c65f4b; /* red safelight */
+  --color-destructive-foreground: #eae7e1;
+
+  --color-border: #26292e; /* hairline */
+  --color-input: #1b1e22;
+  --color-ring: #e0a34a; /* amber focus */
+
+  /* Semantic aliases collapse onto the two signals + monochrome:
+     warning == the amber signal, danger == the red alert, success stays calm. */
+  --color-success: #9a9591; /* in-stock / fine — quiet, not green */
+  --color-warning: #e0a34a; /* attention — amber */
+  --color-danger: #c65f4b; /* problem — red */
+
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
 * {
@@ -36,9 +50,37 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 select option {
   background-color: var(--color-popover);
   color: var(--color-foreground);
+}
+
+/* Visible keyboard focus everywhere — the amber signal doubles as the focus ring. */
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* Technical readouts (Dev Ids, times, dilutions, f-stops, ISO) read like an
+   instrument: tabular mono. Opt in with class="tabular". */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* One quiet motion floor; honor the OS setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
