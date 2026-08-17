@@ -6,14 +6,16 @@ const API_BASE = process.env.TOMU_API_URL || "http://localhost:3456/api/v1";
 const API_TOKEN = process.env.TOMU_API_TOKEN || "";
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${API_TOKEN}`,
-      ...((options.headers as Record<string, string>) || {}),
-    },
-  });
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${API_TOKEN}`,
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  // Only advertise a JSON body when we actually send one. A DELETE (or any
+  // bodyless request) with Content-Type: application/json makes Fastify reject
+  // it as "body cannot be empty" (400) — which broke tomu_undo_load.
+  if (options.body != null) headers["Content-Type"] = "application/json";
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -630,8 +632,13 @@ async function pickActiveRoll(cameraHint?: string): Promise<{ roll?: ActiveRoll;
   if (rolls.length === 0) return { error: "No active rolls. Load one first with tomu_load." };
 
   const candidates = cameraHint
-    ? rolls.filter((r) =>
-        fuzzyMatch(cameraHint, r.cameraMake ?? "", r.cameraModel ?? "", `${r.cameraMake ?? ""} ${r.cameraModel ?? ""}`),
+    ? rolls.filter(
+        (r) =>
+          // Must have an actual camera to match a camera hint — otherwise
+          // camera-less rolls (e.g. loaded 4x5 sheets) fuzzy-match every hint
+          // because their empty make/model are trivially "contained" in it.
+          (r.cameraMake || r.cameraModel) &&
+          fuzzyMatch(cameraHint, r.cameraMake ?? "", r.cameraModel ?? "", `${r.cameraMake ?? ""} ${r.cameraModel ?? ""}`),
       )
     : rolls;
 
