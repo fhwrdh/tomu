@@ -114,6 +114,12 @@ export const updateRollSchema = z.object({
   devShorthand: z.string().max(50).nullish(),
   intendedDilution: z.string().max(50).nullish(),
   intendedDevTimeSeconds: z.number().int().positive().nullish(),
+  // Date corrections (e.g. fixing a display_id mis-stamped by a server-TZ bug).
+  // displayId is a raw edit — the correct value is the caller's responsibility.
+  displayId: z.string().regex(/^\d{8}\.\d+$/, "displayId must be YYYYMMDD.N").nullish(),
+  devDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "devDate must be YYYY-MM-DD").nullish(),
+  loadedAt: z.coerce.date().nullish(),
+  unloadedAt: z.coerce.date().nullish(),
 });
 
 export const rollStatusSchema = z.object({
