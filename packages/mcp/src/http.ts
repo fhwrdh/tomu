@@ -1,99 +1,46 @@
 #!/usr/bin/env node
 
 /**
- * Remote entry point: Tomu MCP over Streamable HTTP.
- *
- * Lets the Claude mobile/web app reach Tomu as a custom connector — field
- * capture from a phone ("pit of success": the log is wherever you are).
- *
- * Auth (either satisfies):
- *   - `Authorization: Bearer <TOMU_MCP_TOKEN>` header
- *   - secret URL path: /<TOMU_MCP_PATH_SECRET>/mcp  (for connector UIs that
- *     only accept a URL)
+ * Remote entry point: Tomu MCP over Streamable HTTP, with an OAuth 2.1
+ * authorization server (for the claude.ai connector) and a legacy
+ * static-token / path-secret fallback (for Claude Code / headless).
  *
  * Env:
  *   MCP_PORT              listen port (default 3457, loopback — nginx fronts it)
- *   TOMU_MCP_TOKEN        bearer token (optional if path secret set)
- *   TOMU_MCP_PATH_SECRET  URL path secret (optional if token set)
- *   TOMU_API_URL / TOMU_API_TOKEN  as for the stdio server
+ *   OAUTH_ISSUER_URL      public https base, e.g. https://film.fhwrdh.net
+ *   DATABASE_URL          Postgres (OAuth client/code/token storage)
+ *   TOMU_API_URL/_TOKEN   app API (tool calls + login verification)
+ *   TOMU_MCP_TOKEN        legacy static bearer (optional fallback)
+ *   TOMU_MCP_PATH_SECRET  legacy URL path secret (optional fallback)
  */
-
-import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import express, { type Request, type Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { createServer } from "./server.js";
+import { handleConsent, tomuOAuthProvider } from "./oauth/provider.js";
 
 const PORT = Number(process.env.MCP_PORT || 3457);
+const ISSUER = process.env.OAUTH_ISSUER_URL || `http://localhost:${PORT}`;
 const TOKEN = process.env.TOMU_MCP_TOKEN || "";
 const PATH_SECRET = process.env.TOMU_MCP_PATH_SECRET || "";
 
-if (!TOKEN && !PATH_SECRET) {
-  console.error("Refusing to start unauthenticated: set TOMU_MCP_TOKEN and/or TOMU_MCP_PATH_SECRET.");
-  process.exit(1);
-}
-
-/** Constant-time string comparison — secrets must not leak length/prefix timing. */
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
-
 function pathSecretSegment(url: string): string {
-  // "/<secret>/mcp" → "<secret>"; anything else → ""
-  const m = url.split("?")[0].match(/^\/([^/]+)\/mcp$/);
+  const m = url.split("?")[0].match(/^\/([^/]+)\/mcp\/?$/);
   return m ? m[1] : "";
 }
 
-function authorized(req: IncomingMessage): boolean {
-  const auth = req.headers.authorization ?? "";
-  if (TOKEN && auth.startsWith("Bearer ") && safeEqual(auth.slice(7), TOKEN)) return true;
-  if (PATH_SECRET && safeEqual(pathSecretSegment(req.url ?? ""), PATH_SECRET)) return true;
-  return false;
-}
-
-/** Path is /mcp or /<secret>/mcp; anything else 404s. */
-function isMcpPath(url: string): boolean {
-  const path = url.split("?")[0];
-  return path === "/mcp" || (PATH_SECRET !== "" && safeEqual(pathSecretSegment(path), PATH_SECRET));
-}
-
-function readBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (c) => {
-      data += c;
-      if (data.length > 4 * 1024 * 1024) reject(new Error("body too large"));
-    });
-    req.on("end", () => {
-      if (!data) return resolve(undefined);
-      try {
-        resolve(JSON.parse(data));
-      } catch {
-        resolve(undefined);
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-// One transport (and McpServer) per session, keyed by mcp-session-id.
+// ── shared MCP transport handling (one session per mcp-session-id) ──
 const transports = new Map<string, StreamableHTTPServerTransport>();
 
-async function handle(req: IncomingMessage, res: ServerResponse) {
-  if (!isMcpPath(req.url ?? "")) {
-    res.writeHead(404).end("not found");
-    return;
-  }
-  if (!authorized(req)) {
-    res.writeHead(401, { "WWW-Authenticate": "Bearer" }).end("unauthorized");
-    return;
-  }
-
+async function handleMcp(req: Request, res: Response): Promise<void> {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  const body = req.method === "POST" ? await readBody(req) : undefined;
-
+  const body = req.method === "POST" ? req.body : undefined;
   let transport = sessionId ? transports.get(sessionId) : undefined;
 
   if (!transport) {
@@ -101,12 +48,14 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       req.method === "POST" &&
       body != null &&
       (Array.isArray(body)
-        ? body.some((m) => m?.method === "initialize")
-        : (body as { method?: string }).method === "initialize");
+        ? body.some((m: { method?: string }) => m?.method === "initialize")
+        : (body as { method?: string })?.method === "initialize");
     if (!isInit) {
-      res
-        .writeHead(400, { "Content-Type": "application/json" })
-        .end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "No valid session. Send initialize first." }, id: null }));
+      res.status(400).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "No valid session. Send initialize first." },
+        id: null,
+      });
       return;
     }
     transport = new StreamableHTTPServerTransport({
@@ -118,20 +67,64 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     transport.onclose = () => {
       if (transport!.sessionId) transports.delete(transport!.sessionId);
     };
-    const server = createServer();
-    await server.connect(transport);
+    await createServer().connect(transport);
   }
 
   await transport.handleRequest(req, res, body);
 }
 
-const httpServer = createHttpServer((req, res) => {
-  handle(req, res).catch((err) => {
-    console.error("request error:", err);
-    if (!res.headersSent) res.writeHead(500).end("internal error");
+// ── dual-mode auth: OAuth access token, else legacy static bearer / path secret ──
+async function authMcp(req: Request, res: Response, next: () => void): Promise<void> {
+  const auth = req.headers.authorization ?? "";
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (bearer) {
+    try {
+      (req as Request & { auth?: unknown }).auth = await tomuOAuthProvider.verifyAccessToken(bearer);
+      return next();
+    } catch {
+      /* not an OAuth token — try legacy */
+    }
+    if (TOKEN && safeEqual(bearer, TOKEN)) return next();
+  }
+  if (PATH_SECRET && safeEqual(pathSecretSegment(req.originalUrl), PATH_SECRET)) return next();
+  res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${ISSUER}/.well-known/oauth-protected-resource"`);
+  res.status(401).json({ error: "unauthorized" });
+}
+
+const app = express();
+app.disable("x-powered-by");
+
+// OAuth authorization-server endpoints: metadata, /register (DCR), /authorize, /token, /revoke
+app.use(
+  mcpAuthRouter({
+    provider: tomuOAuthProvider,
+    issuerUrl: new URL(ISSUER),
+    scopesSupported: ["tomu"],
+    resourceName: "Tomu",
+  }),
+);
+
+// Login-form POST (consent) → issues an authorization code
+app.post("/oauth/consent", express.urlencoded({ extended: false }), (req, res) => {
+  handleConsent(req, res).catch((e) => {
+    console.error("consent error:", e);
+    if (!res.headersSent) res.status(500).send("internal error");
   });
 });
 
-httpServer.listen(PORT, "127.0.0.1", () => {
-  console.error(`tomu-mcp http listening on 127.0.0.1:${PORT} (auth: ${TOKEN ? "bearer" : ""}${TOKEN && PATH_SECRET ? "+" : ""}${PATH_SECRET ? "path-secret" : ""})`);
+// MCP endpoint — clean `/mcp` and legacy `/<secret>/mcp`, both dual-auth
+const mcpJson = express.json({ limit: "4mb" });
+const runMcp = (req: Request, res: Response) =>
+  handleMcp(req, res).catch((e) => {
+    console.error("mcp error:", e);
+    if (!res.headersSent) res.status(500).end("internal error");
+  });
+app.all("/mcp", authMcp, mcpJson, runMcp);
+app.all(/^\/[^/]+\/mcp$/, authMcp, mcpJson, runMcp);
+
+app.listen(PORT, "127.0.0.1", () => {
+  console.error(
+    `tomu-mcp http on 127.0.0.1:${PORT} — OAuth issuer ${ISSUER}` +
+      (TOKEN || PATH_SECRET ? " (+legacy fallback)" : ""),
+  );
 });

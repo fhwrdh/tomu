@@ -102,12 +102,14 @@ sudo env PATH=$PATH pm2 startup systemd -u deploy --hp /home/deploy   # boot per
 
 ## 6. nginx + TLS
 
-Serve the client build and proxy the two services. Minimal server block:
+Serve the client build and proxy the two services. A ready-to-use source config is
+tracked at [`deploy/nginx/tomu.conf`](../deploy/nginx/tomu.conf) (and the rate-limit
+zone at `deploy/nginx/tomu-ratelimit.conf`). Minimal server block:
 
 ```nginx
 server {
     server_name tomu.example.com;
-    root /home/deploy/filmlog/packages/client/dist;
+    root /home/deploy/tomu/packages/client/dist;
     index index.html;
 
     location /api/ { proxy_pass http://127.0.0.1:3456; proxy_set_header Host $host; }
@@ -120,6 +122,15 @@ server {
         proxy_buffering off;
         proxy_read_timeout 3600s;
     }
+
+    # OAuth 2.1 authorization-server endpoints -> the MCP process. Lets the
+    # claude.ai connector authenticate via OAuth (clean /mcp URL, no path secret).
+    location ^~ /.well-known/oauth { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /authorize     { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /token         { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /register      { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /revoke        { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
+    location = /oauth/consent { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
 
     location / { try_files $uri $uri/ /index.html; }
 }
