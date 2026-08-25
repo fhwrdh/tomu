@@ -48,7 +48,12 @@ Exposes Tomu tools to Claude sessions. Configured via environment:
 - `TOMU_API_URL` — API base URL (default: `http://localhost:3456/api/v1`)
 - `TOMU_API_TOKEN` — JWT token for auth
 
-Tools: `tomu_inventory`, `tomu_add_inventory`, `tomu_gear`, `tomu_summary`
+Tools, by area:
+
+- **Inventory** — `tomu_inventory`, `tomu_add_inventory`, `tomu_edit_inventory`, `tomu_delete_inventory`, `tomu_set_stock_aliases`
+- **Shooting** — `tomu_load`, `tomu_shoot`, `tomu_unload`, `tomu_undo_load`, `tomu_rolls`, `tomu_log_shot_roll`, `tomu_correct_roll`
+- **Development** — `tomu_dev_candidates`, `tomu_dev_session`, `tomu_dilution`, `tomu_tanks`, `tomu_tank_plan`
+- **Other** — `tomu_gear`, `tomu_summary`, `tomu_note`
 
 ## Deployment
 

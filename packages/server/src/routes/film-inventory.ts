@@ -18,34 +18,53 @@ async function nextInventoryDisplayId(userId: string): Promise<string> {
   return `R${String(max + 1).padStart(3, "0")}`;
 }
 
+/**
+ * The canonical inventory shape: the row plus its joined film-stock fields.
+ * Reads and writes both return this so clients never get a half-populated item —
+ * a bare `returning()` row has no manufacturer/stockName, which made the MCP
+ * layer throw on a *successful* write while formatting its confirmation.
+ */
+const inventorySelection = {
+  id: filmInventory.id,
+  filmStockId: filmInventory.filmStockId,
+  format: filmInventory.format,
+  form: filmInventory.form,
+  quantity: filmInventory.quantity,
+  frameCount: filmInventory.frameCount,
+  ratedIso: filmInventory.ratedIso,
+  displayId: filmInventory.displayId,
+  remainingLengthFt: filmInventory.remainingLengthFt,
+  originalLengthFt: filmInventory.originalLengthFt,
+  expirationDate: filmInventory.expirationDate,
+  storageLocation: filmInventory.storageLocation,
+  purchaseDate: filmInventory.purchaseDate,
+  costPerRoll: filmInventory.costPerRoll,
+  source: filmInventory.source,
+  notes: filmInventory.notes,
+  createdAt: filmInventory.createdAt,
+  updatedAt: filmInventory.updatedAt,
+  manufacturer: filmStocks.manufacturer,
+  stockName: filmStocks.name,
+  iso: filmStocks.iso,
+  filmType: filmStocks.type,
+};
+
+/** Re-read one inventory row in the canonical joined shape. */
+async function findInventoryRow(id: string, userId: string) {
+  const [row] = await db
+    .select(inventorySelection)
+    .from(filmInventory)
+    .innerJoin(filmStocks, eq(filmInventory.filmStockId, filmStocks.id))
+    .where(and(eq(filmInventory.id, id), eq(filmInventory.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function filmInventoryRoutes(fastify: FastifyInstance) {
   // List all inventory items (with film stock details)
   fastify.get("/", async (request) => {
     const rows = await db
-      .select({
-        id: filmInventory.id,
-        filmStockId: filmInventory.filmStockId,
-        format: filmInventory.format,
-        form: filmInventory.form,
-        quantity: filmInventory.quantity,
-        frameCount: filmInventory.frameCount,
-        ratedIso: filmInventory.ratedIso,
-        displayId: filmInventory.displayId,
-        remainingLengthFt: filmInventory.remainingLengthFt,
-        originalLengthFt: filmInventory.originalLengthFt,
-        expirationDate: filmInventory.expirationDate,
-        storageLocation: filmInventory.storageLocation,
-        purchaseDate: filmInventory.purchaseDate,
-        costPerRoll: filmInventory.costPerRoll,
-        source: filmInventory.source,
-        notes: filmInventory.notes,
-        createdAt: filmInventory.createdAt,
-        updatedAt: filmInventory.updatedAt,
-        manufacturer: filmStocks.manufacturer,
-        stockName: filmStocks.name,
-        iso: filmStocks.iso,
-        filmType: filmStocks.type,
-      })
+      .select(inventorySelection)
       .from(filmInventory)
       .innerJoin(filmStocks, eq(filmInventory.filmStockId, filmStocks.id))
       .where(eq(filmInventory.userId, request.userId))
@@ -112,7 +131,7 @@ export async function filmInventoryRoutes(fastify: FastifyInstance) {
       })
       .returning();
 
-    return reply.status(201).send({ data: row });
+    return reply.status(201).send({ data: await findInventoryRow(row.id, request.userId) });
   });
 
   // Update inventory item
@@ -131,7 +150,7 @@ export async function filmInventoryRoutes(fastify: FastifyInstance) {
       .returning();
 
     if (!row) return reply.status(404).send({ error: "Inventory item not found" });
-    return { data: row };
+    return { data: await findInventoryRow(row.id, request.userId) };
   });
 
   // Claim: give a specific physical item a stable display ID (Rxxx).
@@ -166,7 +185,7 @@ export async function filmInventoryRoutes(fastify: FastifyInstance) {
         .set({ displayId, updatedAt: new Date() })
         .where(eq(filmInventory.id, source.id))
         .returning();
-      return reply.status(200).send({ data: row });
+      return reply.status(200).send({ data: await findInventoryRow(row.id, request.userId) });
     }
 
     // Split: decrement source by 1, create a new qty=1 row carrying over stock + format + form + other attrs.
@@ -194,7 +213,7 @@ export async function filmInventoryRoutes(fastify: FastifyInstance) {
       })
       .returning();
 
-    return reply.status(201).send({ data: row });
+    return reply.status(201).send({ data: await findInventoryRow(row.id, request.userId) });
   });
 
   // Delete inventory item
