@@ -28,7 +28,7 @@ export interface MatchOptions {
   ambiguitySeconds?: number;
   /** Asset ids already attached to some capture — never candidates. */
   usedAssetIds?: Set<string>;
-  /** captureId → photo uuid, decided by a human; bypasses the window. */
+  /** captureId → photo uuid, decided by a human; bypasses both the time window and usedAssetIds. */
   forced?: Map<string, string>;
 }
 
@@ -54,19 +54,40 @@ export function matchPhotos(
   const used = new Set(o.usedAssetIds ?? []);
   const byUuid = new Map(photos.map((p) => [p.uuid, p]));
 
-  // Pass 1: each capture's ranked candidates (forced pairings resolved first).
   type Ranked = { uuid: string; deltaSeconds: number };
   const ranked = new Map<string, Ranked[]>();
   const results = new Map<string, MatchResult>();
 
-  for (const c of captures) {
-    const forcedUuid = o.forced?.get(c.id);
-    if (forcedUuid && byUuid.has(forcedUuid)) {
-      const t = Date.parse(byUuid.get(forcedUuid)!.takenAt) - Date.parse(c.capturedAt);
-      results.set(c.id, { captureId: c.id, status: "matched", photoUuid: forcedUuid, deltaSeconds: Math.round(t / 1000), forced: true });
-      used.add(forcedUuid);
-      continue;
+  // Upfront: Detect duplicate forced entries and resolve all forced pairings before building ranked lists.
+  if (o.forced && o.forced.size > 0) {
+    const photoToCaptureIds = new Map<string, string[]>();
+    for (const [captureId, photoUuid] of o.forced) {
+      if (!photoToCaptureIds.has(photoUuid)) {
+        photoToCaptureIds.set(photoUuid, []);
+      }
+      photoToCaptureIds.get(photoUuid)!.push(captureId);
     }
+    for (const [photoUuid, captureIds] of photoToCaptureIds) {
+      if (captureIds.length > 1) {
+        throw new Error(`Forced pairing conflict: photo ${photoUuid} claimed by captures ${captureIds.join(", ")}`);
+      }
+    }
+
+    // Resolve all forced pairings, add their uuids to used
+    for (const c of captures) {
+      const forcedUuid = o.forced.get(c.id);
+      if (forcedUuid && byUuid.has(forcedUuid)) {
+        const t = Date.parse(byUuid.get(forcedUuid)!.takenAt) - Date.parse(c.capturedAt);
+        results.set(c.id, { captureId: c.id, status: "matched", photoUuid: forcedUuid, deltaSeconds: Math.round(t / 1000), forced: true });
+        used.add(forcedUuid);
+      }
+    }
+  }
+
+  // Pass 1: Build ranked candidate lists for non-forced captures (skips used assets).
+  for (const c of captures) {
+    if (results.has(c.id)) continue; // Already resolved by forced pairing
+
     const t0 = Date.parse(c.capturedAt);
     const lo = t0 - o.windowBeforeMin * 60_000;
     const hi = t0 + o.windowAfterMin * 60_000;
@@ -86,7 +107,7 @@ export function matchPhotos(
     ranked.set(c.id, cands);
   }
 
-  // Pass 2: detect photos wanted by more than one capture.
+  // Pass 2: Detect photos wanted by more than one capture.
   const claims = new Map<string, string[]>();
   for (const [cid, cands] of ranked) {
     const top = cands[0];
@@ -94,6 +115,7 @@ export function matchPhotos(
     claims.set(top.uuid, [...(claims.get(top.uuid) ?? []), cid]);
   }
 
+  // Pass 3: Finalize results for non-forced captures.
   for (const c of captures) {
     if (results.has(c.id)) continue;
     const cands = ranked.get(c.id) ?? [];

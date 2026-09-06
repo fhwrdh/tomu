@@ -70,4 +70,28 @@ describe("matchPhotos", () => {
     const r = matchPhotos([cap("a")], [photo("p1", -min(20))], { windowBeforeMin: 30, windowAfterMin: 0 });
     expect(r[0].status).toBe("matched");
   });
+
+  it("prevents cross-capture double-assignment when forced and unforced share a photo", () => {
+    const r = matchPhotos([cap("a"), cap("b", sec(30))], [photo("p1", -sec(10))], { forced: new Map([["b", "p1"]]) });
+    expect(r.map((x) => [x.captureId, x.status, x.photoUuid, x.forced])).toEqual([
+      ["a", "none", undefined, undefined],
+      ["b", "matched", "p1", true],
+    ]);
+  });
+
+  it("forced pairing overrides usedAssetIds", () => {
+    const r = matchPhotos([cap("a")], [photo("p1", -sec(10))], { usedAssetIds: new Set(["p1"]), forced: new Map([["a", "p1"]]) });
+    expect(r[0]).toMatchObject({ status: "matched", photoUuid: "p1", forced: true });
+  });
+
+  it("throws when two captures have forced pairings to the same photo", () => {
+    expect(() => {
+      matchPhotos([cap("a"), cap("b")], [photo("p1", -sec(10))], { forced: new Map([["a", "p1"], ["b", "p1"]]) });
+    }).toThrow(/Forced pairing conflict.*p1.*a.*b/);
+  });
+
+  it("handles empty input", () => {
+    const r = matchPhotos([], []);
+    expect(r).toEqual([]);
+  });
 });
