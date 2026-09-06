@@ -915,10 +915,12 @@ server.tool(
       notesOut.push("loose (no camera given)");
     }
 
+    let lensUnmatched = false;
     if (lens) {
       const { data: lenses } = await api<{ data: Array<{ id: string; make: string; model: string; focalLengthMm: number | null }> }>("/lenses");
       const match = lenses.find((l) => fuzzyMatch(lens, `${l.make} ${l.model}`, l.model, String(l.focalLengthMm ?? "")));
       if (match) body.lensId = match.id;
+      else lensUnmatched = true;
     }
     if (frameNumber != null) body.frameNumber = frameNumber;
     if (shutterSpeed) body.shutterSpeed = shutterSpeed;
@@ -939,7 +941,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `**${c.captureId}** · ${notesOut.join("; ")}${settings ? ` · ${settings}` : ""}${subject ? ` · ${subject}` : ""} · pending photo`,
+        text: `**${c.captureId}** · ${notesOut.join("; ")}${settings ? ` · ${settings}` : ""}${subject ? ` · ${subject}` : ""} · pending photo${lensUnmatched ? ` · lens "${lens}" not matched` : ""}`,
       }],
     };
   }

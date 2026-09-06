@@ -163,21 +163,25 @@ export async function capturesRoutes(fastify: FastifyInstance) {
     const fields: Record<string, string> = {};
     let fileBuf: Buffer | undefined;
     let mime: string | undefined;
-    for await (const part of request.parts()) {
-      if (part.type === "file") {
-        if (part.fieldname !== "file") { await part.toBuffer(); continue; }
-        mime = part.mimetype;
-        try {
+    try {
+      for await (const part of request.parts()) {
+        if (part.type === "file") {
+          if (part.fieldname !== "file") { await part.toBuffer(); continue; }
+          mime = part.mimetype;
           fileBuf = await part.toBuffer();
-        } catch (err) {
-          if ((err as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") {
-            return reply.status(413).send({ error: "Photo exceeds 25 MB" });
-          }
-          throw err;
+        } else {
+          fields[part.fieldname] = String(part.value);
         }
-      } else {
-        fields[part.fieldname] = String(part.value);
       }
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "FST_REQ_FILE_TOO_LARGE") {
+        return reply.status(413).send({ error: "Photo exceeds 25 MB" });
+      }
+      if (code === "FST_FILES_LIMIT") {
+        return reply.status(400).send({ error: "Send exactly one file part named 'file'" });
+      }
+      throw err;
     }
     if (!fileBuf) return reply.status(400).send({ error: "Missing multipart field 'file'" });
     if (mime !== "image/jpeg") return reply.status(415).send({ error: `Only image/jpeg accepted, got ${mime}` });
@@ -289,10 +293,10 @@ export async function capturesRoutes(fastify: FastifyInstance) {
     const row = await findCapture(request.userId, request.params.id);
     if (!row) return reply.status(404).send({ error: "Capture not found" });
     if (row.status === "assigned" && request.query.force !== "true") {
-      return reply.status(409).send({ error: `${formatCaptureId(row.seq)} is assigned to a frame; pass ?force=true to delete anyway (the frame and its note stay).` });
+      return reply.status(409).send({ error: `${formatCaptureId(row.seq)} is assigned to a frame; pass ?force=true to delete the capture record (the frame, its note, and the photo file stay).` });
     }
     await db.delete(captures).where(eq(captures.id, row.id));
-    if (row.fileKey) await rm(join(config.UPLOADS_DIR, row.fileKey), { force: true });
+    if (row.fileKey && row.status !== "assigned") await rm(join(config.UPLOADS_DIR, row.fileKey), { force: true });
     return reply.status(204).send();
   });
 }

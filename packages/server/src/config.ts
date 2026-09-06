@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -8,7 +9,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   NODE_ENV: z.enum(["development", "production"]).default("development"),
   /** Root for uploaded files (capture photos). Served at /uploads by fastify-static in dev and nginx in prod. */
-  UPLOADS_DIR: z.string().default(new URL("../../../uploads", import.meta.url).pathname),
+  UPLOADS_DIR: z.string().default(fileURLToPath(new URL("../../../uploads", import.meta.url))),
 });
 
 export const config = envSchema.parse(process.env);

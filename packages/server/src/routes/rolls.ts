@@ -4,6 +4,7 @@ import {
   createFrameSchema,
   createNoteSchema,
   createRollSchema,
+  formatCaptureId,
   formatDevId,
   logShotRollSchema,
   parseDevSeqRange,
@@ -326,7 +327,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         frames: rollFrames,
         notes: rollNotes,
         frameNotes,
-        pendingCaptures: pendingCaptures.map((c) => ({ ...c, captureId: `C${c.seq}` })),
+        pendingCaptures: pendingCaptures.map((c) => ({ ...c, captureId: formatCaptureId(c.seq) })),
       },
     };
   });

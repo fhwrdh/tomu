@@ -200,3 +200,7 @@ from a Mac with the iCloud Photos library: `pip install osxphotos`, put
 (`--dry-run` first). Photos are matched by time (window −10/+2 min around the
 capture) and uploaded to `UPLOADS_DIR` on the server (`/uploads/` in nginx).
 Uploads are **not** in the Postgres dump — back that directory up separately.
+Uploaded photos are served publicly by uuid-named URL and retain their original
+EXIF metadata including GPS coordinates; if that matters to you, strip EXIF on
+export (`osxphotos export --exiftool` options, or a post-processing step) or put
+`/uploads/` behind auth.

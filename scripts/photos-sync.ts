@@ -27,7 +27,15 @@ const sinceDays = Number(opt("--since", "14"));
 const windowBeforeMin = Number(opt("--window-before", "10"));
 const windowAfterMin = Number(opt("--window-after", "2"));
 const forcedArg = new Map<string, string>();
-argv.forEach((a, i) => { if (a === "--force" && argv[i + 1]) { const [c, u] = argv[i + 1].split("="); if (c && u) forcedArg.set(c, u); } });
+argv.forEach((a, i) => {
+  if (a !== "--force" || !argv[i + 1]) return;
+  const raw = argv[i + 1];
+  const eq = raw.indexOf("=");
+  const c = eq < 0 ? raw : raw.slice(0, eq);
+  const u = eq < 0 ? "" : raw.slice(eq + 1);
+  if (!c || !u) { console.error(`warning: --force ${raw} ignored: malformed (expected C<seq>=<photo-uuid>)`); return; }
+  forcedArg.set(c, u);
+});
 
 interface Capture {
   id: string; captureId: string; seq: number; capturedAt: string;
@@ -63,6 +71,17 @@ async function main() {
   const { data: all } = await api<{ data: Capture[] }>(`/captures?status=all&since=${encodeURIComponent(since)}&limit=500`);
   const usedAssetIds = new Set(all.map((c) => c.photoAssetId).filter((x): x is string => !!x));
   const todo = all.filter((c) => !c.fileKey);
+
+  // Resolve --force capture ids against pending captures now, so a missing one is
+  // reported even when there's nothing else to sync.
+  const forceCaps = new Map<string, { cap: Capture; uuid: string }>();
+  for (const [cid, uuid] of forcedArg) {
+    const seq = parseCaptureId(cid);
+    const cap = seq != null ? todo.find((c) => c.seq === seq) : undefined;
+    if (!cap) { console.error(`warning: --force ${cid}=${uuid} ignored: no pending capture ${cid} found`); continue; }
+    forceCaps.set(cid, { cap, uuid });
+  }
+
   if (!todo.length) { console.log("Nothing to sync: every capture in range has a photo."); return; }
 
   // One osxphotos query spanning all captures (cheaper than one per capture).
@@ -74,10 +93,9 @@ async function main() {
   const cands: CandidatePhoto[] = photos.map((p) => ({ uuid: p.uuid, takenAt: new Date(p.date).toISOString() }));
 
   const forced = new Map<string, string>();
-  for (const [cid, uuid] of forcedArg) {
-    const seq = parseCaptureId(cid);
-    const cap = todo.find((c) => c.seq === seq);
-    if (cap) forced.set(cap.id, uuid);
+  for (const [cid, { cap, uuid }] of forceCaps) {
+    if (!byUuid.has(uuid)) { console.error(`warning: --force ${cid}=${uuid} ignored: photo ${uuid} not among queried candidates`); continue; }
+    forced.set(cap.id, uuid);
   }
   const caps: MatchCapture[] = todo.map((c) => ({ id: c.id, capturedAt: c.capturedAt }));
   const results = matchPhotos(caps, cands, { usedAssetIds, forced, windowBeforeMin, windowAfterMin });
