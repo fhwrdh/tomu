@@ -305,7 +305,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
       db
         .select()
         .from(captures)
-        .where(and(eq(captures.rollId, roll.id), eq(captures.status, "pending")))
+        .where(and(eq(captures.rollId, roll.id), eq(captures.status, "pending"), eq(captures.userId, request.userId)))
         .orderBy(asc(captures.capturedAt)),
     ]);
 

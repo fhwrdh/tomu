@@ -44,6 +44,16 @@ export function captureFilePath(captureId: string): { key: string; url: string; 
   return { key, url: `/uploads/${key}`, abs: join(config.UPLOADS_DIR, key) };
 }
 
+/** True if a roll with this id exists and belongs to the given user. */
+async function userOwnsRoll(userId: string, rollId: string): Promise<boolean> {
+  const [roll] = await db
+    .select({ id: rolls.id })
+    .from(rolls)
+    .where(and(eq(rolls.id, rollId), eq(rolls.userId, userId)))
+    .limit(1);
+  return !!roll;
+}
+
 export async function capturesRoutes(fastify: FastifyInstance) {
   await fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
   await mkdir(join(config.UPLOADS_DIR, "captures"), { recursive: true });
@@ -51,6 +61,9 @@ export async function capturesRoutes(fastify: FastifyInstance) {
   // ── Create ──────────────────────────────────────────────────────────
   fastify.post("/", async (request, reply) => {
     const body = createCaptureSchema.parse(request.body);
+    if (body.rollId && !(await userOwnsRoll(request.userId, body.rollId))) {
+      return reply.status(404).send({ error: "Roll not found" });
+    }
     const values = {
       userId: request.userId,
       rollId: body.rollId ?? null,
@@ -126,6 +139,9 @@ export async function capturesRoutes(fastify: FastifyInstance) {
     const row = await findCapture(request.userId, request.params.id);
     if (!row) return reply.status(404).send({ error: "Capture not found" });
     const body = updateCaptureSchema.parse(request.body);
+    if (body.rollId != null && !(await userOwnsRoll(request.userId, body.rollId))) {
+      return reply.status(404).send({ error: "Roll not found" });
+    }
     const set: Partial<typeof captures.$inferInsert> = { updatedAt: new Date() };
     if (body.rollId !== undefined) set.rollId = body.rollId;
     if (body.cameraId !== undefined) set.cameraId = body.cameraId;
