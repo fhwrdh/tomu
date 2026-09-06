@@ -149,8 +149,14 @@ export async function capturesRoutes(fastify: FastifyInstance) {
       if (part.type === "file") {
         if (part.fieldname !== "file") { await part.toBuffer(); continue; }
         mime = part.mimetype;
-        fileBuf = await part.toBuffer();
-        if (part.file.truncated) return reply.status(413).send({ error: "Photo exceeds 25 MB" });
+        try {
+          fileBuf = await part.toBuffer();
+        } catch (err) {
+          if ((err as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") {
+            return reply.status(413).send({ error: "Photo exceeds 25 MB" });
+          }
+          throw err;
+        }
       } else {
         fields[part.fieldname] = String(part.value);
       }
