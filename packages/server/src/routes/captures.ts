@@ -88,7 +88,10 @@ export async function capturesRoutes(fastify: FastifyInstance) {
         }
         conds.push(eq(captures.status, status));
       }
-      if (q.roll_id) conds.push(eq(captures.rollId, q.roll_id));
+      if (q.roll_id) {
+        if (!UUID_RE.test(q.roll_id)) return reply.status(400).send({ error: `Invalid roll_id: ${q.roll_id}` });
+        conds.push(eq(captures.rollId, q.roll_id));
+      }
       if (q.since) {
         const d = new Date(q.since);
         if (Number.isNaN(d.getTime())) return reply.status(400).send({ error: `Invalid since: ${q.since}` });
