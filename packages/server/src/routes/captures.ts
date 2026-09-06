@@ -5,7 +5,9 @@ import { imageSize } from "image-size";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  assignCaptureSchema,
   capturePhotoMetaSchema,
+  captureToFrame,
   createCaptureSchema,
   formatCaptureId,
   parseCaptureId,
@@ -13,7 +15,7 @@ import {
 } from "@tomu/shared";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
-import { captures } from "../db/schema.js";
+import { captures, frames, notes, rolls } from "../db/schema.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -189,6 +191,81 @@ export async function capturesRoutes(fastify: FastifyInstance) {
       .where(eq(captures.id, row.id))
       .returning();
     return { data: presentCapture(updated) };
+  });
+
+  // ── Assign: capture becomes a frame ─────────────────────────────────
+  fastify.post<{ Params: { id: string } }>("/:id/assign", async (request, reply) => {
+    const row = await findCapture(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Capture not found" });
+    if (row.status === "assigned") {
+      return reply.status(409).send({ error: `${formatCaptureId(row.seq)} is already assigned (frame ${row.frameNumber})` });
+    }
+    const body = assignCaptureSchema.parse(request.body);
+    const rollId = body.rollId ?? row.rollId;
+    if (!rollId) return reply.status(400).send({ error: `${formatCaptureId(row.seq)} is not linked to a roll; pass rollId` });
+
+    const [roll] = await db
+      .select({ id: rolls.id, status: rolls.status })
+      .from(rolls)
+      .where(and(eq(rolls.id, rollId), eq(rolls.userId, request.userId)))
+      .limit(1);
+    if (!roll) return reply.status(404).send({ error: "Roll not found" });
+
+    const [existing] = await db
+      .select({ id: frames.id })
+      .from(frames)
+      .where(and(eq(frames.rollId, roll.id), eq(frames.frameNumber, body.frameNumber)))
+      .limit(1);
+    if (existing) {
+      return reply.status(400).send({ error: `Frame ${body.frameNumber} already exists on this roll (frame id ${existing.id.slice(0, 8)})` });
+    }
+
+    const f = captureToFrame(row, body.frameNumber);
+    const result = await db.transaction(async (tx) => {
+      const [frame] = await tx
+        .insert(frames)
+        .values({
+          rollId: roll.id,
+          frameNumber: f.frameNumber,
+          lensId: f.lensId,
+          shutterSpeed: f.shutterSpeed,
+          aperture: f.aperture,
+          compensation: f.compensation,
+          meteringMode: f.meteringMode,
+          subject: f.subject,
+          notes: f.notes,
+          latitude: f.latitude != null ? String(f.latitude) : null,
+          longitude: f.longitude != null ? String(f.longitude) : null,
+          locationName: f.locationName,
+          shotAt: new Date(f.shotAt),
+          tags: [],
+        })
+        .returning();
+      if (row.fileKey || row.sceneDescription) {
+        await tx.insert(notes).values({
+          userId: request.userId,
+          frameId: frame.id,
+          type: row.fileKey ? "photo" : "text",
+          content: row.sceneDescription ?? null,
+          fileKey: row.fileKey,
+          fileUrl: row.fileUrl,
+          mimeType: row.mimeType,
+          fileSizeBytes: row.fileSizeBytes,
+          latitude: row.latitude,
+          longitude: row.longitude,
+        });
+      }
+      if (roll.status === "loaded") {
+        await tx.update(rolls).set({ status: "shooting", updatedAt: new Date() }).where(eq(rolls.id, roll.id));
+      }
+      const [capture] = await tx
+        .update(captures)
+        .set({ status: "assigned", rollId: roll.id, frameNumber: f.frameNumber, frameId: frame.id, updatedAt: new Date() })
+        .where(eq(captures.id, row.id))
+        .returning();
+      return { capture: presentCapture(capture), frame };
+    });
+    return reply.status(201).send({ data: result });
   });
 
   // ── Delete ──────────────────────────────────────────────────────────
