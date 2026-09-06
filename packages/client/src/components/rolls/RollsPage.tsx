@@ -205,6 +205,35 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
         </ul>
       )}
 
+      {detail.pendingCaptures.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-muted-foreground">
+            Pending captures ({detail.pendingCaptures.length}) — assign frame numbers with tomu_assign_capture
+          </div>
+          <ul className="space-y-1.5 text-xs">
+            {detail.pendingCaptures.map((c) => {
+              const settings = [c.shutterSpeed, c.aperture, c.compensation].filter(Boolean).join(" ");
+              return (
+                <li key={c.id} className="flex gap-2">
+                  {c.fileUrl ? (
+                    <img src={c.fileUrl} alt="" className="h-12 w-12 shrink-0 rounded object-cover" loading="lazy" />
+                  ) : (
+                    <div className="h-12 w-12 shrink-0 rounded border border-dashed border-border" />
+                  )}
+                  <div className="flex-1">
+                    <span className="font-medium">{c.captureId}</span>
+                    <span className="ml-1 text-muted-foreground tabular-nums">{formatTime(c.photoTakenAt ?? c.capturedAt)}</span>
+                    {settings && <span className="ml-1 text-muted-foreground">{settings}</span>}
+                    {c.subject && <div className="text-foreground">{c.subject}</div>}
+                    {c.sceneDescription && <div className="text-muted-foreground italic">{c.sceneDescription}</div>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       <AddFrameDialog open={frameOpen} onClose={() => setFrameOpen(false)} rollId={rollId} nextFrameNumber={detail.frames.length + 1} />
       <AddNoteDialog open={noteOpen} onClose={() => setNoteOpen(false)} rollId={rollId} />
       <UnloadDialog open={unloadOpen} onClose={() => setUnloadOpen(false)} rollId={rollId} />
