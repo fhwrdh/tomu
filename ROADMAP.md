@@ -55,7 +55,8 @@ Authoritative kit summary. Update when gear changes.
   - The seq remains the real identifier; LR dates are import dates (decided 2026-06-07). Match/join on seq, never on date.
 - ~~**Tank as gear**~~ Done 2026-07-11: `tanks` table (kind roll/sheet, volumeMl, reelUnits/sheetCapacity, quantity, agitation, isActive) + `/tanks` CRUD + `tomu_tanks` MCP. `dev_sessions.tank` stays free text for now; linking sessions to tank rows is a future nicety. Static `TANKS` in shared remains only as the `tomu_dilution` fallback — unify later.
 - **Display id for orphan rolls** — At least one roll (`27ae8905…` FP4) has no `display_id`. Either backfill at first dev, or treat dev_seq as the primary handle when display_id is null.
-- **Reference image attachments** — Phone snaps of scene/box/notes. Roll-level for 35mm/120 (one or a few per roll, frame # often unknown until scan). Frame-level (really sheet-level) for LF, where each sheet is logged individually. Storage: DO Spaces. MCP path: image included in message → tool extracts + uploads → attached to roll/frame.
+- ~~**Reference image attachments**~~ V1 shipped 2026-09 as **field captures** (`captures` table, `tomu_capture`/`tomu_captures`/`tomu_edit_capture`/`tomu_assign_capture`, `scripts/photos-sync.ts`). Photos live on droplet disk under `UPLOADS_DIR`; not in the nightly dump (manual rsync, see RESTORE.md). Spec: `docs/superpowers/specs/2026-09-06-field-captures-design.md`.
+- **Captures V2** — UI-side assignment with thumbnails; reconciliation from Lightroom scan order; move uploads to Spaces with a replication story; thumbnails.
 
 ## API / MCP
 
