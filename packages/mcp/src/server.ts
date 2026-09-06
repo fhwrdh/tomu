@@ -1008,11 +1008,17 @@ server.tool(
       body.lensId = match.id;
     }
     if (description) body.sceneDescription = description;
-    if (capturedAt) body.capturedAt = new Date(capturedAt).toISOString();
+    let capturedAtIgnored = false;
+    if (capturedAt) {
+      const d = new Date(capturedAt);
+      if (Number.isNaN(d.getTime())) capturedAtIgnored = true;
+      else body.capturedAt = d.toISOString();
+    }
     if (Object.keys(body).length === 0) return { content: [{ type: "text" as const, text: "Nothing to change." }] };
     const { data: c } = await api<{ data: CaptureRow }>(`/captures/${encodeURIComponent(capture)}`, { method: "PATCH", body: JSON.stringify(body) });
     const { data: allRolls } = await api<{ data: AnyRoll[] }>("/rolls?status=all");
-    return { content: [{ type: "text" as const, text: `Updated ${captureLine(c, new Map(allRolls.map((r) => [r.id, r])))}` }] };
+    const ignoredNote = capturedAtIgnored ? ` (capturedAt "${capturedAt}" ignored as unparseable — retry with ISO)` : "";
+    return { content: [{ type: "text" as const, text: `Updated ${captureLine(c, new Map(allRolls.map((r) => [r.id, r])))}${ignoredNote}` }] };
   }
 );
 
@@ -1022,7 +1028,8 @@ server.tool(
   "tomu_assign_capture",
   "After development: give captures their frame numbers. Each capture becomes a real frame on its roll " +
     "(settings copied, phone photo attached as a note). Pass `roll` when any listed capture is still loose. " +
-    "Runs in order and stops at the first failure.",
+    "Runs in order and stops at the first failure. The photo itself is attached later by the laptop sync script — " +
+    "never supply it to this tool.",
   {
     assignments: z.array(z.object({
       capture: z.string().describe("'C412' or '412'"),
