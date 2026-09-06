@@ -8,3 +8,4 @@ DEPLOY.md
 *.tsbuildinfo
 .DS_Store
 .playwright-mcp/
+uploads/

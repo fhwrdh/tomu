@@ -7,6 +7,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().default("dev-secret-change-me"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   NODE_ENV: z.enum(["development", "production"]).default("development"),
+  /** Root for uploaded files (capture photos). Served at /uploads by fastify-static in dev and nginx in prod. */
+  UPLOADS_DIR: z.string().default(new URL("../../../uploads", import.meta.url).pathname),
 });
 
 export const config = envSchema.parse(process.env);
