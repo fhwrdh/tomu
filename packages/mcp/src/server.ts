@@ -876,6 +876,8 @@ server.tool(
   "FIELD USE. Record spoken exposure settings for a film frame whose number is not known yet, " +
     "with an optional description of the phone photo you were shown. Do NOT try to upload or attach the image — " +
     "the photo is matched to this capture later on the laptop by timestamp; just describe it in `description`. " +
+    "The photo must be taken with the phone's Camera app (so it lands in the camera roll and iCloud) — a picture " +
+    "taken from inside the Claude app is not saved anywhere and cannot be matched; if the user did that, say so once. " +
     "If `camera` resolves to one active roll the capture is linked to it; otherwise it stays loose. " +
     "Never ask for missing fields — a capture with only a description is valid. Returns the capture id (C412).",
   {

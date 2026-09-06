@@ -194,7 +194,9 @@ npm run deploy:migrate    # same, plus a schema push
 
 ## Field captures and phone photos
 
-Captures (`tomu_capture`) hold spoken settings; the phone photo is attached later
+Captures (`tomu_capture`) hold spoken settings. Take the photo with the phone's
+**Camera app** (a picture taken from inside the Claude app is never saved to the
+camera roll, so it cannot sync or be matched); the photo is attached later
 from a Mac with the iCloud Photos library: `pip install osxphotos`, put
 `TOMU_API_URL` and `TOMU_API_TOKEN` in `.env`, then `npm run photos:sync`
 (`--dry-run` first). Photos are matched by time (window −10/+2 min around the
