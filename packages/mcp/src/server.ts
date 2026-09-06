@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { computeDilution, findTank, rollEquivalents, TANKS } from "@tomu/shared";
+import { computeDilution, findTank, formatDevId, rollEquivalents, TANKS } from "@tomu/shared";
 import {
   bestMatch,
   cleanStockName,
@@ -798,6 +798,265 @@ server.tool(
         text: `Unloaded **${displayStock(roll.manufacturer, roll.stockName)}** from ${roll.cameraMake} ${roll.cameraModel}. ID: **${data.displayId}** (${roll.framesShot} frames logged).${note ? " Note saved." : ""}`,
       }],
     };
+  }
+);
+
+// ── Field captures ────────────────────────────────────────────────────
+//
+// Captures are spoken settings recorded before the frame number is known.
+// The phone photo never passes through Claude: the laptop sync script attaches
+// it later by timestamp. Tools here only move words.
+
+interface CaptureRow {
+  id: string;
+  captureId: string;
+  seq: number;
+  status: "pending" | "assigned";
+  rollId: string | null;
+  cameraId: string | null;
+  frameNumber: number | null;
+  capturedAt: string;
+  shutterSpeed: string | null;
+  aperture: string | null;
+  compensation: string | null;
+  meteringMode: string | null;
+  subject: string | null;
+  locationName: string | null;
+  notes: string | null;
+  sceneDescription: string | null;
+  fileUrl: string | null;
+  photoTakenAt: string | null;
+}
+
+interface AnyRoll {
+  id: string;
+  displayId: string | null;
+  devDate: string | null;
+  devSeq: number | null;
+  status: string;
+  manufacturer: string;
+  stockName: string;
+  cameraMake: string | null;
+  cameraModel: string | null;
+}
+
+/** Resolve a roll by display id ("20260906.1"), Dev Id ("20260906.0741"), bare dev seq ("741"), or uuid prefix. */
+async function resolveRollHandle(handle: string): Promise<{ roll?: AnyRoll; error?: string }> {
+  const h = handle.trim();
+  const { data } = await api<{ data: AnyRoll[] }>("/rolls?status=all");
+  const hits = data.filter((r) => {
+    if (r.displayId === h) return true;
+    if (formatDevId(r.devDate, r.devSeq) === h) return true;
+    if (/^\d{1,5}$/.test(h) && r.devSeq === Number(h)) return true;
+    return h.length >= 8 && r.id.startsWith(h.toLowerCase());
+  });
+  if (hits.length === 1) return { roll: hits[0] };
+  if (hits.length === 0) return { error: `No roll matches "${h}". Use a display id (20260906.1), Dev Id (20260906.0741), or dev seq (741).` };
+  return { error: `"${h}" matches ${hits.length} rolls: ${hits.map((r) => r.displayId ?? r.id.slice(0, 8)).join(", ")}` };
+}
+
+function rollLabel(r: { displayId?: string | null; devDate?: string | null; devSeq?: number | null; id: string }): string {
+  return r.displayId ?? formatDevId(r.devDate, r.devSeq) ?? r.id.slice(0, 8);
+}
+
+function captureLine(c: CaptureRow, rollsById: Map<string, AnyRoll>): string {
+  const settings = [c.shutterSpeed, c.aperture, c.compensation].filter(Boolean).join(" ");
+  const roll = c.rollId ? rollsById.get(c.rollId) : undefined;
+  const where = roll ? `roll ${rollLabel(roll)}` : "loose";
+  const when = c.capturedAt.slice(0, 16).replace("T", " ");
+  const photo = c.fileUrl ? "photo ✓" : "pending photo";
+  const frame = c.status === "assigned" ? ` → frame ${c.frameNumber}` : "";
+  return `**${c.captureId}** · ${when} · ${where}${settings ? ` · ${settings}` : ""}${c.subject ? ` · ${c.subject}` : ""} · ${photo}${frame}`;
+}
+
+// ── Tool: tomu_capture ────────────────────────────────────────────────
+
+server.tool(
+  "tomu_capture",
+  "FIELD USE. Record spoken exposure settings for a film frame whose number is not known yet, " +
+    "with an optional description of the phone photo you were shown. Do NOT try to upload or attach the image — " +
+    "the photo is matched to this capture later on the laptop by timestamp; just describe it in `description`. " +
+    "If `camera` resolves to one active roll the capture is linked to it; otherwise it stays loose. " +
+    "Never ask for missing fields — a capture with only a description is valid. Returns the capture id (C412).",
+  {
+    camera: z.string().optional().describe("Camera hint to link the active roll (e.g. 'M6', 'Mamiya'). Omit if unknown."),
+    lens: z.string().optional().describe("Lens hint for fuzzy match"),
+    frameNumber: z.number().int().positive().optional().describe("Only when known now (typical for 4x5 sheets)."),
+    shutterSpeed: z.string().optional().describe("e.g. '1/250', '2s'"),
+    aperture: z.string().optional().describe("e.g. 'f/8', '5.6'"),
+    compensation: z.string().optional().describe("e.g. '+1', '-1/3'"),
+    meteringMode: z.string().optional().describe("e.g. 'incident', 'spot', 'sunny 16', 'guess'"),
+    subject: z.string().optional().describe("Short subject"),
+    locationName: z.string().optional().describe("Place name"),
+    notes: z.string().optional().describe("Anything unstructured"),
+    description: z.string().optional().describe("What the phone photo shows (scene, light, framing). Your words, not the image."),
+    capturedAt: z.string().optional().describe("ISO time if the shot was earlier than now (e.g. 'that was ten minutes ago')."),
+  },
+  async ({ camera, lens, frameNumber, shutterSpeed, aperture, compensation, meteringMode, subject, locationName, notes, description, capturedAt }) => {
+    const body: Record<string, unknown> = {};
+    const notesOut: string[] = [];
+
+    if (camera) {
+      const { roll, error } = await pickActiveRoll(camera);
+      if (roll) {
+        body.rollId = roll.id;
+        if (roll.cameraId) body.cameraId = roll.cameraId;
+        notesOut.push(`roll ${describeRoll(roll)}`);
+      } else if (error?.startsWith("Multiple active rolls")) {
+        return { content: [{ type: "text" as const, text: error }] };
+      } else {
+        // No active roll for that camera: link the camera if it exists, keep the capture loose.
+        const { data: cams } = await api<{ data: Array<{ id: string; make: string; model: string }> }>("/cameras");
+        const cam = cams.find((c) => fuzzyMatch(camera, c.make, c.model, `${c.make} ${c.model}`));
+        if (cam) { body.cameraId = cam.id; notesOut.push(`${cam.make} ${cam.model}, no active roll — capture is loose`); }
+        else notesOut.push(`no camera matched "${camera}" — capture is loose`);
+      }
+    } else {
+      notesOut.push("loose (no camera given)");
+    }
+
+    if (lens) {
+      const { data: lenses } = await api<{ data: Array<{ id: string; make: string; model: string; focalLengthMm: number | null }> }>("/lenses");
+      const match = lenses.find((l) => fuzzyMatch(lens, `${l.make} ${l.model}`, l.model, String(l.focalLengthMm ?? "")));
+      if (match) body.lensId = match.id;
+    }
+    if (frameNumber != null) body.frameNumber = frameNumber;
+    if (shutterSpeed) body.shutterSpeed = shutterSpeed;
+    if (aperture) body.aperture = aperture;
+    if (compensation) body.compensation = compensation;
+    if (meteringMode) body.meteringMode = meteringMode;
+    if (subject) body.subject = subject;
+    if (locationName) body.locationName = locationName;
+    if (notes) body.notes = notes;
+    if (description) body.sceneDescription = description;
+    if (capturedAt) {
+      const d = new Date(capturedAt);
+      if (!Number.isNaN(d.getTime())) body.capturedAt = d.toISOString();
+    }
+
+    const { data: c } = await api<{ data: CaptureRow }>("/captures", { method: "POST", body: JSON.stringify(body) });
+    const settings = [c.shutterSpeed, c.aperture, c.compensation].filter(Boolean).join(" ");
+    return {
+      content: [{
+        type: "text" as const,
+        text: `**${c.captureId}** · ${notesOut.join("; ")}${settings ? ` · ${settings}` : ""}${subject ? ` · ${subject}` : ""} · pending photo`,
+      }],
+    };
+  }
+);
+
+// ── Tool: tomu_captures ───────────────────────────────────────────────
+
+server.tool(
+  "tomu_captures",
+  "List field captures. Default: pending ones (no frame number yet), newest first. Shows whether the phone photo has been attached.",
+  {
+    roll: z.string().optional().describe("Restrict to one roll: display id, Dev Id, or dev seq"),
+    status: z.string().optional().describe("'pending' (default), 'assigned', or 'all'"),
+    limit: z.number().int().positive().optional().describe("Max rows (default 30)"),
+  },
+  async ({ roll, status, limit }) => {
+    const params = new URLSearchParams();
+    params.set("status", status ?? "pending");
+    params.set("limit", String(limit ?? 30));
+    if (roll) {
+      const r = await resolveRollHandle(roll);
+      if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] };
+      params.set("roll_id", r.roll.id);
+    }
+    const { data } = await api<{ data: CaptureRow[] }>(`/captures?${params}`);
+    if (data.length === 0) return { content: [{ type: "text" as const, text: "No captures." }] };
+    const { data: allRolls } = await api<{ data: AnyRoll[] }>("/rolls?status=all");
+    const rollsById = new Map(allRolls.map((r) => [r.id, r]));
+    const lines = data.map((c) => `- ${captureLine(c, rollsById)}${c.sceneDescription ? `\n  _${c.sceneDescription}_` : ""}`);
+    return { content: [{ type: "text" as const, text: `## Captures (${data.length})\n\n${lines.join("\n")}` }] };
+  }
+);
+
+// ── Tool: tomu_edit_capture ───────────────────────────────────────────
+
+server.tool(
+  "tomu_edit_capture",
+  "Fix a capture: a misheard setting, or link a loose capture to a roll. Only the fields you pass change.",
+  {
+    capture: z.string().describe("Capture id, e.g. 'C412' or '412'"),
+    roll: z.string().optional().describe("Link to this roll: display id, Dev Id, or dev seq"),
+    lens: z.string().optional(),
+    frameNumber: z.number().int().positive().optional(),
+    shutterSpeed: z.string().optional(),
+    aperture: z.string().optional(),
+    compensation: z.string().optional(),
+    meteringMode: z.string().optional(),
+    subject: z.string().optional(),
+    locationName: z.string().optional(),
+    notes: z.string().optional(),
+    description: z.string().optional(),
+    capturedAt: z.string().optional().describe("ISO time"),
+  },
+  async ({ capture, roll, lens, description, capturedAt, ...rest }) => {
+    const body: Record<string, unknown> = { ...rest };
+    for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+    if (roll) {
+      const r = await resolveRollHandle(roll);
+      if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] };
+      body.rollId = r.roll.id;
+    }
+    if (lens) {
+      const { data: lenses } = await api<{ data: Array<{ id: string; make: string; model: string; focalLengthMm: number | null }> }>("/lenses");
+      const match = lenses.find((l) => fuzzyMatch(lens, `${l.make} ${l.model}`, l.model, String(l.focalLengthMm ?? "")));
+      if (!match) return { content: [{ type: "text" as const, text: `No lens matches "${lens}".` }] };
+      body.lensId = match.id;
+    }
+    if (description) body.sceneDescription = description;
+    if (capturedAt) body.capturedAt = new Date(capturedAt).toISOString();
+    if (Object.keys(body).length === 0) return { content: [{ type: "text" as const, text: "Nothing to change." }] };
+    const { data: c } = await api<{ data: CaptureRow }>(`/captures/${encodeURIComponent(capture)}`, { method: "PATCH", body: JSON.stringify(body) });
+    const { data: allRolls } = await api<{ data: AnyRoll[] }>("/rolls?status=all");
+    return { content: [{ type: "text" as const, text: `Updated ${captureLine(c, new Map(allRolls.map((r) => [r.id, r])))}` }] };
+  }
+);
+
+// ── Tool: tomu_assign_capture ─────────────────────────────────────────
+
+server.tool(
+  "tomu_assign_capture",
+  "After development: give captures their frame numbers. Each capture becomes a real frame on its roll " +
+    "(settings copied, phone photo attached as a note). Pass `roll` when any listed capture is still loose. " +
+    "Runs in order and stops at the first failure.",
+  {
+    assignments: z.array(z.object({
+      capture: z.string().describe("'C412' or '412'"),
+      frameNumber: z.number().int().positive(),
+    })).min(1),
+    roll: z.string().optional().describe("Roll for loose captures: display id, Dev Id, or dev seq"),
+  },
+  async ({ assignments, roll }) => {
+    let rollId: string | undefined;
+    if (roll) {
+      const r = await resolveRollHandle(roll);
+      if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] };
+      rollId = r.roll.id;
+    }
+    const done: string[] = [];
+    for (const a of assignments) {
+      try {
+        const { data } = await api<{ data: { capture: CaptureRow; frame: { frameNumber: number } } }>(
+          `/captures/${encodeURIComponent(a.capture)}/assign`,
+          { method: "POST", body: JSON.stringify(rollId ? { rollId, frameNumber: a.frameNumber } : { frameNumber: a.frameNumber }) },
+        );
+        done.push(`${data.capture.captureId} → frame ${data.frame.frameNumber}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const remaining = assignments.slice(done.length + 1).map((x) => x.capture);
+        return {
+          content: [{
+            type: "text" as const,
+            text: `${done.length ? `Assigned: ${done.join(", ")}\n` : ""}Failed on ${a.capture} (frame ${a.frameNumber}): ${msg}${remaining.length ? `\nNot attempted: ${remaining.join(", ")}` : ""}`,
+          }],
+        };
+      }
+    }
+    return { content: [{ type: "text" as const, text: `Assigned: ${done.join(", ")}` }] };
   }
 );
 
