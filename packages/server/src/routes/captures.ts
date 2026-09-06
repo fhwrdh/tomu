@@ -1,8 +1,11 @@
+import multipart from "@fastify/multipart";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { mkdir, rm } from "node:fs/promises";
+import { imageSize } from "image-size";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  capturePhotoMetaSchema,
   createCaptureSchema,
   formatCaptureId,
   parseCaptureId,
@@ -40,6 +43,7 @@ export function captureFilePath(captureId: string): { key: string; url: string; 
 }
 
 export async function capturesRoutes(fastify: FastifyInstance) {
+  await fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
   await mkdir(join(config.UPLOADS_DIR, "captures"), { recursive: true });
 
   // ── Create ──────────────────────────────────────────────────────────
@@ -130,6 +134,54 @@ export async function capturesRoutes(fastify: FastifyInstance) {
       if (body[k] !== undefined) set[k] = body[k];
     }
     const [updated] = await db.update(captures).set(set).where(eq(captures.id, row.id)).returning();
+    return { data: presentCapture(updated) };
+  });
+
+  // ── Photo upload (laptop sync) ──────────────────────────────────────
+  fastify.post<{ Params: { id: string } }>("/:id/photo", async (request, reply) => {
+    const row = await findCapture(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Capture not found" });
+
+    const fields: Record<string, string> = {};
+    let fileBuf: Buffer | undefined;
+    let mime: string | undefined;
+    for await (const part of request.parts()) {
+      if (part.type === "file") {
+        if (part.fieldname !== "file") { await part.toBuffer(); continue; }
+        mime = part.mimetype;
+        fileBuf = await part.toBuffer();
+        if (part.file.truncated) return reply.status(413).send({ error: "Photo exceeds 25 MB" });
+      } else {
+        fields[part.fieldname] = String(part.value);
+      }
+    }
+    if (!fileBuf) return reply.status(400).send({ error: "Missing multipart field 'file'" });
+    if (mime !== "image/jpeg") return reply.status(415).send({ error: `Only image/jpeg accepted, got ${mime}` });
+    const meta = capturePhotoMetaSchema.parse(fields);
+
+    let dims: { width?: number; height?: number } = {};
+    try { dims = imageSize(fileBuf); } catch { /* not fatal */ }
+
+    const { key, url, abs } = captureFilePath(row.id);
+    await writeFile(abs, fileBuf);
+
+    const [updated] = await db
+      .update(captures)
+      .set({
+        fileKey: key,
+        fileUrl: url,
+        mimeType: mime,
+        fileSizeBytes: fileBuf.length,
+        widthPx: dims.width ?? null,
+        heightPx: dims.height ?? null,
+        photoTakenAt: meta.photoTakenAt ? new Date(meta.photoTakenAt) : row.photoTakenAt,
+        latitude: meta.latitude != null ? String(meta.latitude) : row.latitude,
+        longitude: meta.longitude != null ? String(meta.longitude) : row.longitude,
+        photoAssetId: meta.photoAssetId ?? row.photoAssetId,
+        updatedAt: new Date(),
+      })
+      .where(eq(captures.id, row.id))
+      .returning();
     return { data: presentCapture(updated) };
   });
 
