@@ -1,6 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { computeDilution, findTank, rollEquivalents, TANKS } from "@tomu/shared";
+import {
+  bestMatch,
+  cleanStockName,
+  displayStock,
+  fuzzyMatch,
+  normalize,
+  rankedMatch,
+  strictStockMatch,
+} from "./matching.js";
 
 const API_BASE = process.env.TOMU_API_URL || "http://localhost:3456/api/v1";
 const API_TOKEN = process.env.TOMU_API_TOKEN || "";
@@ -24,138 +33,6 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (res.status === 204) return undefined as T;
   return res.json();
-}
-
-// ── Fuzzy matching helpers (Postel's Law) ──
-
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function tokens(s: string): string[] {
-  return s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-}
-
-/**
- * Loose substring check — kept for filters where any partial signal is good enough.
- * Do NOT use this on a `.find()` over a list of similarly-named entities;
- * it will return the first candidate whose any token overlaps and silently pick
- * the wrong one (e.g. "Arista EDU Ultra 100" query → "Arista EDU 400 DX" stock).
- * For singular resolution, use `bestMatch()` instead.
- */
-function fuzzyMatch(query: string, ...candidates: string[]): boolean {
-  const q = normalize(query);
-  return candidates.some((c) => {
-    const n = normalize(c);
-    return n.includes(q) || q.includes(n);
-  });
-}
-
-/**
- * Score how well `query` matches a candidate's `fields`. Higher is better.
- * Token-overlap based: every query token that appears as a substring of any
- * candidate token scores 1; an exact token match scores 2. Ties broken by
- * fewer extra (unmatched) candidate tokens — preferring more-specific names.
- */
-function score(query: string, fields: string[]): number {
-  const qTokens = tokens(query);
-  if (qTokens.length === 0) return 0;
-  const cTokens = fields.flatMap(tokens);
-  if (cTokens.length === 0) return 0;
-
-  let matchScore = 0;
-  let matched = 0;
-  for (const qt of qTokens) {
-    let best = 0;
-    for (const ct of cTokens) {
-      if (ct === qt) best = Math.max(best, 2);
-      else if (ct.includes(qt) || qt.includes(ct)) best = Math.max(best, 1);
-    }
-    matchScore += best;
-    if (best > 0) matched++;
-  }
-
-  // Require at least one token match. Penalize unmatched candidate tokens
-  // mildly so "Arista EDU Ultra 100" beats "Arista EDU 400 DX" for a query
-  // of "arista edu ultra 100".
-  if (matched === 0) return 0;
-  const extra = Math.max(0, cTokens.length - matched);
-  return matchScore - extra * 0.1;
-}
-
-/**
- * Stricter stock match: requires every query token to appear as an *exact* token
- * in the candidate. Returns a single winner, ambiguous tied set, or none —
- * never silently picks a partial-token match (which is how "Kodak Ektapan"
- * once resolved to "Kodak Technical Pan").
- */
-function strictStockMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]): MatchResult<T> {
-  const qTokens = tokens(query);
-  if (qTokens.length === 0) return { kind: "none" };
-
-  let bestScore = -1;
-  let bestItems: T[] = [];
-  for (const item of items) {
-    const cTokens = fieldsOf(item).flatMap(tokens);
-    const cSet = new Set(cTokens);
-    if (!qTokens.every((qt) => cSet.has(qt))) continue;
-    const extra = Math.max(0, cTokens.length - qTokens.length);
-    const s = qTokens.length * 2 - extra * 0.1;
-    if (s > bestScore) {
-      bestScore = s;
-      bestItems = [item];
-    } else if (s === bestScore) {
-      bestItems.push(item);
-    }
-  }
-
-  if (bestItems.length === 0) return { kind: "none" };
-  if (bestItems.length === 1) return { kind: "single", item: bestItems[0], score: bestScore };
-  return { kind: "tied", items: bestItems, score: bestScore };
-}
-
-/** Pick the single best candidate from a list; null if none score above 0. */
-function bestMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]): T | null {
-  let best: T | null = null;
-  let bestScore = 0;
-  for (const item of items) {
-    const s = score(query, fieldsOf(item));
-    if (s > bestScore) {
-      bestScore = s;
-      best = item;
-    }
-  }
-  return best;
-}
-
-/**
- * Like bestMatch but reports ties so callers can refuse to silently pick.
- * Returns:
- *   { kind: "none" }      — no candidate scored above 0
- *   { kind: "single", … } — clear winner
- *   { kind: "tied", … }   — two or more candidates tied for top score
- */
-type MatchResult<T> =
-  | { kind: "none" }
-  | { kind: "single"; item: T; score: number }
-  | { kind: "tied"; items: T[]; score: number };
-
-function rankedMatch<T>(query: string, items: T[], fieldsOf: (item: T) => string[]): MatchResult<T> {
-  let bestScore = 0;
-  let bestItems: T[] = [];
-  for (const item of items) {
-    const s = score(query, fieldsOf(item));
-    if (s <= 0) continue;
-    if (s > bestScore) {
-      bestScore = s;
-      bestItems = [item];
-    } else if (s === bestScore) {
-      bestItems.push(item);
-    }
-  }
-  if (bestItems.length === 0) return { kind: "none" };
-  if (bestItems.length === 1) return { kind: "single", item: bestItems[0], score: bestScore };
-  return { kind: "tied", items: bestItems, score: bestScore };
 }
 
 // ── Server ──
@@ -290,12 +167,44 @@ server.tool(
       return { content: [{ type: "text" as const, text: `${frm === "sheet" ? "Sheets" : "Factory rolls"} require \`quantity\`.` }] };
     }
 
-    // Find or create stock (stock no longer carries format — it's on the inventory item)
-    const { data: stocks } = await api<{ data: Array<{ id: string; manufacturer: string; name: string; iso: number; type: string }> }>("/film-stocks");
-    let stock = bestMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer]);
+    // Find or create stock (stock no longer carries format — it's on the inventory item).
+    //
+    // Resolution is deliberately strict. `bestMatch` used to be used here, which
+    // scores any single overlapping token above zero — so "Verichrome Pan" landed
+    // on the existing "Kodak Technical Pan" and "Washi F" on "Washi S", and the
+    // create-it-automatically path never fired. `strictStockMatch` requires every
+    // query token to be present exactly.
+    type Stock = { id: string; manufacturer: string; name: string; iso: number; type: string; aliases?: string[] };
+    const { data: stocks } = await api<{ data: Stock[] }>("/film-stocks");
+    const m = strictStockMatch(film, stocks, (s) => [`${s.manufacturer} ${s.name}`, s.name, s.manufacturer, ...(s.aliases ?? [])]);
+    let matches = m.kind === "single" ? [m.item] : m.kind === "tied" ? m.items : [];
+
+    // Passing manufacturer + iso is the caller stating what this stock *is*. An
+    // existing stock only counts as "the same film" if it agrees on both;
+    // otherwise this is a genuinely new stock and we create it rather than
+    // silently filing the lot under a near-namesake.
+    const isNewStockSpec = Boolean(manufacturer) && iso != null;
+    if (isNewStockSpec) {
+      matches = matches.filter(
+        (s) => normalize(s.manufacturer) === normalize(manufacturer!) && s.iso === iso
+      );
+    }
+
+    if (matches.length > 1) {
+      const lines = matches.map((s) => `- ${displayStock(s.manufacturer, s.name)} (ISO ${s.iso})`);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `"${film}" matches more than one stock — say which one:\n${lines.join("\n")}`,
+        }],
+      };
+    }
+
+    let stock = matches[0] ?? null;
+    let createdStock = false;
 
     if (!stock) {
-      if (!manufacturer || !iso) {
+      if (!isNewStockSpec) {
         return {
           content: [{
             type: "text" as const,
@@ -303,16 +212,17 @@ server.tool(
           }],
         };
       }
-      const created = await api<{ data: typeof stock }>("/film-stocks", {
+      const created = await api<{ data: Stock }>("/film-stocks", {
         method: "POST",
         body: JSON.stringify({
           manufacturer,
-          name: film,
+          name: cleanStockName(film, manufacturer!),
           iso,
           type: type || "bw",
         }),
       });
-      stock = created.data!;
+      stock = created.data;
+      createdStock = true;
     }
 
     // Build inventory body by form
@@ -341,7 +251,7 @@ server.tool(
     return {
       content: [{
         type: "text" as const,
-        text: `Added ${summary} of **${displayStock(stock.manufacturer, stock.name)}** (${fmt}, ISO ${stock.iso}).${expirationDate ? ` Expires ${expirationDate}.` : ""}`,
+        text: `Added ${summary} of **${displayStock(stock.manufacturer, stock.name)}** (${fmt}, ISO ${stock.iso}).${expirationDate ? ` Expires ${expirationDate}.` : ""}${createdStock ? " Created this film stock — it was new." : ""}`,
       }],
     };
   }
@@ -383,10 +293,61 @@ interface InventoryRow {
   format: string;
   form: "factory_roll" | "bulk_roll" | "sheet";
   quantity: number;
+  remainingLengthFt?: string | number | null;
+  originalLengthFt?: string | number | null;
   expirationDate?: string | null;
   storageLocation: string;
   costPerRoll?: string | number | null;
   source?: string | null;
+}
+
+/** One-line rendering of a lot, for disambiguation lists and delete confirmations. */
+function describeLot(r: InventoryRow): string {
+  const id = r.displayId ? `[${r.displayId}] ` : `[${r.id.slice(0, 8)}] `;
+  const exp = r.expirationDate ? `, exp ${r.expirationDate}` : "";
+  const src = r.source ? `, src ${r.source}` : "";
+  return `${id}${displayStock(r.manufacturer, r.stockName)} — ${describeItem(r as unknown as InventoryItem)}${exp}${src}`;
+}
+
+/**
+ * Resolve exactly one inventory lot from a loose identifier, or explain why not.
+ * Shared by tomu_edit_inventory and tomu_delete_inventory so both refuse to guess
+ * in the same way. Returns `{ lot }` on a clean hit, `{ text }` otherwise.
+ */
+async function resolveLot(opts: {
+  film?: string;
+  displayId?: string;
+  format?: string;
+  form?: string;
+}): Promise<{ lot: InventoryRow } | { text: string }> {
+  const { film, displayId, format, form } = opts;
+  const { data: rows } = await api<{ data: InventoryRow[] }>("/inventory");
+
+  let candidates: InventoryRow[];
+  if (displayId) {
+    candidates = rows.filter((r) => r.displayId === displayId);
+    if (candidates.length === 0) {
+      return { text: `No inventory lot with displayId "${displayId}".` };
+    }
+  } else {
+    const m = rankedMatch(film!, rows, (r) => [`${r.manufacturer} ${r.stockName}`, r.stockName, r.manufacturer]);
+    if (m.kind === "none") {
+      return { text: `No inventory lot matching "${film}".` };
+    }
+    candidates = m.kind === "single" ? [m.item] : m.items;
+    // Narrow by format/form when provided
+    if (format) candidates = candidates.filter((r) => r.format === format);
+    if (form) candidates = candidates.filter((r) => r.form === form);
+  }
+
+  if (candidates.length === 0) {
+    return { text: `Matched the stock, but no lot with that format/form. Drop the format/form filter to see options.` };
+  }
+  if (candidates.length > 1) {
+    const lines = candidates.map((r) => `- ${describeLot(r)}`);
+    return { text: `Multiple lots match — narrow with format/form (or displayId):\n${lines.join("\n")}` };
+  }
+  return { lot: candidates[0] };
 }
 
 server.tool(
@@ -424,45 +385,19 @@ server.tool(
       return { content: [{ type: "text" as const, text: "Identify the lot: pass `film` (+ optional format/form) or `displayId`." }] };
     }
 
-    const { data: rows } = await api<{ data: InventoryRow[] }>("/inventory");
-
-    // Resolve candidate lot(s)
-    let candidates: InventoryRow[];
-    if (displayId) {
-      candidates = rows.filter((r) => r.displayId === displayId);
-      if (candidates.length === 0) {
-        return { content: [{ type: "text" as const, text: `No inventory lot with displayId "${displayId}".` }] };
-      }
-    } else {
-      const m = rankedMatch(film!, rows, (r) => [`${r.manufacturer} ${r.stockName}`, r.stockName, r.manufacturer]);
-      if (m.kind === "none") {
-        return { content: [{ type: "text" as const, text: `No inventory lot matching "${film}".` }] };
-      }
-      candidates = m.kind === "single" ? [m.item] : m.items;
-      // Narrow by format/form when provided
-      if (format) candidates = candidates.filter((r) => r.format === format);
-      if (form) candidates = candidates.filter((r) => r.form === form);
-    }
-
-    if (candidates.length === 0) {
-      return { content: [{ type: "text" as const, text: `Matched the stock, but no lot with that format/form. Drop the format/form filter to see options.` }] };
-    }
-    if (candidates.length > 1) {
-      const lines = candidates.map((r) => {
-        const id = r.displayId ? `[${r.displayId}] ` : `[${r.id.slice(0, 8)}] `;
-        const exp = r.expirationDate ? `, exp ${r.expirationDate}` : "";
-        const src = r.source ? `, src ${r.source}` : "";
-        return `- ${id}${displayStock(r.manufacturer, r.stockName)} — ${describeItem(r as unknown as InventoryItem)}${exp}${src}`;
-      });
-      return { content: [{ type: "text" as const, text: `Multiple lots match — narrow with format/form (or displayId):\n${lines.join("\n")}` }] };
-    }
-
-    const lot = candidates[0];
+    const resolved = await resolveLot({ film, displayId, format, form });
+    if ("text" in resolved) return { content: [{ type: "text" as const, text: resolved.text }] };
+    const lot = resolved.lot;
     const updated = await api<{ data: InventoryRow }>(`/inventory/${lot.id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     });
-    const u = updated.data;
+    // Merge over the pre-patch lot: formatting the confirmation must never be able
+    // to fail on a write that already succeeded. (It did — the API used to return
+    // a bare row with no manufacturer/stockName, so displayStock() threw
+    // "Cannot read properties of undefined (reading 'trim')" and the tool reported
+    // an error for a patch that had landed.)
+    const u = { ...lot, ...updated.data };
 
     const changes = Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(", ");
     return {
@@ -471,6 +406,51 @@ server.tool(
         text: `Updated **${displayStock(u.manufacturer, u.stockName)}** (${u.format}, ${describeItem(u as unknown as InventoryItem)}): ${changes}.`,
       }],
     };
+  }
+);
+
+// ── Tool: tomu_delete_inventory ───────────────────────────────────────
+
+server.tool(
+  "tomu_delete_inventory",
+  "Remove an inventory lot entirely. Use this to undo a mistaken add — zeroing the " +
+    "quantity leaves a phantom lot behind, deleting takes it off the books. Identify the " +
+    "lot the same way as tomu_edit_inventory: film name (fuzzy) plus optional format/form, " +
+    "or displayId. A lot that still holds film requires `confirm: true`; an empty one deletes " +
+    "outright. The film stock definition itself is left alone.",
+  {
+    film: z.string().optional().describe("Film stock name to locate the lot (fuzzy: 'verichrome', 'washi'). Omit if using displayId."),
+    displayId: z.string().optional().describe("Lot display ID if it has one (e.g. 'R001'). Takes precedence over film/format/form."),
+    format: z.string().optional().describe("Disambiguate by format: '35mm', '120', '4x5', '8x10'"),
+    form: z.string().optional().describe("Disambiguate by form: 'factory_roll', 'bulk_roll', 'sheet'"),
+    confirm: z.boolean().optional().describe("Required to delete a lot that still has film in it (quantity > 0, or bulk footage remaining)."),
+  },
+  async ({ film, displayId, format, form, confirm }) => {
+    if (!film && !displayId) {
+      return { content: [{ type: "text" as const, text: "Identify the lot: pass `film` (+ optional format/form) or `displayId`." }] };
+    }
+
+    const resolved = await resolveLot({ film, displayId, format, form });
+    if ("text" in resolved) return { content: [{ type: "text" as const, text: resolved.text }] };
+    const lot = resolved.lot;
+
+    // Guard non-empty lots — deleting film you still own is almost always a
+    // mis-identified lot rather than the intent.
+    const remainingFt = lot.remainingLengthFt != null ? Number(lot.remainingLengthFt) : 0;
+    const hasFilm = lot.form === "bulk_roll" ? remainingFt > 0 : lot.quantity > 0;
+    if (hasFilm && !confirm) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `That lot still has film in it: ${describeLot(lot)}. Re-run with confirm: true to delete it anyway.`,
+        }],
+      };
+    }
+
+    const summary = describeLot(lot);
+    await api(`/inventory/${lot.id}`, { method: "DELETE" });
+
+    return { content: [{ type: "text" as const, text: `Deleted ${summary}.` }] };
   }
 );
 
@@ -1074,26 +1054,6 @@ function groupLabel(i: number): string {
     n = Math.floor(n / 26) - 1;
   } while (n >= 0);
   return s;
-}
-
-/** Strip a leading manufacturer token from a stock name so create-on-the-fly
- *  doesn't produce "Kentmere Kentmere Pan 400". */
-function cleanStockName(name: string, manufacturer: string): string {
-  const n = name.trim();
-  const m = manufacturer.trim();
-  if (!m) return n;
-  const prefix = m.toLowerCase() + " ";
-  if (n.toLowerCase().startsWith(prefix)) return n.slice(prefix.length).trim();
-  return n;
-}
-
-/** "Kentmere Pan 100" not "Kentmere Kentmere Pan 100" when name already starts with mfg. */
-function displayStock(manufacturer: string, stockName: string): string {
-  const n = stockName.trim();
-  const m = manufacturer.trim();
-  if (n.toLowerCase().startsWith(m.toLowerCase() + " ")) return n;
-  if (n.toLowerCase() === m.toLowerCase()) return n;
-  return `${m} ${n}`;
 }
 
 server.tool(
