@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { computeDilution, findTank, formatDevId, rollEquivalents, TANKS } from "@tomu/shared";
 import {
   bestMatch,
@@ -801,31 +802,20 @@ server.tool(
   }
 );
 
-// ── Field captures ────────────────────────────────────────────────────
+// ── Field events ──────────────────────────────────────────────────────
 //
-// Captures are spoken settings recorded before the frame number is known.
-// The phone photo never passes through Claude: the laptop sync script attaches
-// it later by timestamp. Tools here only move words.
+// The field stream: voice notes (verbatim transcript + parsed fields) and photos.
+// This tool path is the Claude-app fallback; the PWA is the primary field surface.
+// The photo never passes through Claude.
 
-interface CaptureRow {
-  id: string;
-  captureId: string;
-  seq: number;
-  status: "pending" | "assigned";
-  rollId: string | null;
-  cameraId: string | null;
-  frameNumber: number | null;
-  capturedAt: string;
-  shutterSpeed: string | null;
-  aperture: string | null;
-  compensation: string | null;
-  meteringMode: string | null;
-  subject: string | null;
-  locationName: string | null;
-  notes: string | null;
-  sceneDescription: string | null;
-  fileUrl: string | null;
-  photoTakenAt: string | null;
+interface FieldEventRow {
+  id: string; shortId: string; clientId: string; kind: "voice" | "photo";
+  status: "pending" | "pinned" | "roll_level"; rollId: string | null; cameraId: string | null;
+  frameNumber: number | null; frameProvisional: boolean; sheetId: string | null; capturedAt: string;
+  transcript: string | null; fileUrl: string | null;
+  shutterSpeed: string | null; aperture: string | null; compensation: string | null; meteringMode: string | null;
+  subject: string | null; locationName: string | null; remarks: string | null; sceneDescription: string | null;
+  parser: string | null; parseNotes: string | null; review: boolean; editedFields: string[];
 }
 
 interface AnyRoll {
@@ -859,215 +849,154 @@ function rollLabel(r: { displayId?: string | null; devDate?: string | null; devS
   return r.displayId ?? formatDevId(r.devDate, r.devSeq) ?? r.id.slice(0, 8);
 }
 
-function captureLine(c: CaptureRow, rollsById: Map<string, AnyRoll>): string {
-  const settings = [c.shutterSpeed, c.aperture, c.compensation].filter(Boolean).join(" ");
-  const roll = c.rollId ? rollsById.get(c.rollId) : undefined;
+function eventLine(e: FieldEventRow, rollsById: Map<string, AnyRoll>): string {
+  const settings = [e.shutterSpeed, e.aperture, e.compensation].filter(Boolean).join(" ");
+  const roll = e.rollId ? rollsById.get(e.rollId) : undefined;
   const where = roll ? `roll ${rollLabel(roll)}` : "loose";
-  const when = c.capturedAt.slice(0, 16).replace("T", " ");
-  const photo = c.fileUrl ? "photo ✓" : "pending photo";
-  const frame = c.status === "assigned" ? ` → frame ${c.frameNumber}` : "";
-  return `**${c.captureId}** · ${when} · ${where}${settings ? ` · ${settings}` : ""}${c.subject ? ` · ${c.subject}` : ""} · ${photo}${frame}`;
+  const when = e.capturedAt.slice(0, 16).replace("T", " ");
+  const frame = e.frameNumber != null ? ` · frame ${e.frameNumber}${e.frameProvisional ? "?" : ""}` : e.sheetId ? ` · sheet ${e.sheetId}` : "";
+  const state = e.status === "pending" ? (e.review ? "NEEDS REVIEW" : "pending") : e.status;
+  const head = e.kind === "photo" ? "📷 photo" : settings || "(no settings)";
+  return `**${e.shortId}** · ${when} · ${where}${frame} · ${head}${e.subject ? ` · ${e.subject}` : ""} · ${state}`;
 }
 
-// ── Tool: tomu_capture ────────────────────────────────────────────────
+async function rollsIndex(): Promise<Map<string, AnyRoll>> {
+  const { data } = await api<{ data: AnyRoll[] }>("/rolls?status=all");
+  return new Map(data.map((r) => [r.id, r]));
+}
 
 server.tool(
   "tomu_capture",
-  "FIELD USE. Record spoken exposure settings for a film frame whose number is not known yet, " +
-    "with an optional description of the phone photo you were shown. Do NOT try to upload or attach the image — " +
-    "the photo is matched to this capture later on the laptop by timestamp; just describe it in `description`. " +
-    "The photo must be taken with the phone's Camera app (so it lands in the camera roll and iCloud) — a picture " +
-    "taken from inside the Claude app is not saved anywhere and cannot be matched; if the user did that, say so once. " +
-    "If `camera` resolves to one active roll the capture is linked to it; otherwise it stays loose. " +
-    "Never ask for missing fields — a capture with only a description is valid. Returns the capture id (C412).",
+  "FIELD USE (fallback when the Tomu app isn't handy). Record a spoken field note verbatim. Pass the user's words as " +
+    "`transcript` — do not summarise or reformat them; the server extracts settings and keeps the ramble. " +
+    "Do NOT try to upload or attach an image: a photo taken inside the Claude app is not saved anywhere. " +
+    "If `camera` names a camera with one active roll the note is linked to it and gets a provisional frame number; " +
+    "otherwise it stays loose. Never ask for missing details.",
   {
-    camera: z.string().optional().describe("Camera hint to link the active roll (e.g. 'M6', 'Mamiya'). Omit if unknown."),
-    lens: z.string().optional().describe("Lens hint for fuzzy match"),
-    frameNumber: z.number().int().positive().optional().describe("Only when known now (typical for 4x5 sheets)."),
-    shutterSpeed: z.string().optional().describe("e.g. '1/250', '2s'"),
-    aperture: z.string().optional().describe("e.g. 'f/8', '5.6'"),
-    compensation: z.string().optional().describe("e.g. '+1', '-1/3'"),
-    meteringMode: z.string().optional().describe("e.g. 'incident', 'spot', 'sunny 16', 'guess'"),
-    subject: z.string().optional().describe("Short subject"),
-    locationName: z.string().optional().describe("Place name"),
-    notes: z.string().optional().describe("Anything unstructured"),
-    description: z.string().optional().describe("What the phone photo shows (scene, light, framing). Your words, not the image."),
-    capturedAt: z.string().optional().describe("ISO time if the shot was earlier than now (e.g. 'that was ten minutes ago')."),
+    transcript: z.string().min(1).describe("The user's words, verbatim"),
+    camera: z.string().optional().describe("Camera hint (e.g. 'M6', 'Mamiya'); omit if not said"),
+    frameNumber: z.number().int().positive().optional().describe("Only if the user stated it and it is not in the transcript"),
+    capturedAt: z.string().optional().describe("ISO time if the shot was earlier than now"),
   },
-  async ({ camera, lens, frameNumber, shutterSpeed, aperture, compensation, meteringMode, subject, locationName, notes, description, capturedAt }) => {
-    const body: Record<string, unknown> = {};
+  async ({ transcript, camera, frameNumber, capturedAt }) => {
+    const body: Record<string, unknown> = { clientId: randomUUID(), kind: "voice", transcript };
     const notesOut: string[] = [];
-
     if (camera) {
       const { roll, error } = await pickActiveRoll(camera);
-      if (roll) {
-        body.rollId = roll.id;
-        if (roll.cameraId) body.cameraId = roll.cameraId;
-        notesOut.push(`roll ${describeRoll(roll)}`);
-      } else if (error?.startsWith("Multiple active rolls")) {
-        return { content: [{ type: "text" as const, text: error }] };
-      } else {
-        // No active roll for that camera: link the camera if it exists, keep the capture loose.
-        const { data: cams } = await api<{ data: Array<{ id: string; make: string; model: string }> }>("/cameras");
-        const cam = cams.find((c) => fuzzyMatch(camera, c.make, c.model, `${c.make} ${c.model}`));
-        if (cam) { body.cameraId = cam.id; notesOut.push(`${cam.make} ${cam.model}, no active roll — capture is loose`); }
-        else notesOut.push(`no camera matched "${camera}" — capture is loose`);
-      }
-    } else {
-      notesOut.push("loose (no camera given)");
-    }
-
-    let lensUnmatched = false;
-    if (lens) {
-      const { data: lenses } = await api<{ data: Array<{ id: string; make: string; model: string; focalLengthMm: number | null }> }>("/lenses");
-      const match = lenses.find((l) => fuzzyMatch(lens, `${l.make} ${l.model}`, l.model, String(l.focalLengthMm ?? "")));
-      if (match) body.lensId = match.id;
-      else lensUnmatched = true;
+      if (roll) { body.rollId = roll.id; if (roll.cameraId) body.cameraId = roll.cameraId; notesOut.push(`roll ${describeRoll(roll)}`); }
+      else if (error?.startsWith("Multiple active rolls")) return { content: [{ type: "text" as const, text: error }] };
+      else notesOut.push(`no active roll for "${camera}" — loose`);
     }
     if (frameNumber != null) body.frameNumber = frameNumber;
-    if (shutterSpeed) body.shutterSpeed = shutterSpeed;
-    if (aperture) body.aperture = aperture;
-    if (compensation) body.compensation = compensation;
-    if (meteringMode) body.meteringMode = meteringMode;
-    if (subject) body.subject = subject;
-    if (locationName) body.locationName = locationName;
-    if (notes) body.notes = notes;
-    if (description) body.sceneDescription = description;
-    if (capturedAt) {
-      const d = new Date(capturedAt);
-      if (!Number.isNaN(d.getTime())) body.capturedAt = d.toISOString();
-    }
-
-    const { data: c } = await api<{ data: CaptureRow }>("/captures", { method: "POST", body: JSON.stringify(body) });
-    const settings = [c.shutterSpeed, c.aperture, c.compensation].filter(Boolean).join(" ");
-    return {
-      content: [{
-        type: "text" as const,
-        text: `**${c.captureId}** · ${notesOut.join("; ")}${settings ? ` · ${settings}` : ""}${subject ? ` · ${subject}` : ""} · pending photo${lensUnmatched ? ` · lens "${lens}" not matched` : ""}`,
-      }],
-    };
+    if (capturedAt) { const d = new Date(capturedAt); if (!Number.isNaN(d.getTime())) body.capturedAt = d.toISOString(); }
+    const { data: e } = await api<{ data: FieldEventRow }>("/field-events", { method: "POST", body: JSON.stringify(body) });
+    return { content: [{ type: "text" as const, text: `${eventLine(e, await rollsIndex())}${notesOut.length ? `\n${notesOut.join("; ")}` : ""}` }] };
   }
 );
 
-// ── Tool: tomu_captures ───────────────────────────────────────────────
-
 server.tool(
-  "tomu_captures",
-  "List field captures. Default: pending ones (no frame number yet), newest first. Shows whether the phone photo has been attached.",
+  "tomu_field_events",
+  "List field events (voice notes and photos). Default: pending ones, newest first. Shows transcript first, then parsed settings.",
   {
-    roll: z.string().optional().describe("Restrict to one roll: display id, Dev Id, or dev seq"),
-    status: z.string().optional().describe("'pending' (default), 'assigned', or 'all'"),
-    limit: z.number().int().positive().optional().describe("Max rows (default 30)"),
+    roll: z.string().optional().describe("display id, Dev Id, dev seq, or uuid prefix"),
+    status: z.string().optional().describe("'pending' (default), 'pinned', 'roll_level', or 'all'"),
+    review: z.boolean().optional().describe("Only events the parser flagged for review"),
+    limit: z.number().int().positive().optional().describe("Max rows (default 20)"),
   },
-  async ({ roll, status, limit }) => {
-    const params = new URLSearchParams();
-    params.set("status", status ?? "pending");
-    params.set("limit", String(limit ?? 30));
-    if (roll) {
-      const r = await resolveRollHandle(roll);
-      if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] };
-      params.set("roll_id", r.roll.id);
-    }
-    const { data } = await api<{ data: CaptureRow[] }>(`/captures?${params}`);
-    if (data.length === 0) return { content: [{ type: "text" as const, text: "No captures." }] };
-    const { data: allRolls } = await api<{ data: AnyRoll[] }>("/rolls?status=all");
-    const rollsById = new Map(allRolls.map((r) => [r.id, r]));
-    const lines = data.map((c) => `- ${captureLine(c, rollsById)}${c.sceneDescription ? `\n  _${c.sceneDescription}_` : ""}`);
-    return { content: [{ type: "text" as const, text: `## Captures (${data.length})\n\n${lines.join("\n")}` }] };
+  async ({ roll, status, review, limit }) => {
+    const params = new URLSearchParams({ status: status ?? "pending", limit: String(limit ?? 20) });
+    if (review) params.set("review", "true");
+    if (roll) { const r = await resolveRollHandle(roll); if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] }; params.set("roll_id", r.roll.id); }
+    const { data } = await api<{ data: FieldEventRow[] }>(`/field-events?${params}`);
+    if (!data.length) return { content: [{ type: "text" as const, text: "No field events." }] };
+    const idx = await rollsIndex();
+    const lines = data.map((e) => {
+      const extra = [e.transcript ? `  > ${e.transcript}` : "", e.parseNotes ? `  ⚠ ${e.parseNotes}` : "", e.fileUrl ? `  ${e.fileUrl}` : ""].filter(Boolean).join("\n");
+      return `- ${eventLine(e, idx)}${extra ? `\n${extra}` : ""}`;
+    });
+    return { content: [{ type: "text" as const, text: `## Field events (${data.length})\n\n${lines.join("\n")}` }] };
   }
 );
 
-// ── Tool: tomu_edit_capture ───────────────────────────────────────────
-
 server.tool(
-  "tomu_edit_capture",
-  "Fix a capture: a misheard setting, or link a loose capture to a roll. Only the fields you pass change.",
+  "tomu_edit_event",
+  "Correct a field event's parsed fields, roll, or frame number. Edited fields are protected from re-parsing. The transcript cannot be changed.",
   {
-    capture: z.string().describe("Capture id, e.g. 'C412' or '412'"),
-    roll: z.string().optional().describe("Link to this roll: display id, Dev Id, or dev seq"),
-    lens: z.string().optional(),
-    frameNumber: z.number().int().positive().optional(),
-    shutterSpeed: z.string().optional(),
-    aperture: z.string().optional(),
-    compensation: z.string().optional(),
-    meteringMode: z.string().optional(),
-    subject: z.string().optional(),
-    locationName: z.string().optional(),
-    notes: z.string().optional(),
-    description: z.string().optional(),
-    capturedAt: z.string().optional().describe("ISO time"),
+    event: z.string().describe("Event id (uuid or ≥8-char prefix)"),
+    roll: z.string().optional(), frameNumber: z.number().int().positive().optional(), sheetId: z.string().optional(),
+    shutterSpeed: z.string().optional(), aperture: z.string().optional(), compensation: z.string().optional(), meteringMode: z.string().optional(),
+    lens: z.string().optional().describe("Lens hint (fuzzy)"), subject: z.string().optional(), locationName: z.string().optional(),
+    remarks: z.string().optional(), review: z.boolean().optional().describe("false to clear a review flag"),
   },
-  async ({ capture, roll, lens, description, capturedAt, ...rest }) => {
-    const body: Record<string, unknown> = { ...rest };
-    for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
-    if (roll) {
-      const r = await resolveRollHandle(roll);
-      if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] };
-      body.rollId = r.roll.id;
-    }
+  async ({ event, roll, lens, ...rest }) => {
+    const body: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(rest)) if (v !== undefined) body[k] = v;
+    if (roll) { const r = await resolveRollHandle(roll); if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] }; body.rollId = r.roll.id; }
     if (lens) {
       const { data: lenses } = await api<{ data: Array<{ id: string; make: string; model: string; focalLengthMm: number | null }> }>("/lenses");
-      const match = lenses.find((l) => fuzzyMatch(lens, `${l.make} ${l.model}`, l.model, String(l.focalLengthMm ?? "")));
-      if (!match) return { content: [{ type: "text" as const, text: `No lens matches "${lens}".` }] };
-      body.lensId = match.id;
+      const m = lenses.find((l) => fuzzyMatch(lens, `${l.make} ${l.model}`, l.model, String(l.focalLengthMm ?? "")));
+      if (!m) return { content: [{ type: "text" as const, text: `No lens matches "${lens}".` }] };
+      body.lensId = m.id;
     }
-    if (description) body.sceneDescription = description;
-    let capturedAtIgnored = false;
-    if (capturedAt) {
-      const d = new Date(capturedAt);
-      if (Number.isNaN(d.getTime())) capturedAtIgnored = true;
-      else body.capturedAt = d.toISOString();
-    }
-    if (Object.keys(body).length === 0) return { content: [{ type: "text" as const, text: "Nothing to change." }] };
-    const { data: c } = await api<{ data: CaptureRow }>(`/captures/${encodeURIComponent(capture)}`, { method: "PATCH", body: JSON.stringify(body) });
-    const { data: allRolls } = await api<{ data: AnyRoll[] }>("/rolls?status=all");
-    const ignoredNote = capturedAtIgnored ? ` (capturedAt "${capturedAt}" ignored as unparseable — retry with ISO)` : "";
-    return { content: [{ type: "text" as const, text: `Updated ${captureLine(c, new Map(allRolls.map((r) => [r.id, r])))}${ignoredNote}` }] };
+    if (!Object.keys(body).length) return { content: [{ type: "text" as const, text: "Nothing to change." }] };
+    const { data: e } = await api<{ data: FieldEventRow }>(`/field-events/${encodeURIComponent(event)}`, { method: "PATCH", body: JSON.stringify(body) });
+    return { content: [{ type: "text" as const, text: `Updated ${eventLine(e, await rollsIndex())}` }] };
   }
 );
 
-// ── Tool: tomu_assign_capture ─────────────────────────────────────────
-
 server.tool(
-  "tomu_assign_capture",
-  "After development: give captures their frame numbers. Each capture becomes a real frame on its roll " +
-    "(settings copied, phone photo attached as a note). Pass `roll` when any listed capture is still loose. " +
-    "Runs in order and stops at the first failure. The photo itself is attached later by the laptop sync script — " +
-    "never supply it to this tool.",
+  "tomu_pin_event",
+  "After development: pin field events to frame numbers. A voice note becomes (or fills) the frame and its transcript is attached as a note; " +
+    "a photo becomes a photo note on that frame. Pass `roll` for loose events. Runs in order, stops at the first failure.",
   {
-    assignments: z.array(z.object({
-      capture: z.string().describe("'C412' or '412'"),
-      frameNumber: z.number().int().positive(),
-    })).min(1),
-    roll: z.string().optional().describe("Roll for loose captures: display id, Dev Id, or dev seq"),
+    pins: z.array(z.object({ event: z.string(), frameNumber: z.number().int().positive() })).min(1),
+    roll: z.string().optional(),
   },
-  async ({ assignments, roll }) => {
+  async ({ pins, roll }) => {
     let rollId: string | undefined;
-    if (roll) {
-      const r = await resolveRollHandle(roll);
-      if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] };
-      rollId = r.roll.id;
-    }
+    if (roll) { const r = await resolveRollHandle(roll); if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] }; rollId = r.roll.id; }
     const done: string[] = [];
-    for (const a of assignments) {
+    for (const p of pins) {
       try {
-        const { data } = await api<{ data: { capture: CaptureRow; frame: { frameNumber: number } } }>(
-          `/captures/${encodeURIComponent(a.capture)}/assign`,
-          { method: "POST", body: JSON.stringify(rollId ? { rollId, frameNumber: a.frameNumber } : { frameNumber: a.frameNumber }) },
-        );
-        done.push(`${data.capture.captureId} → frame ${data.frame.frameNumber}`);
+        const { data } = await api<{ data: { event: FieldEventRow; frame: { frameNumber: number }; joined: boolean } }>(
+          `/field-events/${encodeURIComponent(p.event)}/pin`, { method: "POST", body: JSON.stringify(rollId ? { rollId, frameNumber: p.frameNumber } : { frameNumber: p.frameNumber }) });
+        done.push(`${data.event.shortId} → frame ${data.frame.frameNumber}${data.joined ? " (joined)" : ""}`);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const remaining = assignments.slice(done.length + 1).map((x) => x.capture);
-        return {
-          content: [{
-            type: "text" as const,
-            text: `${done.length ? `Assigned: ${done.join(", ")}\n` : ""}Failed on ${a.capture} (frame ${a.frameNumber}): ${msg}${remaining.length ? `\nNot attempted: ${remaining.join(", ")}` : ""}`,
-          }],
-        };
+        const remaining = pins.slice(done.length + 1).map((x) => x.event);
+        return { content: [{ type: "text" as const, text: `${done.length ? `Pinned: ${done.join(", ")}\n` : ""}Failed on ${p.event} (frame ${p.frameNumber}): ${(err as Error).message}${remaining.length ? `\nNot attempted: ${remaining.join(", ")}` : ""}` }] };
       }
     }
-    return { content: [{ type: "text" as const, text: `Assigned: ${done.join(", ")}` }] };
+    return { content: [{ type: "text" as const, text: `Pinned: ${done.join(", ")}` }] };
+  }
+);
+
+server.tool(
+  "tomu_roll_level_event",
+  "Attach a field event to its roll as a note without a frame number (a scene reference photo, a general remark).",
+  { event: z.string(), roll: z.string().optional().describe("Required for loose events") },
+  async ({ event, roll }) => {
+    let rollId: string | undefined;
+    if (roll) { const r = await resolveRollHandle(roll); if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] }; rollId = r.roll.id; }
+    const { data } = await api<{ data: { event: FieldEventRow } }>(`/field-events/${encodeURIComponent(event)}/roll-level`, { method: "POST", body: JSON.stringify(rollId ? { rollId } : {}) });
+    return { content: [{ type: "text" as const, text: `Attached ${eventLine(data.event, await rollsIndex())}` }] };
+  }
+);
+
+server.tool(
+  "tomu_reparse_events",
+  "Run the model parse again over voice events (after a prompt change, or to fill fields). Hand-edited fields are never touched.",
+  { events: z.array(z.string()).optional().describe("Event ids"), roll: z.string().optional(), since: z.string().optional().describe("ISO date") },
+  async ({ events, roll, since }) => {
+    const body: Record<string, unknown> = {};
+    if (events?.length) {
+      const ids: string[] = [];
+      for (const h of events) { const { data } = await api<{ data: FieldEventRow }>(`/field-events/${encodeURIComponent(h)}`); ids.push(data.id); }
+      body.ids = ids;
+    }
+    if (roll) { const r = await resolveRollHandle(roll); if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] }; body.rollId = r.roll.id; }
+    if (since) body.since = new Date(since).toISOString();
+    const { data } = await api<{ data: { attempted: number; changed: number } }>("/field-events/reparse", { method: "POST", body: JSON.stringify(body) });
+    return { content: [{ type: "text" as const, text: `Reparsed ${data.attempted} event(s); ${data.changed} changed.` }] };
   }
 );
 
