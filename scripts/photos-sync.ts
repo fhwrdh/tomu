@@ -10,7 +10,7 @@
  * Usage: npm run photos:sync -- [--dry-run] [--since 14] [--force <eventIdPrefix>=<photo-uuid>]...
  *        [--window-before 10] [--window-after 2]
  */
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -63,6 +63,21 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 function isoMinus(ms: number, from = Date.now()) { return new Date(from - ms).toISOString(); }
 
+/**
+ * Deterministic clientId for a photo event, derived from the Photos asset uuid (uuid-v5
+ * style: sha1 over a fixed namespace string, version nibble + variant bits set). Same
+ * asset uuid always yields the same clientId, so re-running photos:sync hits the
+ * idempotent create (200, existing row) instead of duplicating a photo event.
+ */
+function photoClientId(assetUuid: string): string {
+  const hash = createHash("sha1").update(`tomu-photo:${assetUuid}`).digest();
+  const bytes = hash.subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant RFC 4122
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 async function osxQuery(fromIso: string, toIso: string): Promise<OsxPhoto[]> {
   const { stdout } = await run("osxphotos", ["query", "--json", "--only-photos", "--from-date", fromIso, "--to-date", toIso], { maxBuffer: 64 * 1024 * 1024 });
   return stdout.trim() ? (JSON.parse(stdout) as OsxPhoto[]) : [];
@@ -78,8 +93,6 @@ async function osxExport(uuid: string, dir: string): Promise<string> {
   return join(dir, files[0]);
 }
 
-const NEARBY_PHOTO_MS = 2 * 60_000;
-
 async function main() {
   const since = isoMinus(sinceDays * 86_400_000);
   const [{ data: voiceEvents }, { data: photoEvents }] = await Promise.all([
@@ -88,10 +101,17 @@ async function main() {
   ]);
   const usedAssetIds = new Set(photoEvents.map((e) => e.photoAssetId).filter((x): x is string => !!x));
 
-  // A voice event that already has a photo event within ±2 min on the same roll is done.
+  // A voice event that already has an uploaded photo event (same asymmetric window used for
+  // matching) on the same roll is done. A photo event with no fileKey (create succeeded,
+  // upload failed) doesn't count here — it's retryable, so the voice event stays a candidate
+  // and the retry below reuses that row via the deterministic clientId.
   const todo = voiceEvents.filter((v) => {
     const t = Date.parse(v.capturedAt);
-    return !photoEvents.some((p) => p.rollId === v.rollId && Math.abs(Date.parse(p.capturedAt) - t) <= NEARBY_PHOTO_MS);
+    return !photoEvents.some((p) => {
+      if (p.rollId !== v.rollId || !p.fileKey) return false;
+      const dt = Date.parse(p.capturedAt) - t;
+      return dt >= -windowBeforeMin * 60_000 && dt <= windowAfterMin * 60_000;
+    });
   });
 
   // Resolve --force event-id prefixes against candidate voice events now, so a missing one is
@@ -140,7 +160,7 @@ async function main() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: randomUUID(),
+          clientId: photoClientId(p.uuid),
           kind: "photo",
           rollId: ev.rollId ?? undefined,
           capturedAt: photoTakenAt,

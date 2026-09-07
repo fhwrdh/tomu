@@ -885,7 +885,14 @@ server.tool(
       const { roll, error } = await pickActiveRoll(camera);
       if (roll) { body.rollId = roll.id; if (roll.cameraId) body.cameraId = roll.cameraId; notesOut.push(`roll ${describeRoll(roll)}`); }
       else if (error?.startsWith("Multiple active rolls")) return { content: [{ type: "text" as const, text: error }] };
-      else notesOut.push(`no active roll for "${camera}" — loose`);
+      else {
+        // No active roll for this camera hint — still resolve the camera itself (V1 behaviour)
+        // so the note is linked to a camera even when loose.
+        const { data: cams } = await api<{ data: Array<{ id: string; make: string; model: string }> }>("/cameras");
+        const m = rankedMatch(camera, cams, (c) => [`${c.make} ${c.model}`, c.model, c.make]);
+        if (m.kind === "single") body.cameraId = m.item.id;
+        notesOut.push("no active roll — loose");
+      }
     }
     if (frameNumber != null) body.frameNumber = frameNumber;
     if (capturedAt) { const d = new Date(capturedAt); if (!Number.isNaN(d.getTime())) body.capturedAt = d.toISOString(); }
@@ -994,7 +1001,11 @@ server.tool(
       body.ids = ids;
     }
     if (roll) { const r = await resolveRollHandle(roll); if (!r.roll) return { content: [{ type: "text" as const, text: r.error! }] }; body.rollId = r.roll.id; }
-    if (since) body.since = new Date(since).toISOString();
+    if (since) {
+      const d = new Date(since);
+      if (Number.isNaN(d.getTime())) return { content: [{ type: "text" as const, text: "since is not a parseable date" }] };
+      body.since = d.toISOString();
+    }
     const { data } = await api<{ data: { attempted: number; changed: number } }>("/field-events/reparse", { method: "POST", body: JSON.stringify(body) });
     return { content: [{ type: "text" as const, text: `Reparsed ${data.attempted} event(s); ${data.changed} changed.` }] };
   }

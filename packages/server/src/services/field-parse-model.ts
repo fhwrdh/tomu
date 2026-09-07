@@ -27,6 +27,9 @@ const Output = z.object({
   reviewReason: z.string().nullable(),
 });
 
+/** Max size of a photo attached to a tier-2 request; larger photos are skipped. */
+export const TIER2_MAX_IMAGE_BYTES = 3_500_000;
+
 let promptCache: string | null = null;
 async function prompt(): Promise<string> {
   if (!promptCache) promptCache = await readFile(new URL("./field-parse-prompt.md", import.meta.url), "utf8");
@@ -63,8 +66,12 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
 
   const userContent: Anthropic.MessageParam["content"] = [];
   if (photo?.fileKey) {
-    const buf = await readFile(join(config.UPLOADS_DIR, photo.fileKey)).catch(() => null);
-    if (buf) userContent.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } });
+    if (photo.fileSizeBytes != null && photo.fileSizeBytes <= TIER2_MAX_IMAGE_BYTES) {
+      const buf = await readFile(join(config.UPLOADS_DIR, photo.fileKey)).catch(() => null);
+      if (buf) userContent.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } });
+    } else {
+      console.debug(`skipping oversized photo for tier-2 (event ${ev.id}, photo ${photo.id})`);
+    }
   }
   userContent.push({ type: "text", text: `${context}\n\nTranscript:\n"""\n${ev.transcript}\n"""` });
 
@@ -107,11 +114,16 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     try {
-      await db.update(fieldEvents).set({
+      const set: Record<string, unknown> = {
         parseAttempts: sql`${fieldEvents.parseAttempts} + 1`,
-        parseNotes: `tier-2 failed: ${msg.slice(0, 200)}`,
         updatedAt: new Date(),
-      }).where(eq(fieldEvents.id, ev.id));
+      };
+      // Never clobber a real reviewReason left in parseNotes — only overwrite when it's empty
+      // or already our own "tier-2 failed" note from a previous attempt.
+      if (ev.parseNotes == null || ev.parseNotes.startsWith("tier-2 failed")) {
+        set.parseNotes = `tier-2 failed: ${msg.slice(0, 200)}`;
+      }
+      await db.update(fieldEvents).set(set).where(eq(fieldEvents.id, ev.id));
     } catch (recordErr) {
       console.error(`failed to record tier-2 failure for ${ev.id}:`, recordErr);
     }

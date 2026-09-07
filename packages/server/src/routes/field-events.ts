@@ -54,6 +54,18 @@ async function userOwnsRoll(userId: string, rollId: string): Promise<{ id: strin
   return roll ?? null;
 }
 
+async function userOwnsCamera(userId: string, cameraId: string): Promise<boolean> {
+  const [row] = await db.select({ id: cameras.id }).from(cameras)
+    .where(and(eq(cameras.id, cameraId), eq(cameras.userId, userId))).limit(1);
+  return !!row;
+}
+
+async function userOwnsLens(userId: string, lensId: string): Promise<boolean> {
+  const [row] = await db.select({ id: lenses.id }).from(lenses)
+    .where(and(eq(lenses.id, lensId), eq(lenses.userId, userId))).limit(1);
+  return !!row;
+}
+
 /** Highest frame number noted on a roll across frames and events (pending or pinned). */
 export async function highestNotedFrame(rollId: string): Promise<number | null> {
   const [f] = await db.select({ m: max(frames.frameNumber) }).from(frames).where(eq(frames.rollId, rollId));
@@ -89,6 +101,12 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     if (body.rollId) {
       roll = await userOwnsRoll(request.userId, body.rollId);
       if (!roll) return reply.status(404).send({ error: "Roll not found" });
+    }
+    if (body.cameraId && !(await userOwnsCamera(request.userId, body.cameraId))) {
+      return reply.status(404).send({ error: "Camera not found" });
+    }
+    if (body.lensId && !(await userOwnsLens(request.userId, body.lensId))) {
+      return reply.status(404).send({ error: "Lens not found" });
     }
 
     // Tier 1 on the server when the client sent none (Claude-app path / curl).
@@ -166,7 +184,7 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { status?: string; kind?: string; roll_id?: string; since?: string; review?: string; client_ids?: string; limit?: string } }>("/", async (request, reply) => {
     const q = request.query;
     const conds = [eq(fieldEvents.userId, request.userId)];
-    const status = q.status ?? "pending";
+    const status = q.status ?? (q.client_ids ? "all" : "pending");
     if (status !== "all") {
       if (!["pending", "pinned", "roll_level"].includes(status)) return reply.status(400).send({ error: `Invalid status: ${status}` });
       conds.push(eq(fieldEvents.status, status));
@@ -219,6 +237,8 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     if (!row) return reply.status(404).send({ error: "Event not found" });
     const body = updateFieldEventSchema.parse(request.body);
     if (body.rollId && !(await userOwnsRoll(request.userId, body.rollId))) return reply.status(404).send({ error: "Roll not found" });
+    if (body.cameraId && !(await userOwnsCamera(request.userId, body.cameraId))) return reply.status(404).send({ error: "Camera not found" });
+    if (body.lensId && !(await userOwnsLens(request.userId, body.lensId))) return reply.status(404).send({ error: "Lens not found" });
     const set: Partial<typeof fieldEvents.$inferInsert> = { updatedAt: new Date() };
     const edited = new Set(row.editedFields);
     for (const k of ["shutterSpeed", "aperture", "compensation", "meteringMode", "lensId", "subject", "locationName"] as const) {
@@ -256,6 +276,7 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
       const code = (err as { code?: string }).code;
       if (code === "FST_REQ_FILE_TOO_LARGE") return reply.status(413).send({ error: "Photo exceeds 25 MB" });
       if (code === "FST_FILES_LIMIT") return reply.status(400).send({ error: "Send exactly one file part named 'file'" });
+      if (code === "FST_INVALID_MULTIPART_CONTENT_TYPE") return reply.status(400).send({ error: "Send multipart/form-data with a 'file' part" });
       throw err;
     }
     if (!fileBuf) return reply.status(400).send({ error: "Missing multipart field 'file'" });
@@ -282,6 +303,9 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     const row = await findEvent(request.userId, request.params.id);
     if (!row) return reply.status(404).send({ error: "Event not found" });
     if (row.status !== "pending") return reply.status(409).send({ error: `Event is already ${row.status}` });
+    if (row.kind === "photo" && !row.fileKey) {
+      return reply.status(400).send({ error: "Nothing to attach: photo not uploaded yet" });
+    }
     const body = pinFieldEventSchema.parse(request.body);
     const rollId = body.rollId ?? row.rollId;
     if (!rollId) return reply.status(400).send({ error: "Event is not linked to a roll; pass rollId" });
@@ -386,5 +410,3 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     return reply.status(204).send();
   });
 }
-
-export const ROUTE_PREFIX = "/api/v1/field-events";
