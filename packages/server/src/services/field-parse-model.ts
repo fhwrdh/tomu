@@ -7,7 +7,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 // `zodOutputFormat` requires a zod/v4 `ZodType`; the rest of the codebase uses the zod v3
 // classic API (package.json pins zod ^3.25, which ships a `zod/v4` compat entry point), so
 // this schema — local to the tier-2 SDK call — is built against `zod/v4` specifically.
@@ -68,47 +68,66 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
   }
   userContent.push({ type: "text", text: `${context}\n\nTranscript:\n"""\n${ev.transcript}\n"""` });
 
-  const res = await client.messages.parse({
-    model: config.FIELD_PARSE_MODEL,
-    max_tokens: 2000,
-    system: [{ type: "text", text: await prompt(), cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: userContent }],
-    output_config: { format: zodOutputFormat(Output) },
-  });
-  const out = res.parsed_output;
-  if (!out) throw new Error("tier-2 parse returned no structured output");
+  try {
+    const res = await client.messages.parse({
+      model: config.FIELD_PARSE_MODEL,
+      max_tokens: 2000,
+      system: [{ type: "text", text: await prompt(), cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: userContent }],
+      output_config: { format: zodOutputFormat(Output) },
+    });
+    const out = res.parsed_output;
+    if (!out) throw new Error("tier-2 parse returned no structured output");
 
-  const tier2: Tier2Result = {
-    fields: Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, out[k].value])) as Tier2Result["fields"],
-    confidence: Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, out[k].confidence])) as Tier2Result["confidence"],
-    cameraId: out.cameraId, remarks: out.remarks ?? undefined, sceneDescription: out.sceneDescription ?? undefined, reviewReason: out.reviewReason,
-  };
-  // lensId must be a real lens of this user; drop hallucinated ids.
-  if (tier2.fields.lensId && !lens.some((l) => l.id === tier2.fields.lensId)) { tier2.fields.lensId = null; }
-  const current = Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, (ev as Record<string, unknown>)[k] as string | null])) as Parameters<typeof mergeParse>[0];
-  const merged = mergeParse(current, tier2, ev.editedFields);
+    const tier2: Tier2Result = {
+      fields: Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, out[k].value])) as Tier2Result["fields"],
+      confidence: Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, out[k].confidence])) as Tier2Result["confidence"],
+      cameraId: out.cameraId, remarks: out.remarks ?? undefined, sceneDescription: out.sceneDescription ?? undefined, reviewReason: out.reviewReason,
+    };
+    // lensId must be a real lens of this user; drop hallucinated ids.
+    if (tier2.fields.lensId && !lens.some((l) => l.id === tier2.fields.lensId)) { tier2.fields.lensId = null; }
+    const current = Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, (ev as Record<string, unknown>)[k] as string | null])) as Parameters<typeof mergeParse>[0];
+    const merged = mergeParse(current, tier2, ev.editedFields);
 
-  const set: Partial<typeof fieldEvents.$inferInsert> = {
-    ...merged.fields,
-    parsedAt: new Date(),
-    parser: `claude:${config.FIELD_PARSE_MODEL}`,
-    parseNotes: tier2.reviewReason ?? null,
-    review: !!tier2.reviewReason,
-    updatedAt: new Date(),
-  };
-  if (!ev.remarks && tier2.remarks) set.remarks = tier2.remarks;
-  if (!ev.sceneDescription && tier2.sceneDescription) set.sceneDescription = tier2.sceneDescription;
-  // Hallucinated cameraId that does not belong to this user must never be written.
-  if (!ev.cameraId && tier2.cameraId && cams.some((c) => c.id === tier2.cameraId)) set.cameraId = tier2.cameraId;
-  await db.update(fieldEvents).set(set).where(eq(fieldEvents.id, ev.id));
-  return { skipped: false, changed: merged.changed };
+    const set: Partial<typeof fieldEvents.$inferInsert> = {
+      ...merged.fields,
+      parsedAt: new Date(),
+      parser: `claude:${config.FIELD_PARSE_MODEL}`,
+      parseNotes: tier2.reviewReason ?? null,
+      review: !!tier2.reviewReason,
+      parseAttempts: 0,
+      updatedAt: new Date(),
+    };
+    if (!ev.remarks && tier2.remarks) set.remarks = tier2.remarks;
+    if (!ev.sceneDescription && tier2.sceneDescription) set.sceneDescription = tier2.sceneDescription;
+    // Hallucinated cameraId that does not belong to this user must never be written.
+    if (!ev.cameraId && tier2.cameraId && cams.some((c) => c.id === tier2.cameraId)) set.cameraId = tier2.cameraId;
+    await db.update(fieldEvents).set(set).where(eq(fieldEvents.id, ev.id));
+    return { skipped: false, changed: merged.changed };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await db.update(fieldEvents).set({
+      parseAttempts: sql`${fieldEvents.parseAttempts} + 1`,
+      parseNotes: `tier-2 failed: ${msg.slice(0, 200)}`,
+      updatedAt: new Date(),
+    }).where(eq(fieldEvents.id, ev.id));
+    throw err;
+  }
 }
 
-/** Voice events never seen by tier 2 (parser null or "regex"), oldest first. Returns how many were attempted. */
+/** Max tier-2 attempts the sweep will retry before giving up on an event (explicit reparse ignores this). */
+export const MAX_PARSE_ATTEMPTS = 5;
+
+/** Voice events never seen by tier 2 (parser null or "regex"), oldest first, not yet at the attempt cap. Returns how many were attempted. */
 export async function sweepUnparsed(limit = 20): Promise<number> {
   if (!client) return 0;
   const rows = await db.select({ id: fieldEvents.id }).from(fieldEvents)
-    .where(and(eq(fieldEvents.kind, "voice"), sql`${fieldEvents.transcript} is not null`, sql`(${fieldEvents.parser} is null or ${fieldEvents.parser} = 'regex')`))
+    .where(and(
+      eq(fieldEvents.kind, "voice"),
+      sql`${fieldEvents.transcript} is not null`,
+      sql`(${fieldEvents.parser} is null or ${fieldEvents.parser} = 'regex')`,
+      lt(fieldEvents.parseAttempts, MAX_PARSE_ATTEMPTS),
+    ))
     .orderBy(fieldEvents.capturedAt).limit(limit);
   for (const r of rows) {
     try { await parseEventWithModel(r.id); } catch (err) { console.error(`tier-2 parse failed for ${r.id}:`, (err as Error).message); }

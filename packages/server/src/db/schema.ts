@@ -268,6 +268,7 @@ export const fieldEvents = pgTable(
     parsedAt: timestamp("parsed_at", { withTimezone: true }),
     parser: text("parser"),
     parseNotes: text("parse_notes"),
+    parseAttempts: integer("parse_attempts").notNull().default(0),
     editedFields: text("edited_fields").array().notNull().default([]),
     review: boolean("review").notNull().default(false),
     status: text("status").notNull().default("pending"),

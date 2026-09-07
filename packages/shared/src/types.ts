@@ -223,6 +223,7 @@ export interface FieldEvent extends Timestamps {
   parsedAt?: string;
   parser?: string;
   parseNotes?: string;
+  parseAttempts: number;
   editedFields: string[];
   review: boolean;
   status: FieldEventStatus;
