@@ -79,7 +79,10 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
     const res = await client.messages.parse({
       model: config.FIELD_PARSE_MODEL,
       max_tokens: 2000,
-      system: [{ type: "text", text: await prompt(), cache_control: { type: "ephemeral" } }],
+      // No cache_control: the prompt is ~260 tokens, far below the minimum cacheable
+      // prefix (2048 for Haiku, 1024 for Sonnet/Opus), so a cache breakpoint here is
+      // silently ignored. Add one back if the prompt grows past that.
+      system: [{ type: "text", text: await prompt() }],
       messages: [{ role: "user", content: userContent }],
       output_config: { format: zodOutputFormat(Output) },
     });

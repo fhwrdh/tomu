@@ -62,7 +62,7 @@ Authoritative kit summary. Update when gear changes.
 
 ## Field capture
 
-Tier-1 (deterministic regex, on device and server) + tier-2 (Claude, server-side, optional) parser. Tier-1 extracts: shutter, aperture, compensation, metering mode, frame number / sheet id, camera, lens. Tier-2 adds: subject, location, remarks, scene description. Stream at `field_events` table; MCP tools `tomu_capture` / `tomu_field_events` / `tomu_edit_event` / `tomu_pin_event` / `tomu_roll_level_event` / `tomu_reparse_events`. `photos:sync` matches Mac Photos-library images to voice events by time and creates `photo` events (fallback path; the PWA in part 2 uploads directly). Read-only 'Field notes' section on roll detail (transcript first). Uploads live under `uploads/events/` on the droplet (not in Postgres dump; back up separately).
+Tier-1 (deterministic regex, on device and server) + tier-2 (Claude, server-side, optional) parser. Tier-1 extracts: shutter, aperture, compensation, metering mode, frame number / sheet id, camera, lens. Tier-2 adds: subject, location, remarks, scene description. Stream at `field_events` table; MCP tools `tomu_capture` / `tomu_field_events` / `tomu_edit_event` / `tomu_pin_event` / `tomu_roll_level_event` / `tomu_reparse_events` / `tomu_delete_event`. `photos:sync` matches Mac Photos-library images to voice events by time and creates `photo` events (fallback path; the PWA in part 2 uploads directly). Read-only 'Field notes' section on roll detail (transcript first). Uploads live under `uploads/events/` on the droplet (not in Postgres dump; back up separately).
 
 **Production status:** part 1 shipped 2026-09-07 (PR #23, `bf048fe`). `field_events`
 exists in prod and the empty `captures` table is dropped. Still to do: add

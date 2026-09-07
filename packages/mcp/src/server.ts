@@ -1011,6 +1011,22 @@ server.tool(
   }
 );
 
+server.tool(
+  "tomu_delete_event",
+  "Delete a field event — the field's 'scratch that' once a note is already logged. " +
+    "Pending events delete outright; a pinned or roll-level event needs `force`, and its frame, note, and photo file stay behind.",
+  {
+    event: z.string().describe("Event id (short id, uuid, or client id)"),
+    force: z.boolean().optional().describe("Required to delete an event that is already pinned or roll-level"),
+  },
+  async ({ event, force }) => {
+    const { data } = await api<{ data: FieldEventRow }>(`/field-events/${encodeURIComponent(event)}`);
+    const line = eventLine(data, await rollsIndex());
+    await api(`/field-events/${encodeURIComponent(data.id)}${force ? "?force=true" : ""}`, { method: "DELETE" });
+    return { content: [{ type: "text" as const, text: `Deleted ${line}` }] };
+  }
+);
+
 // ── Tool: tomu_note ───────────────────────────────────────────────────
 
 server.tool(
