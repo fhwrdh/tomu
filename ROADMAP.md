@@ -64,19 +64,36 @@ Authoritative kit summary. Update when gear changes.
 
 Tier-1 (deterministic regex, on device and server) + tier-2 (Claude, server-side, optional) parser. Tier-1 extracts: shutter, aperture, compensation, metering mode, frame number / sheet id, camera, lens. Tier-2 adds: subject, location, remarks, scene description. Stream at `field_events` table; MCP tools `tomu_capture` / `tomu_field_events` / `tomu_edit_event` / `tomu_pin_event` / `tomu_roll_level_event` / `tomu_reparse_events`. `photos:sync` matches Mac Photos-library images to voice events by time and creates `photo` events (fallback path; the PWA in part 2 uploads directly). Read-only 'Field notes' section on roll detail (transcript first). Uploads live under `uploads/events/` on the droplet (not in Postgres dump; back up separately).
 
-**Production deployment:**
+**Production status:** part 1 shipped 2026-09-07 (PR #23, `bf048fe`). `field_events`
+exists in prod and the empty `captures` table is dropped. Still to do: add
+`ANTHROPIC_API_KEY` + `FIELD_PARSE_MODEL` to the droplet `.env` and
+`pm2 restart tomu-api --update-env` — until then tier-2 is inert and events carry
+`parser: regex` only. Live tier-2 parse has never been exercised anywhere; the first
+`tomu_capture` after the key lands should return `parser: claude:claude-haiku-4-5`.
 
-1. Set `.env` on the droplet:
-   - `ANTHROPIC_API_KEY` — required for tier-2 parse (optional if you parse manually only)
-   - `FIELD_PARSE_MODEL` — defaults to `claude-haiku-4-5`
+**How the migration was actually run.** Neither drizzle path works for this change:
+the deploy workflow's `migrate` toggle fails the deploy on a DROP by design, and
+`drizzle-kit push --strict` on the droplet blocks on an interactive "created or
+renamed?" prompt. It was applied as a reviewed SQL file instead — DDL copied out of
+the dev DB with `pg_dump --schema-only -t public.field_events`, wrapped in one
+transaction with a row-count guard before `DROP TABLE public.captures`, run with
+`psql -v ON_ERROR_STOP=1` after a fresh backup. The recipe, for next time:
 
-2. Migration order (drop the old `captures` table safely):
-   1. Snapshot: `pg_dump` on the droplet (prod `captures` is empty — the V1 field test ran on the dev DB — so there is nothing to copy).
-   2. Merge → auto-deploy (no migrate).
-   3. On the droplet, one time: `cd ~/filmlog/packages/server && set -a && . ../../.env && set +a && npx drizzle-kit push --strict` to see the statements; if they are exactly CREATE `field_events` (+ indexes) and DROP `captures`, run `npx drizzle-kit push --force`, then `pm2 reload tomu-api`.
-   4. Add `ANTHROPIC_API_KEY` (optional) and `FIELD_PARSE_MODEL` to `.env`, `pm2 restart tomu-api --update-env`.
+1. Back up and confirm the dump landed off-box.
+2. `pg_dump --schema-only --no-owner --no-privileges -t public.<table> "$DEV_DATABASE_URL"`;
+   strip the `\restrict` / `SET ` / comment lines.
+3. Wrap in `BEGIN; … COMMIT;` with any `DROP` last, behind a
+   `DO $$ … RAISE EXCEPTION …$$` row-count guard on the table being dropped.
+4. Copy it to the server and run it with `psql -v ON_ERROR_STOP=1 -f`.
+5. `pm2 reload tomu-api tomu-mcp`.
 
-   For self-hosters with pending V1 captures: run `npm run -w packages/server migrate:field-events` BEFORE step 3, while `captures` still exists — it needs `field_events` to exist too, so create it first with `npx drizzle-kit push --strict` → accept only the CREATE (or run the CREATE statement via psql), copy, verify `-- --check` prints 0, then force-push the drop.
+Copying the DDL from dev rather than re-deriving it means prod ends up structurally
+identical, so later drizzle pushes see no diff.
+
+For self-hosters with pending V1 captures, split the SQL file in two: apply the CREATE
+half first (both tables now exist), run `npm run -w packages/server migrate:field-events`
+to copy the rows, verify with `-- --check` that it prints 0 remaining, then apply the
+`DROP TABLE public.captures` half.
 
 `parse_attempts` caps tier-2 retries at 5 per event; `POST /field-events/reparse` (or `tomu_reparse_events`) always retries.
 
