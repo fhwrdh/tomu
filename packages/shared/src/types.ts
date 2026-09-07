@@ -184,6 +184,51 @@ export interface Capture extends Timestamps {
   frameId?: string;
 }
 
+// ── Field events (V2 stream) ──
+
+export type FieldEventKind = "voice" | "photo";
+export type FieldEventStatus = "pending" | "pinned" | "roll_level";
+
+/** One thing captured in the field: a voice note (transcript + parsed fields) or a photo. */
+export interface FieldEvent extends Timestamps {
+  id: string;
+  clientId: string;
+  userId: string;
+  kind: FieldEventKind;
+  capturedAt: string;
+  latitude?: number;
+  longitude?: number;
+  rollId?: string;
+  cameraId?: string;
+  frameNumber?: number;
+  frameProvisional: boolean;
+  sheetId?: string;
+  /** Verbatim dictation. Immutable. */
+  transcript?: string;
+  fileKey?: string;
+  fileUrl?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  widthPx?: number;
+  heightPx?: number;
+  shutterSpeed?: string;
+  aperture?: string;
+  compensation?: string;
+  meteringMode?: string;
+  lensId?: string;
+  subject?: string;
+  locationName?: string;
+  remarks?: string;
+  sceneDescription?: string;
+  parsedAt?: string;
+  parser?: string;
+  parseNotes?: string;
+  editedFields: string[];
+  review: boolean;
+  status: FieldEventStatus;
+  frameId?: string;
+}
+
 // ── Development ──
 
 export interface DevelopmentLog extends Timestamps {

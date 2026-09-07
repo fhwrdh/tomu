@@ -7,3 +7,6 @@ export * from "./capture.js";
 export * from "./dilution.js";
 export * from "./photo-match.js";
 export * from "./field-parse.js";
+export * from "./field-merge.js";
+export * from "./frame-numbering.js";
+export * from "./field-event.js";
