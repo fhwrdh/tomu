@@ -192,17 +192,23 @@ npm run deploy            # rsync -> build -> pm2 reload
 npm run deploy:migrate    # same, plus a schema push
 ```
 
-## Field captures and phone photos
+## Field capture events
 
-Captures (`tomu_capture`) hold spoken settings. Take the photo with the phone's
-**Camera app** (a picture taken from inside the Claude app is never saved to the
-camera roll, so it cannot sync or be matched); the photo is attached later
-from a Mac with the iCloud Photos library: `pip install osxphotos`, put
-`TOMU_API_URL` and `TOMU_API_TOKEN` in `.env`, then `npm run photos:sync`
-(`--dry-run` first). Photos are matched by time (window −10/+2 min around the
-capture) and uploaded to `UPLOADS_DIR` on the server (`/uploads/` in nginx).
-Uploads are **not** in the Postgres dump — back that directory up separately.
-Uploaded photos are served publicly by uuid-named URL and retain their original
-EXIF metadata including GPS coordinates; if that matters to you, strip EXIF on
-export (`osxphotos export --exiftool` options, or a post-processing step) or put
-`/uploads/` behind auth.
+Field events (voice notes and photos) are parsed into frame data: shutter, aperture, compensation, metering mode, frame number / sheet id, camera, lens; tier-2 (Claude, optional) adds subject, location, remarks, scene description. Tier-1 parser (regex) runs on the phone and on the server; the transcript is stored verbatim and never modified. Tier-2 requires `ANTHROPIC_API_KEY` in `.env`.
+
+Voice notes and text entries go through `tomu_capture` (MCP) or `/api/v1/field-events` (HTTP POST). Photos from the phone are a fallback synchronization step:
+
+1. Take photos with the phone's **Camera app** (not inside Claude — they won't sync to the camera roll).
+2. On the laptop, set `TOMU_API_URL` and `TOMU_API_TOKEN` in `.env`, then:
+   ```bash
+   pip install osxphotos
+   npm run photos:sync -- --dry-run    # preview
+   npm run photos:sync                 # create photo events, matched by time (−10/+2 min)
+   ```
+
+Photos are uploaded to `uploads/events/` on the server (not in the Postgres dump). Back that directory up separately:
+```bash
+rsync -a <user>@<host>:filmlog/uploads/events/ ./uploads/events/
+```
+
+Uploaded photos are served publicly by uuid-named URL and retain their original EXIF metadata including GPS coordinates; if that matters to you, strip EXIF on export or put `/uploads/` behind auth.
