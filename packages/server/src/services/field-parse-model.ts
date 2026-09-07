@@ -106,11 +106,15 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
     return { skipped: false, changed: merged.changed };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    await db.update(fieldEvents).set({
-      parseAttempts: sql`${fieldEvents.parseAttempts} + 1`,
-      parseNotes: `tier-2 failed: ${msg.slice(0, 200)}`,
-      updatedAt: new Date(),
-    }).where(eq(fieldEvents.id, ev.id));
+    try {
+      await db.update(fieldEvents).set({
+        parseAttempts: sql`${fieldEvents.parseAttempts} + 1`,
+        parseNotes: `tier-2 failed: ${msg.slice(0, 200)}`,
+        updatedAt: new Date(),
+      }).where(eq(fieldEvents.id, ev.id));
+    } catch (recordErr) {
+      console.error(`failed to record tier-2 failure for ${ev.id}:`, recordErr);
+    }
     throw err;
   }
 }
