@@ -9,7 +9,7 @@ const gear = {
   cameras: [{ id: "cam-m6", label: "Leica M6" }],
   lenses: [{ id: "lens-35", label: "Leica Summicron 35mm" }],
   activeRolls: [
-    { id: "roll-1", cameraId: "cam-m6", label: "Pan F", framesShot: 11, frameCount: 36 },
+    { id: "roll-1", cameraId: "cam-m6", cameraLabel: "Leica M6", label: "Pan F", framesShot: 11, frameCount: 36 },
   ],
 };
 

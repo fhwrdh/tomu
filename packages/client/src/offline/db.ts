@@ -71,7 +71,15 @@ export interface PendingDelete {
 /** One row, id `"gear"` — the cameras, lenses and active rolls the parser and header need offline. */
 export interface GearCache extends GearIndex {
   id: "gear";
-  activeRolls: Array<{ id: string; cameraId: string | null; label: string; framesShot: number; frameCount: number }>;
+  activeRolls: Array<{
+    id: string;
+    cameraId: string | null;
+    /** Which camera it is in — the thing that says whether this is the right roll. */
+    cameraLabel: string | null;
+    label: string;
+    framesShot: number;
+    frameCount: number;
+  }>;
   refreshedAt: string;
 }
 

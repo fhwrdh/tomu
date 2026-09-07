@@ -70,7 +70,9 @@ export const syncApi: SyncApi = {
     const [cameras, lenses, rolls] = await Promise.all([
       json<{ data: Array<{ id: string; make: string; model: string }> }>("/cameras"),
       json<{ data: Array<{ id: string; make: string; model: string; focalLengthMm?: number }> }>("/lenses"),
-      json<{ data: Array<{ id: string; cameraId?: string; manufacturer: string; stockName: string; framesShot: number; frameCount: number }> }>("/rolls?status=loaded"),
+      // "active" is loaded + shooting. Asking for "loaded" alone drops every roll
+      // that already has a frame on it — i.e. every roll actually in use.
+      json<{ data: Array<{ id: string; cameraId?: string; cameraMake: string | null; cameraModel: string | null; manufacturer: string; stockName: string; framesShot: number; frameCount: number }> }>("/rolls?status=active"),
     ]);
     const gear: Omit<GearCache, "id" | "refreshedAt"> = {
       cameras: cameras.data.map((c) => ({ id: c.id, label: `${c.make} ${c.model}` })),
@@ -81,6 +83,7 @@ export const syncApi: SyncApi = {
       activeRolls: rolls.data.map((r) => ({
         id: r.id,
         cameraId: r.cameraId ?? null,
+        cameraLabel: r.cameraMake && r.cameraModel ? `${r.cameraMake} ${r.cameraModel}` : r.cameraModel ?? null,
         label: `${r.manufacturer} ${r.stockName}`,
         framesShot: r.framesShot,
         frameCount: r.frameCount,

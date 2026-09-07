@@ -86,7 +86,7 @@ export function CapturePage() {
             >
               {activeRolls.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.label} · {r.framesShot}/{r.frameCount}
+                  {[r.cameraLabel, r.label].filter(Boolean).join(" · ")} · {r.framesShot}/{r.frameCount}
                 </option>
               ))}
             </select>

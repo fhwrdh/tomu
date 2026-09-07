@@ -20,7 +20,7 @@ const gear = {
   cameras: [{ id: "cam-m6", label: "Leica M6" }],
   lenses: [{ id: "lens-35", label: "Leica Summicron 35mm" }],
   activeRolls: [
-    { id: "roll-1", cameraId: "cam-m6", label: "Ilford Pan F", framesShot: 11, frameCount: 36 },
+    { id: "roll-1", cameraId: "cam-m6", cameraLabel: "Leica M6", label: "Ilford Pan F", framesShot: 11, frameCount: 36 },
   ],
 };
 
@@ -40,7 +40,24 @@ describe("the header", () => {
   it("shows the active roll and how far into it we are", async () => {
     render(<CapturePage />);
     expect(await screen.findByRole("combobox", { name: "Active roll" })).toHaveValue("roll-1");
-    expect(screen.getByText(/Ilford Pan F · 11\/36/)).toBeDefined();
+    // The camera is what tells you whether this is the right roll.
+    expect(screen.getByText(/Leica M6 · Ilford Pan F · 11\/36/)).toBeDefined();
+  });
+
+  it("offers every active roll, not just the untouched ones", async () => {
+    // A roll flips to "shooting" on its first frame; mid-roll is the normal case.
+    await saveGear(db, {
+      ...gear,
+      activeRolls: [
+        ...gear.activeRolls,
+        { id: "roll-2", cameraId: "cam-rb", cameraLabel: "Mamiya RB67", label: "HP5 Plus", framesShot: 4, frameCount: 10 },
+      ],
+    });
+    render(<CapturePage />);
+
+    const picker = await screen.findByRole("combobox", { name: "Active roll" });
+    expect(picker.querySelectorAll("option")).toHaveLength(2);
+    expect(screen.getByText(/Mamiya RB67 · HP5 Plus · 4\/10/)).toBeDefined();
   });
 
   it("says so when there is no active roll, without blocking anything", async () => {
