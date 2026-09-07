@@ -165,18 +165,37 @@ const SHUTTER_RULES_EXPLICIT: Rule[] = [
   },
 ];
 
-// Bare spoken/typed number meaning a shutter speed denominator, e.g. "at 250",
-// "two fifty", "one sixty". Runs after every explicit rule (frame, aperture,
-// compensation, metering) so it never steals a number that belongs elsewhere.
-const SHUTTER_RULE_BARE: Rule = {
-  field: "shutterSpeed",
-  re: new RegExp(`\\b(?:at\\s+)?(${NUM_WORD})\\b`, "gi"),
-  value: (m) => {
-    const n = spokenNumber(m[1]);
-    if (n == null || n < 15 || n > 8000) return null;
-    return `1/${n}`;
+// A bare number (no "1/" prefix, no "seconds", no spoken ordinal) counts as a
+// shutter speed only when it has a shutter cue AND its value is one of the
+// standard full-stop denominators — otherwise ordinary numbers in a ramble
+// ("sixteen people at the party", "twenty dollars for the print") would be
+// misread as shutter speeds. Two cue shapes are recognised: the number is
+// preceded by "at "/"speed "/"shutter ", or it is followed (after an optional
+// comma and/or "and") by "at", an aperture cue ("f8", "f/8", "f 8", or a bare
+// aperture word), or the end of the text.
+const STANDARD_SHUTTER_DENOMS = new Set([15, 30, 60, 125, 250, 500, 1000, 2000, 4000, 8000]);
+
+function bareShutterValue(m: RegExpExecArray): string | null {
+  const n = spokenNumber(m[1]);
+  if (n == null || !STANDARD_SHUTTER_DENOMS.has(n)) return null;
+  return `1/${n}`;
+}
+
+const SHUTTER_BARE_RULES: Rule[] = [
+  {
+    field: "shutterSpeed",
+    re: new RegExp(`(?<=\\b(?:at|speed|shutter)\\s)\\b(${NUM_WORD})\\b`, "gi"),
+    value: bareShutterValue,
   },
-};
+  {
+    field: "shutterSpeed",
+    re: new RegExp(
+      `\\b(${NUM_WORD})\\b(?=\\s*,?\\s*(?:and\\s+)?(?:at\\b|f\\/?\\d|f\\/|f\\b|eight\\b|eleven\\b|sixteen\\b|$))`,
+      "gi",
+    ),
+    value: bareShutterValue,
+  },
+];
 
 // ── aperture ──
 
@@ -322,7 +341,7 @@ export function parseTranscript(text: string, gear?: GearIndex): ParseResult {
   apply(APERTURE_RULES, text, fields, spans);
   apply(COMP_RULES, text, fields, spans);
   apply(METER_RULES, text, fields, spans);
-  apply([SHUTTER_RULE_BARE], text, fields, spans);
+  apply(SHUTTER_BARE_RULES, text, fields, spans);
 
   if (gear) {
     const cam = matchGear(text, gear.cameras);

@@ -146,4 +146,14 @@ describe("additional coverage", () => {
     expect(parseTranscript("average of the scene").fields.meteringMode).toBe("average");
     expect(parseTranscript("center weighted").fields.meteringMode).toBe("center");
   });
+  it("does not read an ordinary number in a ramble as a shutter speed", () => {
+    expect(parseTranscript("sixteen people at the party").fields.shutterSpeed).toBeUndefined();
+    expect(parseTranscript("twenty dollars for the print").fields.shutterSpeed).toBeUndefined();
+    expect(parseTranscript("the film box says thirty-six exposures").fields.shutterSpeed).toBeUndefined();
+    expect(parseTranscript("we walked for twenty minutes").fields.shutterSpeed).toBeUndefined();
+    expect(parseTranscript("sixteen frames left on the roll").fields.shutterSpeed).toBeUndefined();
+  });
+  it("reads a shutter speed after an explicit 'shutter' cue", () => {
+    expect(parseTranscript("shutter two fifty").fields.shutterSpeed).toBe("1/250");
+  });
 });
