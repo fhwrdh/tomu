@@ -118,31 +118,40 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
       frameNumber = spokenFrame;
     }
 
-    const [row] = await db.insert(fieldEvents).values({
-      clientId: body.clientId,
-      userId: request.userId,
-      kind: body.kind,
-      capturedAt: body.capturedAt ? new Date(body.capturedAt) : new Date(),
-      latitude: body.latitude != null ? String(body.latitude) : null,
-      longitude: body.longitude != null ? String(body.longitude) : null,
-      rollId: roll?.id ?? null,
-      cameraId,
-      frameNumber,
-      frameProvisional: provisional,
-      sheetId,
-      transcript: body.kind === "voice" ? (body.transcript ?? null) : null,
-      shutterSpeed: parsed.shutterSpeed ?? null,
-      aperture: parsed.aperture ?? null,
-      compensation: parsed.compensation ?? null,
-      meteringMode: parsed.meteringMode ?? null,
-      lensId: parsed.lensId ?? null,
-      subject: parsed.subject ?? null,
-      locationName: parsed.locationName ?? null,
-      parser,
-      parsedAt: parser ? new Date() : null,
-      editedFields: body.editedFields ?? [],
-    }).returning();
-    return reply.status(201).send({ data: presentEvent(row) });
+    try {
+      const [row] = await db.insert(fieldEvents).values({
+        clientId: body.clientId,
+        userId: request.userId,
+        kind: body.kind,
+        capturedAt: body.capturedAt ? new Date(body.capturedAt) : new Date(),
+        latitude: body.latitude != null ? String(body.latitude) : null,
+        longitude: body.longitude != null ? String(body.longitude) : null,
+        rollId: roll?.id ?? null,
+        cameraId,
+        frameNumber,
+        frameProvisional: provisional,
+        sheetId,
+        transcript: body.kind === "voice" ? (body.transcript ?? null) : null,
+        shutterSpeed: parsed.shutterSpeed ?? null,
+        aperture: parsed.aperture ?? null,
+        compensation: parsed.compensation ?? null,
+        meteringMode: parsed.meteringMode ?? null,
+        lensId: parsed.lensId ?? null,
+        subject: parsed.subject ?? null,
+        locationName: parsed.locationName ?? null,
+        parser,
+        parsedAt: parser ? new Date() : null,
+        editedFields: body.editedFields ?? [],
+      }).returning();
+      return reply.status(201).send({ data: presentEvent(row) });
+    } catch (err) {
+      if ((err as { code?: string }).code === "23505") {
+        const [existing] = await db.select().from(fieldEvents)
+          .where(and(eq(fieldEvents.userId, request.userId), eq(fieldEvents.clientId, body.clientId))).limit(1);
+        if (existing) return reply.status(200).send({ data: presentEvent(existing) });
+      }
+      throw err;
+    }
   });
 
   // ── List ────────────────────────────────────────────────────────────
