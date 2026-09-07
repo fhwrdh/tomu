@@ -80,7 +80,13 @@ jobs:
           npm run build
           if [ "$MIGRATE" = "true" ]; then
             echo "--> db schema push"
-            npm run db:push -w packages/server
+            # Load the droplet's .env so drizzle-kit talks to the real DB (else it silently
+            # uses the dev default and, worse, exits 0 on auth failure).
+            set -a; . ./.env; set +a
+            [ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL missing from .env"; exit 1; }
+            out=$(npm run db:push -w packages/server </dev/null 2>&1) || { echo "$out"; exit 1; }
+            echo "$out"
+            echo "$out" | grep -qiE "^error|password authentication failed|ECONNREFUSED" && { echo "db push failed"; exit 1; }
           fi
           echo "--> pm2 reload"
           pm2 startOrReload ecosystem.config.cjs --update-env
