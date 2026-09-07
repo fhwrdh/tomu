@@ -275,19 +275,37 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     const roll = await userOwnsRoll(request.userId, rollId);
     if (!roll) return reply.status(404).send({ error: "Roll not found" });
 
-    const [existing] = await db.select().from(frames)
-      .where(and(eq(frames.rollId, roll.id), eq(frames.frameNumber, body.frameNumber))).limit(1);
-
     const result = await db.transaction(async (tx) => {
-      let frame = existing;
+      let [frame] = await tx.select().from(frames)
+        .where(and(eq(frames.rollId, roll.id), eq(frames.frameNumber, body.frameNumber))).limit(1);
+      let joined = !!frame;
       if (!frame) {
         const f = eventToFrame(row, body.frameNumber);
-        [frame] = await tx.insert(frames).values({
-          rollId: roll.id, frameNumber: f.frameNumber, lensId: f.lensId, shutterSpeed: f.shutterSpeed, aperture: f.aperture,
-          compensation: f.compensation, meteringMode: f.meteringMode, subject: f.subject, notes: null,
-          latitude: f.latitude != null ? String(f.latitude) : null, longitude: f.longitude != null ? String(f.longitude) : null,
-          locationName: f.locationName, shotAt: new Date(f.shotAt), tags: [],
-        }).returning();
+        try {
+          // Nested transaction (savepoint): on a unique-violation, this rolls back to the
+          // savepoint only, so the outer transaction can keep going with a plain SELECT below.
+          [frame] = await tx.transaction(async (tx2) =>
+            tx2.insert(frames).values({
+              rollId: roll.id, frameNumber: f.frameNumber, lensId: f.lensId, shutterSpeed: f.shutterSpeed, aperture: f.aperture,
+              compensation: f.compensation, meteringMode: f.meteringMode, subject: f.subject, notes: null,
+              latitude: f.latitude != null ? String(f.latitude) : null, longitude: f.longitude != null ? String(f.longitude) : null,
+              locationName: f.locationName, shotAt: new Date(f.shotAt), tags: [],
+            }).returning()
+          );
+        } catch (err) {
+          if ((err as { code?: string }).code !== "23505") throw err;
+          // Lost the race to a concurrent pin at the same (rollId, frameNumber): join it instead.
+          [frame] = await tx.select().from(frames)
+            .where(and(eq(frames.rollId, roll.id), eq(frames.frameNumber, body.frameNumber))).limit(1);
+          joined = true;
+          if (row.kind === "voice") {
+            const fill: Partial<typeof frames.$inferInsert> = {};
+            for (const k of ["lensId", "shutterSpeed", "aperture", "compensation", "meteringMode", "subject", "locationName"] as const) {
+              if (frame[k] == null && f[k] != null) (fill as Record<string, unknown>)[k] = f[k];
+            }
+            if (Object.keys(fill).length) [frame] = await tx.update(frames).set({ ...fill, updatedAt: new Date() }).where(eq(frames.id, frame.id)).returning();
+          }
+        }
       } else if (row.kind === "voice") {
         // Joining an existing frame (e.g. a photo pinned after the voice note, or two notes on one frame):
         // fill only empty frame fields; never overwrite what is there.
@@ -311,7 +329,7 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
       const [ev] = await tx.update(fieldEvents)
         .set({ status: "pinned", rollId: roll.id, frameNumber: body.frameNumber, frameProvisional: false, frameId: frame.id, updatedAt: new Date() })
         .where(eq(fieldEvents.id, row.id)).returning();
-      return { event: presentEvent(ev), frame, joined: !!existing };
+      return { event: presentEvent(ev), frame, joined };
     });
     return reply.status(201).send({ data: result });
   });
@@ -326,6 +344,9 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     if (!rollId) return reply.status(400).send({ error: "Event is not linked to a roll; pass rollId" });
     const roll = await userOwnsRoll(request.userId, rollId);
     if (!roll) return reply.status(404).send({ error: "Roll not found" });
+    if ((row.kind === "voice" && !row.transcript) || (row.kind === "photo" && !row.fileKey)) {
+      return reply.status(400).send({ error: "Nothing to attach: event has no transcript/photo" });
+    }
     const result = await db.transaction(async (tx) => {
       await tx.insert(notes).values({
         userId: request.userId, rollId: roll.id,
