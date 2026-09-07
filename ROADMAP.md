@@ -71,10 +71,12 @@ Tier-1 (deterministic regex, on device and server) + tier-2 (Claude, server-side
    - `FIELD_PARSE_MODEL` — defaults to `claude-haiku-4-5`
 
 2. Migration order (drop the old `captures` table safely):
-   - Deploy with `migrate` → creates `field_events` table
-   - On the droplet: `npm run -w packages/server migrate:field-events` → copies V1 captures to events
-   - Verify: `npm run -w packages/server migrate:field-events -- --check` prints 'would copy 0'
-   - Next deploy with `migrate` → drops `captures` table
+   1. Snapshot: `pg_dump` on the droplet (prod `captures` is empty — the V1 field test ran on the dev DB — so there is nothing to copy).
+   2. Merge → auto-deploy (no migrate).
+   3. On the droplet, one time: `cd ~/filmlog/packages/server && set -a && . ../../.env && set +a && npx drizzle-kit push --strict` to see the statements; if they are exactly CREATE `field_events` (+ indexes) and DROP `captures`, run `npx drizzle-kit push --force`, then `pm2 reload tomu-api`.
+   4. Add `ANTHROPIC_API_KEY` (optional) and `FIELD_PARSE_MODEL` to `.env`, `pm2 restart tomu-api --update-env`.
+
+   For self-hosters with pending V1 captures: run `npm run -w packages/server migrate:field-events` BEFORE step 3, while `captures` still exists — it needs `field_events` to exist too, so create it first with `npx drizzle-kit push --strict` → accept only the CREATE (or run the CREATE statement via psql), copy, verify `-- --check` prints 0, then force-push the drop.
 
 `parse_attempts` caps tier-2 retries at 5 per event; `POST /field-events/reparse` (or `tomu_reparse_events`) always retries.
 

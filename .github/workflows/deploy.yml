@@ -86,7 +86,7 @@ jobs:
             [ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL missing from .env"; exit 1; }
             out=$(npm run db:push -w packages/server </dev/null 2>&1) || { echo "$out"; exit 1; }
             echo "$out"
-            echo "$out" | grep -qiE "^error|password authentication failed|ECONNREFUSED" && { echo "db push failed"; exit 1; }
+            echo "$out" | grep -qiE "^error|password authentication failed|ECONNREFUSED|about to (delete|drop|truncate)|table created or renamed" && { echo "db push needs interactive confirmation — run it on the droplet by hand"; exit 1; }
           fi
           echo "--> pm2 reload"
           pm2 startOrReload ecosystem.config.cjs --update-env

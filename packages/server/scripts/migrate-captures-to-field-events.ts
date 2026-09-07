@@ -51,17 +51,26 @@ interface CaptureRow {
 }
 
 async function main() {
-  const result = await db.execute<CaptureRow>(sql`
-    select
-      id, user_id as "userId", status, roll_id as "rollId", camera_id as "cameraId", lens_id as "lensId",
-      frame_number as "frameNumber", captured_at as "capturedAt", shutter_speed as "shutterSpeed", aperture,
-      compensation, metering_mode as "meteringMode", subject, location_name as "locationName", notes,
-      scene_description as "sceneDescription", file_key as "fileKey", file_url as "fileUrl", mime_type as "mimeType",
-      file_size_bytes as "fileSizeBytes", width_px as "widthPx", height_px as "heightPx",
-      photo_taken_at as "photoTakenAt", latitude, longitude, photo_asset_id as "photoAssetId",
-      frame_id as "frameId", created_at as "createdAt", updated_at as "updatedAt"
-    from captures
-  `);
+  let result;
+  try {
+    result = await db.execute<CaptureRow>(sql`
+      select
+        id, user_id as "userId", status, roll_id as "rollId", camera_id as "cameraId", lens_id as "lensId",
+        frame_number as "frameNumber", captured_at as "capturedAt", shutter_speed as "shutterSpeed", aperture,
+        compensation, metering_mode as "meteringMode", subject, location_name as "locationName", notes,
+        scene_description as "sceneDescription", file_key as "fileKey", file_url as "fileUrl", mime_type as "mimeType",
+        file_size_bytes as "fileSizeBytes", width_px as "widthPx", height_px as "heightPx",
+        photo_taken_at as "photoTakenAt", latitude, longitude, photo_asset_id as "photoAssetId",
+        frame_id as "frameId", created_at as "createdAt", updated_at as "updatedAt"
+      from captures
+    `);
+  } catch (e) {
+    if ((e as { code?: string }).code === "42P01") {
+      console.log("captures table does not exist (already dropped); nothing to copy");
+      process.exit(0);
+    }
+    throw e;
+  }
   const rows = result.rows;
   const existing = new Set((await db.select({ c: fieldEvents.clientId }).from(fieldEvents)).map((r) => r.c));
   let voice = 0, photo = 0, skipped = 0;
@@ -92,6 +101,8 @@ async function main() {
         remarks: c.notes,
         sceneDescription: c.sceneDescription,
         parsedAt: hasSettings ? c.createdAt : null,
+        // "claude-app" (not "regex") so the tier-2 sweep skips migrated rows; they were
+        // already interpreted by Claude in the V1 flow.
         parser: hasSettings ? "claude-app" : null,
         status: c.status === "assigned" ? "pinned" : "pending",
         frameId: c.frameId,
