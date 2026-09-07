@@ -1,6 +1,20 @@
-import type { FrameFields } from "./capture.js";
-
 export const SHEET_FORMATS = ["4x5", "8x10"];
+
+export interface FrameFields {
+  frameNumber: number;
+  lensId: string | null;
+  shutterSpeed: string | null;
+  aperture: string | null;
+  compensation: string | null;
+  meteringMode: string | null;
+  subject: string | null;
+  locationName: string | null;
+  notes: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** ISO string. Photo EXIF time when known, else when the settings were spoken. */
+  shotAt: string;
+}
 
 type Nullable<T> = T | null | undefined;
 export interface FieldEventLike {

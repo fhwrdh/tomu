@@ -12,7 +12,6 @@ export default defineConfig({
         "packages/shared/src/dilution.ts",
         "packages/shared/src/dev-id.ts",
         "packages/shared/src/dev-shorthand.ts",
-        "packages/shared/src/capture.ts",
         "packages/shared/src/photo-match.ts",
         "packages/shared/src/field-parse.ts",
         "packages/shared/src/field-merge.ts",

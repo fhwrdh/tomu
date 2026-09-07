@@ -3,18 +3,66 @@
  * id already appears as a field_events.client_id). A capture with a photo also
  * spawns a `photo` event carrying the file. Run with DATABASE_URL set.
  *
+ * `captures` is read via raw SQL, not the Drizzle schema — the table (and its schema.ts
+ * export) is retired once V1 is removed, but the table itself still exists in the
+ * database until the subsequent `db:push` drops it, so `--check` still works right up
+ * to that point.
+ *
  *   npm run -w packages/server migrate:field-events            # copy
  *   npm run -w packages/server migrate:field-events -- --check # counts only
  */
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../src/db/client.js";
-import { captures, fieldEvents } from "../src/db/schema.js";
+import { fieldEvents } from "../src/db/schema.js";
 
 const check = process.argv.includes("--check");
 
+interface CaptureRow {
+  id: string;
+  userId: string;
+  status: string;
+  rollId: string | null;
+  cameraId: string | null;
+  lensId: string | null;
+  frameNumber: number | null;
+  capturedAt: Date;
+  shutterSpeed: string | null;
+  aperture: string | null;
+  compensation: string | null;
+  meteringMode: string | null;
+  subject: string | null;
+  locationName: string | null;
+  notes: string | null;
+  sceneDescription: string | null;
+  fileKey: string | null;
+  fileUrl: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  widthPx: number | null;
+  heightPx: number | null;
+  photoTakenAt: Date | null;
+  latitude: string | null;
+  longitude: string | null;
+  photoAssetId: string | null;
+  frameId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 async function main() {
-  const rows = await db.select().from(captures);
+  const result = await db.execute<CaptureRow>(sql`
+    select
+      id, user_id as "userId", status, roll_id as "rollId", camera_id as "cameraId", lens_id as "lensId",
+      frame_number as "frameNumber", captured_at as "capturedAt", shutter_speed as "shutterSpeed", aperture,
+      compensation, metering_mode as "meteringMode", subject, location_name as "locationName", notes,
+      scene_description as "sceneDescription", file_key as "fileKey", file_url as "fileUrl", mime_type as "mimeType",
+      file_size_bytes as "fileSizeBytes", width_px as "widthPx", height_px as "heightPx",
+      photo_taken_at as "photoTakenAt", latitude, longitude, photo_asset_id as "photoAssetId",
+      frame_id as "frameId", created_at as "createdAt", updated_at as "updatedAt"
+    from captures
+  `);
+  const rows = result.rows;
   const existing = new Set((await db.select({ c: fieldEvents.clientId }).from(fieldEvents)).map((r) => r.c));
   let voice = 0, photo = 0, skipped = 0;
   for (const c of rows) {
