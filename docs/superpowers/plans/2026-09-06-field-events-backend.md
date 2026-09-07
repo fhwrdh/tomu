@@ -251,22 +251,7 @@ const ORDINAL: Record<string, number> = {
 };
 const HUNDREDS_WORDS = "(?:one|two|four|five|eight)?\\s*(?:hundred|thousand)";
 
-/** "two fifty" → 250, "one sixty" → 160, "sixty" → 60, "125" → 125. */
-function wordsToNumber(s: string): number | null {
-  const t = s.toLowerCase().replace(/-/g, " ").trim();
-  if (/^\d+$/.test(t)) return Number(t);
-  const parts = t.split(/\s+/);
-  let n = 0;
-  for (const p of parts) {
-    if (p in ONES) n = n * (n >= 10 ? 1 : 1) + ONES[p]; // "two fifty": handled below
-    else if (p in TENS) n = n * 10 + TENS[p] / 10 * 10; // placeholder, replaced below
-    else return null;
-  }
-  return n;
-}
-
-// The simple version above mis-handles "two fifty" (=250) vs "twenty five" (=25); use a
-// small grammar instead: [ones] [tens|hundred] ([ones])
+// Small grammar for spoken numbers: [ones] [tens|hundred|thousand] ([ones]).
 function spokenNumber(s: string): number | null {
   const t = s.toLowerCase().replace(/-/g, " ").trim();
   if (/^\d+$/.test(t)) return Number(t);
@@ -288,7 +273,6 @@ function spokenNumber(s: string): number | null {
   }
   return null;
 }
-void wordsToNumber; // keep the simpler helper out of the public surface
 
 const NUM_WORD = "(?:\\d+|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)(?:[\\s-](?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand))*)";
 
@@ -408,7 +392,7 @@ export function parseTranscript(text: string, gear?: GearIndex): ParseResult {
 }
 ```
 
-Then delete the dead `wordsToNumber` function and its `void` line — they exist only to show the pitfall; the grammar in `spokenNumber` is the implementation. Run the tests; iterate on the regexes until every case passes. The expected outcomes in the test file are the contract; the regexes above are a starting point and may need adjusting (e.g. the bare-number shutter rule must not fire on "frame 12" — the frame rule runs first and its span blocks it; "eleven" alone as aperture only when it is the whole remaining phrase after "at" or the entire text).
+Run the tests; iterate on the regexes until every case passes. The expected outcomes in the test file are the contract; the regexes above are a starting point and may need adjusting (e.g. the bare-number shutter rule must not fire on "frame 12" — the frame rule runs first and its span blocks it; "eleven" alone as aperture only when it is the whole remaining phrase after "at" or the entire text).
 
 - [ ] **Step 4: Export and add to coverage**
 
