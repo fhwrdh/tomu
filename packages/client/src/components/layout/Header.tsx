@@ -18,7 +18,10 @@ export function Header() {
   }, []);
 
   return (
-    <header className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
+    // Installed to the home screen the page runs under the status bar and the
+    // Dynamic Island (viewport-fit=cover), so the top inset is padding, not margin:
+    // the bar's background has to reach the top of the screen behind the clock.
+    <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-card px-[max(1rem,env(safe-area-inset-left))] pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
       <h1 className="text-base font-semibold">Tomu</h1>
       <div className="relative" ref={menuRef}>
         <button
