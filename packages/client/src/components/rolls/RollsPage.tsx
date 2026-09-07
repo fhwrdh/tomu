@@ -205,6 +205,36 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
         </ul>
       )}
 
+      {detail.unpinnedEvents.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">
+            Field notes ({detail.unpinnedEvents.length}) — pin with tomu_pin_event
+          </div>
+          <ul className="space-y-2 text-xs">
+            {detail.unpinnedEvents.map((e) => {
+              const settings = [e.shutterSpeed, e.aperture, e.compensation, e.meteringMode].filter(Boolean).join(" · ");
+              const frame = e.frameNumber != null ? `frame ${e.frameNumber}${e.frameProvisional ? "?" : ""}` : e.sheetId ? `sheet ${e.sheetId}` : null;
+              return (
+                <li key={e.id} className="flex gap-2">
+                  {e.kind === "photo" && e.fileUrl ? (
+                    <img src={e.fileUrl} alt="" className="h-14 w-14 shrink-0 rounded object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-14 shrink-0 text-muted-foreground tabular-nums">{formatTime(e.capturedAt)}</div>
+                  )}
+                  <div className="flex-1 space-y-0.5">
+                    {e.transcript && <div className="text-foreground whitespace-pre-wrap">{e.transcript}</div>}
+                    <div className="text-muted-foreground">
+                      {[frame, settings, e.review ? "needs review" : null].filter(Boolean).join(" · ")}
+                    </div>
+                    {e.parseNotes && <div className="text-muted-foreground italic">{e.parseNotes}</div>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       <AddFrameDialog open={frameOpen} onClose={() => setFrameOpen(false)} rollId={rollId} nextFrameNumber={detail.frames.length + 1} />
       <AddNoteDialog open={noteOpen} onClose={() => setNoteOpen(false)} rollId={rollId} />
       <UnloadDialog open={unloadOpen} onClose={() => setUnloadOpen(false)} rollId={rollId} />
