@@ -8,6 +8,7 @@ import authPlugin from "./plugins/auth.js";
 import { authRoutes } from "./routes/auth.js";
 import { camerasRoutes } from "./routes/cameras.js";
 import { capturesRoutes } from "./routes/captures.js";
+import { fieldEventsRoutes } from "./routes/field-events.js";
 import { filmInventoryRoutes } from "./routes/film-inventory.js";
 import { filmStocksRoutes } from "./routes/film-stocks.js";
 import { lensesRoutes } from "./routes/lenses.js";
@@ -58,6 +59,7 @@ await fastify.register(rollsRoutes, { prefix: "/api/v1/rolls" });
 await fastify.register(devSessionsRoutes, { prefix: "/api/v1/dev-sessions" });
 await fastify.register(tanksRoutes, { prefix: "/api/v1/tanks" });
 await fastify.register(capturesRoutes, { prefix: "/api/v1/captures" });
+await fastify.register(fieldEventsRoutes, { prefix: "/api/v1/field-events" });
 
 // Health check
 fastify.get("/api/health", async () => ({ status: "ok" }));

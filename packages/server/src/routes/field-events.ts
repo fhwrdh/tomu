@@ -1,0 +1,268 @@
+import multipart from "@fastify/multipart";
+import { and, desc, eq, gte, inArray, max, sql } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
+import { imageSize } from "image-size";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  createFieldEventSchema,
+  fieldEventPhotoMetaSchema,
+  nextFrameNumber,
+  parseTranscript,
+  updateFieldEventSchema,
+} from "@tomu/shared";
+import { config } from "../config.js";
+import { db } from "../db/client.js";
+import { cameras, fieldEvents, frames, lenses, rolls } from "../db/schema.js";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export type FieldEventRow = typeof fieldEvents.$inferSelect;
+
+export function presentEvent(row: FieldEventRow) {
+  return { ...row, shortId: row.id.slice(0, 8) };
+}
+
+/** uuid, uuid prefix (≥ 8 chars), or clientId. */
+export async function findEvent(userId: string, handle: string): Promise<FieldEventRow | undefined> {
+  const h = handle.trim().toLowerCase();
+  if (UUID_RE.test(h)) {
+    const [row] = await db.select().from(fieldEvents)
+      .where(and(eq(fieldEvents.userId, userId), sql`(${fieldEvents.id} = ${h} or ${fieldEvents.clientId} = ${h})`)).limit(1);
+    return row;
+  }
+  if (/^[0-9a-f]{8,}$/.test(h)) {
+    const rows = await db.select().from(fieldEvents)
+      .where(and(eq(fieldEvents.userId, userId), sql`${fieldEvents.id}::text like ${h + "%"}`)).limit(2);
+    return rows.length === 1 ? rows[0] : undefined;
+  }
+  return undefined;
+}
+
+export function eventFilePath(eventId: string): { key: string; url: string; abs: string } {
+  const key = `events/${eventId}.jpg`;
+  return { key, url: `/uploads/${key}`, abs: join(config.UPLOADS_DIR, key) };
+}
+
+async function userOwnsRoll(userId: string, rollId: string): Promise<{ id: string; format: string; status: string } | null> {
+  const [roll] = await db.select({ id: rolls.id, format: rolls.format, status: rolls.status }).from(rolls)
+    .where(and(eq(rolls.id, rollId), eq(rolls.userId, userId))).limit(1);
+  return roll ?? null;
+}
+
+/** Highest frame number noted on a roll across frames and events (pending or pinned). */
+export async function highestNotedFrame(rollId: string): Promise<number | null> {
+  const [f] = await db.select({ m: max(frames.frameNumber) }).from(frames).where(eq(frames.rollId, rollId));
+  const [e] = await db.select({ m: max(fieldEvents.frameNumber) }).from(fieldEvents).where(eq(fieldEvents.rollId, rollId));
+  const vals = [f?.m, e?.m].filter((x): x is number => x != null);
+  return vals.length ? Math.max(...vals) : null;
+}
+
+/** Gear index for tier-1 parsing on the server (Claude-app path sends no parsed fields). */
+async function gearIndex(userId: string) {
+  const [cams, lens] = await Promise.all([
+    db.select({ id: cameras.id, make: cameras.make, model: cameras.model }).from(cameras).where(eq(cameras.userId, userId)),
+    db.select({ id: lenses.id, make: lenses.make, model: lenses.model, focalLengthMm: lenses.focalLengthMm }).from(lenses).where(eq(lenses.userId, userId)),
+  ]);
+  return {
+    cameras: cams.map((c) => ({ id: c.id, label: `${c.make} ${c.model}` })),
+    lenses: lens.map((l) => ({ id: l.id, label: `${l.make} ${l.model} ${l.focalLengthMm ?? ""}mm` })),
+  };
+}
+
+export async function fieldEventsRoutes(fastify: FastifyInstance) {
+  await fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
+  await mkdir(join(config.UPLOADS_DIR, "events"), { recursive: true });
+
+  // ── Create (idempotent on clientId) ─────────────────────────────────
+  fastify.post("/", async (request, reply) => {
+    const body = createFieldEventSchema.parse(request.body);
+    const [dup] = await db.select().from(fieldEvents)
+      .where(and(eq(fieldEvents.userId, request.userId), eq(fieldEvents.clientId, body.clientId))).limit(1);
+    if (dup) return reply.status(200).send({ data: presentEvent(dup) });
+
+    let roll: { id: string; format: string; status: string } | null = null;
+    if (body.rollId) {
+      roll = await userOwnsRoll(request.userId, body.rollId);
+      if (!roll) return reply.status(404).send({ error: "Roll not found" });
+    }
+
+    // Tier 1 on the server when the client sent none (Claude-app path / curl).
+    let parsed = { shutterSpeed: body.shutterSpeed, aperture: body.aperture, compensation: body.compensation, meteringMode: body.meteringMode, lensId: body.lensId, subject: body.subject, locationName: body.locationName };
+    let cameraId = body.cameraId ?? null;
+    let spokenFrame = body.frameNumber ?? null;
+    let sheetId = body.sheetId ?? null;
+    let parser: string | null = body.parser ?? null;
+    if (body.kind === "voice" && body.transcript && !body.parser) {
+      const r = parseTranscript(body.transcript, await gearIndex(request.userId));
+      parsed = {
+        shutterSpeed: parsed.shutterSpeed ?? r.fields.shutterSpeed, aperture: parsed.aperture ?? r.fields.aperture,
+        compensation: parsed.compensation ?? r.fields.compensation, meteringMode: parsed.meteringMode ?? r.fields.meteringMode,
+        lensId: parsed.lensId ?? r.fields.lensId, subject: parsed.subject, locationName: parsed.locationName,
+      };
+      cameraId = cameraId ?? r.fields.cameraId ?? null;
+      spokenFrame = spokenFrame ?? r.fields.frameNumber ?? null;
+      sheetId = sheetId ?? r.fields.sheetId ?? null;
+      if (Object.keys(r.fields).length) parser = "regex";
+    }
+    // Camera without a roll → the camera's active roll, if exactly one.
+    if (!roll && cameraId) {
+      const active = await db.select({ id: rolls.id, format: rolls.format, status: rolls.status }).from(rolls)
+        .where(and(eq(rolls.userId, request.userId), eq(rolls.cameraId, cameraId), inArray(rolls.status, ["loaded", "shooting"])));
+      if (active.length === 1) roll = active[0];
+    }
+    let frameNumber: number | null = null, provisional = false;
+    if (body.kind === "voice" && roll) {
+      const n = nextFrameNumber({ spoken: spokenFrame, highestNoted: await highestNotedFrame(roll.id), format: roll.format });
+      frameNumber = n.frameNumber; provisional = n.provisional;
+    } else if (spokenFrame != null) {
+      frameNumber = spokenFrame;
+    }
+
+    const [row] = await db.insert(fieldEvents).values({
+      clientId: body.clientId,
+      userId: request.userId,
+      kind: body.kind,
+      capturedAt: body.capturedAt ? new Date(body.capturedAt) : new Date(),
+      latitude: body.latitude != null ? String(body.latitude) : null,
+      longitude: body.longitude != null ? String(body.longitude) : null,
+      rollId: roll?.id ?? null,
+      cameraId,
+      frameNumber,
+      frameProvisional: provisional,
+      sheetId,
+      transcript: body.kind === "voice" ? (body.transcript ?? null) : null,
+      shutterSpeed: parsed.shutterSpeed ?? null,
+      aperture: parsed.aperture ?? null,
+      compensation: parsed.compensation ?? null,
+      meteringMode: parsed.meteringMode ?? null,
+      lensId: parsed.lensId ?? null,
+      subject: parsed.subject ?? null,
+      locationName: parsed.locationName ?? null,
+      parser,
+      parsedAt: parser ? new Date() : null,
+      editedFields: body.editedFields ?? [],
+    }).returning();
+    return reply.status(201).send({ data: presentEvent(row) });
+  });
+
+  // ── List ────────────────────────────────────────────────────────────
+  fastify.get<{ Querystring: { status?: string; kind?: string; roll_id?: string; since?: string; review?: string; client_ids?: string; limit?: string } }>("/", async (request, reply) => {
+    const q = request.query;
+    const conds = [eq(fieldEvents.userId, request.userId)];
+    const status = q.status ?? "pending";
+    if (status !== "all") {
+      if (!["pending", "pinned", "roll_level"].includes(status)) return reply.status(400).send({ error: `Invalid status: ${status}` });
+      conds.push(eq(fieldEvents.status, status));
+    }
+    if (q.kind) {
+      if (!["voice", "photo"].includes(q.kind)) return reply.status(400).send({ error: `Invalid kind: ${q.kind}` });
+      conds.push(eq(fieldEvents.kind, q.kind));
+    }
+    if (q.roll_id) {
+      if (!UUID_RE.test(q.roll_id)) return reply.status(400).send({ error: `Invalid roll_id: ${q.roll_id}` });
+      conds.push(eq(fieldEvents.rollId, q.roll_id));
+    }
+    if (q.since) {
+      const d = new Date(q.since);
+      if (Number.isNaN(d.getTime())) return reply.status(400).send({ error: `Invalid since: ${q.since}` });
+      conds.push(gte(fieldEvents.capturedAt, d));
+    }
+    if (q.review === "true") conds.push(eq(fieldEvents.review, true));
+    if (q.client_ids) {
+      const ids = q.client_ids.split(",").map((s) => s.trim()).filter((s) => UUID_RE.test(s));
+      if (!ids.length) return reply.status(400).send({ error: "client_ids must be uuids" });
+      conds.push(inArray(fieldEvents.clientId, ids));
+    }
+    const limit = Math.min(Math.max(Number(q.limit ?? 100) || 100, 1), 500);
+    const rows = await db.select().from(fieldEvents).where(and(...conds)).orderBy(desc(fieldEvents.capturedAt)).limit(limit);
+    return { data: rows.map(presentEvent) };
+  });
+
+  // ── Get one ─────────────────────────────────────────────────────────
+  fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
+    const row = await findEvent(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Event not found" });
+    return { data: presentEvent(row) };
+  });
+
+  // ── Patch (transcript immutable; edited fields recorded) ────────────
+  fastify.patch<{ Params: { id: string } }>("/:id", async (request, reply) => {
+    if (request.body && typeof request.body === "object" && "transcript" in (request.body as object)) {
+      return reply.status(400).send({ error: "transcript is immutable" });
+    }
+    const row = await findEvent(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Event not found" });
+    const body = updateFieldEventSchema.parse(request.body);
+    if (body.rollId && !(await userOwnsRoll(request.userId, body.rollId))) return reply.status(404).send({ error: "Roll not found" });
+    const set: Partial<typeof fieldEvents.$inferInsert> = { updatedAt: new Date() };
+    const edited = new Set(row.editedFields);
+    for (const k of ["shutterSpeed", "aperture", "compensation", "meteringMode", "lensId", "subject", "locationName"] as const) {
+      if (body[k] !== undefined) { set[k] = body[k]; edited.add(k); }
+    }
+    for (const k of ["rollId", "cameraId", "sheetId", "remarks", "sceneDescription", "review"] as const) {
+      if (body[k] !== undefined) (set as Record<string, unknown>)[k] = body[k];
+    }
+    if (body.frameNumber !== undefined) { set.frameNumber = body.frameNumber; set.frameProvisional = false; }
+    if (body.capturedAt !== undefined) set.capturedAt = new Date(body.capturedAt);
+    set.editedFields = [...edited];
+    const [updated] = await db.update(fieldEvents).set(set).where(eq(fieldEvents.id, row.id)).returning();
+    return { data: presentEvent(updated) };
+  });
+
+  // ── Photo upload (PWA or photos:sync) ───────────────────────────────
+  fastify.post<{ Params: { id: string } }>("/:id/photo", async (request, reply) => {
+    const row = await findEvent(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Event not found" });
+    if (row.kind !== "photo") return reply.status(400).send({ error: "Only photo events take a file" });
+    const fields: Record<string, string> = {};
+    let fileBuf: Buffer | undefined;
+    let mime: string | undefined;
+    try {
+      for await (const part of request.parts()) {
+        if (part.type === "file") {
+          if (part.fieldname !== "file") { await part.toBuffer(); continue; }
+          mime = part.mimetype;
+          fileBuf = await part.toBuffer();
+        } else {
+          fields[part.fieldname] = String(part.value);
+        }
+      }
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "FST_REQ_FILE_TOO_LARGE") return reply.status(413).send({ error: "Photo exceeds 25 MB" });
+      if (code === "FST_FILES_LIMIT") return reply.status(400).send({ error: "Send exactly one file part named 'file'" });
+      throw err;
+    }
+    if (!fileBuf) return reply.status(400).send({ error: "Missing multipart field 'file'" });
+    if (mime !== "image/jpeg") return reply.status(415).send({ error: `Only image/jpeg accepted, got ${mime}` });
+    const meta = fieldEventPhotoMetaSchema.parse(fields);
+    let dims: { width?: number; height?: number } = {};
+    try { dims = imageSize(fileBuf); } catch { /* not fatal */ }
+    const { key, url, abs } = eventFilePath(row.id);
+    await writeFile(abs, fileBuf);
+    const [updated] = await db.update(fieldEvents).set({
+      fileKey: key, fileUrl: url, mimeType: mime, fileSizeBytes: fileBuf.length,
+      widthPx: dims.width ?? null, heightPx: dims.height ?? null,
+      capturedAt: meta.photoTakenAt ? new Date(meta.photoTakenAt) : row.capturedAt,
+      latitude: meta.latitude != null ? String(meta.latitude) : row.latitude,
+      longitude: meta.longitude != null ? String(meta.longitude) : row.longitude,
+      photoAssetId: meta.photoAssetId ?? row.photoAssetId,
+      updatedAt: new Date(),
+    }).where(eq(fieldEvents.id, row.id)).returning();
+    return { data: presentEvent(updated) };
+  });
+
+  // ── Delete ──────────────────────────────────────────────────────────
+  fastify.delete<{ Params: { id: string }; Querystring: { force?: string } }>("/:id", async (request, reply) => {
+    const row = await findEvent(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Event not found" });
+    if (row.status !== "pending" && request.query.force !== "true") {
+      return reply.status(409).send({ error: `Event is ${row.status}; pass ?force=true to delete the event record (the frame/note and photo file stay).` });
+    }
+    await db.delete(fieldEvents).where(eq(fieldEvents.id, row.id));
+    if (row.fileKey && row.status === "pending") await rm(join(config.UPLOADS_DIR, row.fileKey), { force: true });
+    return reply.status(204).send();
+  });
+}
+
+export const ROUTE_PREFIX = "/api/v1/field-events";
