@@ -236,6 +236,11 @@ export const fieldEvents = pgTable(
     uniqueIndex("field_events_client_id_unique").on(t.clientId),
     index("field_events_user_captured_idx").on(t.userId, t.capturedAt),
     index("field_events_roll_status_idx").on(t.rollId, t.status),
+    // Partial index backing sweepUnparsed's scan: pending voice events not yet
+    // seen by tier 2 (or only regex-parsed), oldest first.
+    index("field_events_sweep_idx")
+      .on(t.capturedAt)
+      .where(sql`kind = 'voice' and status = 'pending' and (parser is null or parser = 'regex')`),
   ]
 );
 

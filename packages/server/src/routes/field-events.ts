@@ -19,6 +19,7 @@ import { config } from "../config.js";
 import { db } from "../db/client.js";
 import { cameras, fieldEvents, frames, lenses, notes, rolls } from "../db/schema.js";
 import { parseEventWithModel, reparseMany, tier2Enabled } from "../services/field-parse-model.js";
+import { loadGear } from "../services/gear.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type FieldEventRow = typeof fieldEvents.$inferSelect;
@@ -74,18 +75,6 @@ export async function highestNotedFrame(rollId: string): Promise<number | null> 
   return vals.length ? Math.max(...vals) : null;
 }
 
-/** Gear index for tier-1 parsing on the server (Claude-app path sends no parsed fields). */
-async function gearIndex(userId: string) {
-  const [cams, lens] = await Promise.all([
-    db.select({ id: cameras.id, make: cameras.make, model: cameras.model }).from(cameras).where(eq(cameras.userId, userId)),
-    db.select({ id: lenses.id, make: lenses.make, model: lenses.model, focalLengthMm: lenses.focalLengthMm }).from(lenses).where(eq(lenses.userId, userId)),
-  ]);
-  return {
-    cameras: cams.map((c) => ({ id: c.id, label: `${c.make} ${c.model}` })),
-    lenses: lens.map((l) => ({ id: l.id, label: `${l.make} ${l.model} ${l.focalLengthMm ?? ""}mm` })),
-  };
-}
-
 export async function fieldEventsRoutes(fastify: FastifyInstance) {
   await fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
   await mkdir(join(config.UPLOADS_DIR, "events"), { recursive: true });
@@ -116,7 +105,7 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     let sheetId = body.sheetId ?? null;
     let parser: string | null = body.parser ?? null;
     if (body.kind === "voice" && body.transcript && !body.parser) {
-      const r = parseTranscript(body.transcript, await gearIndex(request.userId));
+      const r = parseTranscript(body.transcript, await loadGear(request.userId));
       parsed = {
         shutterSpeed: parsed.shutterSpeed ?? r.fields.shutterSpeed, aperture: parsed.aperture ?? r.fields.aperture,
         compensation: parsed.compensation ?? r.fields.compensation, meteringMode: parsed.meteringMode ?? r.fields.meteringMode,
@@ -335,17 +324,11 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
           [frame] = await tx.select().from(frames)
             .where(and(eq(frames.rollId, roll.id), eq(frames.frameNumber, body.frameNumber))).limit(1);
           joined = true;
-          if (row.kind === "voice") {
-            const fill: Partial<typeof frames.$inferInsert> = {};
-            for (const k of ["lensId", "shutterSpeed", "aperture", "compensation", "meteringMode", "subject", "locationName"] as const) {
-              if (frame[k] == null && f[k] != null) (fill as Record<string, unknown>)[k] = f[k];
-            }
-            if (Object.keys(fill).length) [frame] = await tx.update(frames).set({ ...fill, updatedAt: new Date() }).where(eq(frames.id, frame.id)).returning();
-          }
         }
-      } else if (row.kind === "voice") {
-        // Joining an existing frame (e.g. a photo pinned after the voice note, or two notes on one frame):
-        // fill only empty frame fields; never overwrite what is there.
+      }
+      if (joined && row.kind === "voice") {
+        // Joining an existing frame (e.g. a photo pinned after the voice note, or two notes on one frame,
+        // or a race lost above): fill only empty frame fields; never overwrite what is there.
         const f = eventToFrame(row, body.frameNumber);
         const fill: Partial<typeof frames.$inferInsert> = {};
         for (const k of ["lensId", "shutterSpeed", "aperture", "compensation", "meteringMode", "subject", "locationName"] as const) {

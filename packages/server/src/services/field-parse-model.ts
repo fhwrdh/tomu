@@ -15,7 +15,8 @@ import { z } from "zod/v4";
 import { mergeParse, PARSED_FIELD_NAMES, type Tier2Result } from "@tomu/shared";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
-import { cameras, fieldEvents, lenses, rolls } from "../db/schema.js";
+import { fieldEvents, rolls } from "../db/schema.js";
+import { loadGear } from "./gear.js";
 
 const Field = z.object({ value: z.string().nullable(), confidence: z.number().min(0).max(1) });
 const Output = z.object({
@@ -45,9 +46,8 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
   const [ev] = await db.select().from(fieldEvents).where(eq(fieldEvents.id, eventId)).limit(1);
   if (!ev || ev.kind !== "voice" || !ev.transcript) return { skipped: true, changed: [] };
 
-  const [cams, lens, roll] = await Promise.all([
-    db.select({ id: cameras.id, make: cameras.make, model: cameras.model }).from(cameras).where(eq(cameras.userId, ev.userId)),
-    db.select({ id: lenses.id, make: lenses.make, model: lenses.model, focalLengthMm: lenses.focalLengthMm }).from(lenses).where(eq(lenses.userId, ev.userId)),
+  const [gear, roll] = await Promise.all([
+    loadGear(ev.userId),
     ev.rollId ? db.select({ format: rolls.format }).from(rolls).where(eq(rolls.id, ev.rollId)).limit(1) : Promise.resolve([]),
   ]);
   // Nearest photo event within 10 min on the same roll (or loose), for the scene description.
@@ -58,8 +58,8 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
   )).orderBy(desc(fieldEvents.capturedAt)).limit(1);
 
   const context = [
-    `Cameras: ${cams.map((c) => `${c.id} = ${c.make} ${c.model}`).join("; ") || "none"}`,
-    `Lenses: ${lens.map((l) => `${l.id} = ${l.make} ${l.model} ${l.focalLengthMm ?? ""}mm`).join("; ") || "none"}`,
+    `Cameras: ${gear.cameras.map((c) => `${c.id} = ${c.label}`).join("; ") || "none"}`,
+    `Lenses: ${gear.lenses.map((l) => `${l.id} = ${l.label}`).join("; ") || "none"}`,
     `Roll format: ${roll[0]?.format ?? "unknown"}`,
     `Already parsed (keep unless the note clearly says otherwise): ${PARSED_FIELD_NAMES.map((k) => `${k}=${(ev as Record<string, unknown>)[k] ?? "null"}`).join(", ")}`,
   ].join("\n");
@@ -92,7 +92,7 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
       cameraId: out.cameraId, remarks: out.remarks ?? undefined, sceneDescription: out.sceneDescription ?? undefined, reviewReason: out.reviewReason,
     };
     // lensId must be a real lens of this user; drop hallucinated ids.
-    if (tier2.fields.lensId && !lens.some((l) => l.id === tier2.fields.lensId)) { tier2.fields.lensId = null; }
+    if (tier2.fields.lensId && !gear.lenses.some((l) => l.id === tier2.fields.lensId)) { tier2.fields.lensId = null; }
     const current = Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, (ev as Record<string, unknown>)[k] as string | null])) as Parameters<typeof mergeParse>[0];
     const merged = mergeParse(current, tier2, ev.editedFields);
 
@@ -108,7 +108,7 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
     if (!ev.remarks && tier2.remarks) set.remarks = tier2.remarks;
     if (!ev.sceneDescription && tier2.sceneDescription) set.sceneDescription = tier2.sceneDescription;
     // Hallucinated cameraId that does not belong to this user must never be written.
-    if (!ev.cameraId && tier2.cameraId && cams.some((c) => c.id === tier2.cameraId)) set.cameraId = tier2.cameraId;
+    if (!ev.cameraId && tier2.cameraId && gear.cameras.some((c) => c.id === tier2.cameraId)) set.cameraId = tier2.cameraId;
     await db.update(fieldEvents).set(set).where(eq(fieldEvents.id, ev.id));
     return { skipped: false, changed: merged.changed };
   } catch (err) {
@@ -140,6 +140,7 @@ export async function sweepUnparsed(limit = 20): Promise<number> {
   const rows = await db.select({ id: fieldEvents.id }).from(fieldEvents)
     .where(and(
       eq(fieldEvents.kind, "voice"),
+      eq(fieldEvents.status, "pending"),
       sql`${fieldEvents.transcript} is not null`,
       sql`(${fieldEvents.parser} is null or ${fieldEvents.parser} = 'regex')`,
       lt(fieldEvents.parseAttempts, MAX_PARSE_ATTEMPTS),
