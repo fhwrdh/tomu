@@ -1,6 +1,15 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // Server tests import @tomu/shared transitively, whose package entry points
+      // at dist/. Resolve it to source so the suite runs on a fresh `npm ci`
+      // without a build step, and always tests the code in the tree.
+      "@tomu/shared": fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url)),
+    },
+  },
   test: {
     include: ["packages/**/test/**/*.test.ts"],
     // Server tests hit a real Postgres (see packages/server/test/setup.ts); the
