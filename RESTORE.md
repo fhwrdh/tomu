@@ -15,7 +15,7 @@ Any Postgres 16 box + the latest nightly dump = a working Tomu in minutes.
   `BACKUP_REPO`; use a repo deploy key with write access.
 - **Pre-change snapshots**: before any schema change or import, take a manual
   timestamped dump into `db-backups/` in the main repo (existing convention).
-- **Uploaded files** (`uploads/` on the droplet — capture photos) are **not** in
+- **Uploaded files** (`uploads/captures/` and `uploads/events/` on the droplet) are **not** in
   the nightly dump. Until file storage moves to Spaces, pull a copy after each
   `photos:sync` run: `rsync -a fhwrdh@<droplet>:filmlog/uploads/ ./uploads/`
   (kept out of git via `.gitignore`).

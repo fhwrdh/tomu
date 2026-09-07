@@ -57,8 +57,28 @@ Authoritative kit summary. Update when gear changes.
   - The seq remains the real identifier; LR dates are import dates (decided 2026-06-07). Match/join on seq, never on date.
 - ~~**Tank as gear**~~ Done 2026-07-11: `tanks` table (kind roll/sheet, volumeMl, reelUnits/sheetCapacity, quantity, agitation, isActive) + `/tanks` CRUD + `tomu_tanks` MCP. `dev_sessions.tank` stays free text for now; linking sessions to tank rows is a future nicety. Static `TANKS` in shared remains only as the `tomu_dilution` fallback — unify later.
 - **Display id for orphan rolls** — At least one roll (`27ae8905…` FP4) has no `display_id`. Either backfill at first dev, or treat dev_seq as the primary handle when display_id is null.
-- ~~**Reference image attachments**~~ V1 shipped 2026-09 as **field captures** (`captures` table, `tomu_capture`/`tomu_captures`/`tomu_edit_capture`/`tomu_assign_capture`, `scripts/photos-sync.ts`). Photos live on droplet disk under `UPLOADS_DIR`; not in the nightly dump (manual rsync, see RESTORE.md). Spec: `docs/superpowers/specs/2026-09-06-field-captures-design.md`.
+- ~~**Reference image attachments**~~ Superseded by **field events** (V2 part 1, 2026-09): `field_events` stream, tier-1 parser in shared, tier-2 Claude parse server-side (`FIELD_PARSE_MODEL`), pin/roll-level. V2 part 2 = PWA capture screen (spec §2–3).
 - **Captures V2** — UI-side assignment with thumbnails; reconciliation from Lightroom scan order; move uploads to Spaces with a replication story; thumbnails.
+
+## Field capture
+
+Tier-1 (deterministic regex, on device and server) + tier-2 (Claude, server-side, optional) parser. Tier-1 extracts: shutter, aperture, compensation, metering mode, frame number / sheet id, camera, lens. Tier-2 adds: subject, location, remarks, scene description. Stream at `field_events` table; MCP tools `tomu_capture` / `tomu_field_events` / `tomu_edit_event` / `tomu_pin_event` / `tomu_roll_level_event` / `tomu_reparse_events`. `photos:sync` matches Mac Photos-library images to voice events by time and creates `photo` events (fallback path; the PWA in part 2 uploads directly). Read-only 'Field notes' section on roll detail (transcript first). Uploads live under `uploads/events/` on the droplet (not in Postgres dump; back up separately).
+
+**Production deployment:**
+
+1. Set `.env` on the droplet:
+   - `ANTHROPIC_API_KEY` — required for tier-2 parse (optional if you parse manually only)
+   - `FIELD_PARSE_MODEL` — defaults to `claude-haiku-4-5`
+
+2. Migration order (drop the old `captures` table safely):
+   1. Snapshot: `pg_dump` on the droplet (prod `captures` is empty — the V1 field test ran on the dev DB — so there is nothing to copy).
+   2. Merge → auto-deploy (no migrate).
+   3. On the droplet, one time: `cd ~/filmlog/packages/server && set -a && . ../../.env && set +a && npx drizzle-kit push --strict` to see the statements; if they are exactly CREATE `field_events` (+ indexes) and DROP `captures`, run `npx drizzle-kit push --force`, then `pm2 reload tomu-api`.
+   4. Add `ANTHROPIC_API_KEY` (optional) and `FIELD_PARSE_MODEL` to `.env`, `pm2 restart tomu-api --update-env`.
+
+   For self-hosters with pending V1 captures: run `npm run -w packages/server migrate:field-events` BEFORE step 3, while `captures` still exists — it needs `field_events` to exist too, so create it first with `npx drizzle-kit push --strict` → accept only the CREATE (or run the CREATE statement via psql), copy, verify `-- --check` prints 0, then force-push the drop.
+
+`parse_attempts` caps tier-2 retries at 5 per event; `POST /field-events/reparse` (or `tomu_reparse_events`) always retries.
 
 ## API / MCP
 

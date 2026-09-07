@@ -7,13 +7,14 @@ import { config } from "./config.js";
 import authPlugin from "./plugins/auth.js";
 import { authRoutes } from "./routes/auth.js";
 import { camerasRoutes } from "./routes/cameras.js";
-import { capturesRoutes } from "./routes/captures.js";
+import { fieldEventsRoutes } from "./routes/field-events.js";
 import { filmInventoryRoutes } from "./routes/film-inventory.js";
 import { filmStocksRoutes } from "./routes/film-stocks.js";
 import { lensesRoutes } from "./routes/lenses.js";
 import { devSessionsRoutes } from "./routes/dev-sessions.js";
 import { rollsRoutes } from "./routes/rolls.js";
 import { tanksRoutes } from "./routes/tanks.js";
+import { sweepUnparsed, tier2Enabled } from "./services/field-parse-model.js";
 
 const fastify = Fastify({
   logger: {
@@ -57,7 +58,7 @@ await fastify.register(filmInventoryRoutes, { prefix: "/api/v1/inventory" });
 await fastify.register(rollsRoutes, { prefix: "/api/v1/rolls" });
 await fastify.register(devSessionsRoutes, { prefix: "/api/v1/dev-sessions" });
 await fastify.register(tanksRoutes, { prefix: "/api/v1/tanks" });
-await fastify.register(capturesRoutes, { prefix: "/api/v1/captures" });
+await fastify.register(fieldEventsRoutes, { prefix: "/api/v1/field-events" });
 
 // Health check
 fastify.get("/api/health", async () => ({ status: "ok" }));
@@ -66,6 +67,10 @@ fastify.get("/api/health", async () => ({ status: "ok" }));
 try {
   await fastify.listen({ port: config.PORT, host: config.HOST });
   fastify.log.info(`Tomu API running on ${config.HOST}:${config.PORT}`);
+  if (tier2Enabled()) {
+    setInterval(() => { sweepUnparsed().catch((err) => fastify.log.warn({ err }, "tier-2 sweep failed")); }, 5 * 60_000).unref();
+    fastify.log.info(`Tier-2 field parsing on (${config.FIELD_PARSE_MODEL})`);
+  }
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

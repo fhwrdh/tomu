@@ -260,36 +260,68 @@ export const createNoteSchema = z.object({
   longitude: z.number().optional(),
 });
 
-// ── Field captures ──
+// ── Field events (V2 stream) ──
 
-export const createCaptureSchema = z.object({
-  rollId: uuid.optional(),
-  cameraId: uuid.optional(),
-  lensId: uuid.optional(),
-  frameNumber: z.number().int().positive().optional(),
+const parsedFieldSchemas = {
+  shutterSpeed: z.string().max(20).nullable().optional(),
+  aperture: z.string().max(10).nullable().optional(),
+  compensation: z.string().max(10).nullable().optional(),
+  meteringMode: z.string().max(30).nullable().optional(),
+  lensId: uuid.nullable().optional(),
+  subject: z.string().max(500).nullable().optional(),
+  locationName: z.string().max(200).nullable().optional(),
+};
+
+export const createFieldEventSchema = z.object({
+  clientId: uuid,
+  kind: z.enum(["voice", "photo"]),
   capturedAt: z.string().datetime().optional(),
-  shutterSpeed: z.string().max(20).optional(),
-  aperture: z.string().max(10).optional(),
-  compensation: z.string().max(10).optional(),
-  meteringMode: z.string().max(30).optional(),
-  subject: z.string().max(500).optional(),
-  locationName: z.string().max(200).optional(),
-  notes: z.string().max(2000).optional(),
-  sceneDescription: z.string().max(2000).optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  rollId: uuid.nullable().optional(),
+  cameraId: uuid.nullable().optional(),
+  frameNumber: z.number().int().positive().nullable().optional(),
+  sheetId: z.string().max(10).nullable().optional(),
+  transcript: z.string().max(20000).optional(),
+  ...parsedFieldSchemas,
+  /** Fields the phone already parsed (tier 1) — recorded as parser "regex". */
+  parser: z.enum(["regex"]).optional(),
+  /** Fields the user corrected on the phone before sync. */
+  editedFields: z.array(z.string()).optional(),
 });
 
-export const updateCaptureSchema = createCaptureSchema.partial();
+export const updateFieldEventSchema = z.object({
+  rollId: uuid.nullable().optional(),
+  cameraId: uuid.nullable().optional(),
+  frameNumber: z.number().int().positive().nullable().optional(),
+  sheetId: z.string().max(10).nullable().optional(),
+  capturedAt: z.string().datetime().optional(),
+  ...parsedFieldSchemas,
+  remarks: z.string().max(5000).nullable().optional(),
+  sceneDescription: z.string().max(2000).nullable().optional(),
+  review: z.boolean().optional(),
+});
 
-/** Body for POST /captures/:id/assign. rollId required only when the capture is loose. */
-export const assignCaptureSchema = z.object({
+export const pinFieldEventSchema = z.object({
   rollId: uuid.optional(),
   frameNumber: z.number().int().positive(),
 });
 
-/** Multipart text fields that ride along with the photo on POST /captures/:id/photo. */
-export const capturePhotoMetaSchema = z.object({
+export const rollLevelFieldEventSchema = z.object({
+  rollId: uuid.optional(),
+});
+
+export const fieldEventPhotoMetaSchema = z.object({
   photoTakenAt: z.string().datetime().optional(),
   latitude: z.coerce.number().min(-90).max(90).optional(),
   longitude: z.coerce.number().min(-180).max(180).optional(),
   photoAssetId: z.string().max(100).optional(),
 });
+
+export const reparseFieldEventsSchema = z
+  .object({
+    ids: z.array(uuid).min(1).max(200).optional(),
+    rollId: uuid.optional(),
+    since: z.string().datetime().optional(),
+  })
+  .refine((v) => v.ids || v.rollId || v.since, { message: "pass ids, rollId, or since" });

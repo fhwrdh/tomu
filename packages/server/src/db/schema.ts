@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   date,
+  index,
   integer,
   numeric,
   pgTable,
@@ -181,47 +182,66 @@ export const frames = pgTable(
   (t) => [unique().on(t.rollId, t.frameNumber)]
 );
 
-// ── Field captures ──
+// ── Field events (V2 stream) ──
 //
-// Spoken settings + (later) the phone photo, recorded in the field before the
-// frame number is known. `seq` is a per-user counter shown as `C412`. A
-// capture becomes a real `frames` row at assign time (POST /captures/:id/assign)
-// and keeps `frame_id` as the link.
+// One row per thing captured in the field. `voice` rows carry the verbatim
+// transcript (immutable) plus parsed fields; `photo` rows carry a file. Pinning
+// (POST /field-events/:id/pin) turns an event into a frame + note; roll-level
+// attaches it to the roll as a note. `client_id` is minted on the phone so sync
+// is idempotent.
 
-export const captures = pgTable(
-  "captures",
+export const fieldEvents = pgTable(
+  "field_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id").notNull(),
     userId: uuid("user_id").notNull().references(() => users.id),
-    seq: integer("seq").notNull(),
-    status: text("status").notNull().default("pending"),
+    kind: text("kind").notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+    latitude: numeric("latitude", { precision: 10, scale: 7 }),
+    longitude: numeric("longitude", { precision: 10, scale: 7 }),
     rollId: uuid("roll_id").references(() => rolls.id, { onDelete: "set null" }),
     cameraId: uuid("camera_id").references(() => cameras.id),
-    lensId: uuid("lens_id").references(() => lenses.id),
     frameNumber: integer("frame_number"),
-    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
-    shutterSpeed: text("shutter_speed"),
-    aperture: text("aperture"),
-    compensation: text("compensation"),
-    meteringMode: text("metering_mode"),
-    subject: text("subject"),
-    locationName: text("location_name"),
-    notes: text("notes"),
-    sceneDescription: text("scene_description"),
+    frameProvisional: boolean("frame_provisional").notNull().default(false),
+    sheetId: text("sheet_id"),
+    transcript: text("transcript"),
     fileKey: text("file_key"),
     fileUrl: text("file_url"),
     mimeType: text("mime_type"),
     fileSizeBytes: integer("file_size_bytes"),
     widthPx: integer("width_px"),
     heightPx: integer("height_px"),
-    photoTakenAt: timestamp("photo_taken_at", { withTimezone: true }),
-    latitude: numeric("latitude", { precision: 10, scale: 7 }),
-    longitude: numeric("longitude", { precision: 10, scale: 7 }),
     photoAssetId: text("photo_asset_id"),
+    shutterSpeed: text("shutter_speed"),
+    aperture: text("aperture"),
+    compensation: text("compensation"),
+    meteringMode: text("metering_mode"),
+    lensId: uuid("lens_id").references(() => lenses.id),
+    subject: text("subject"),
+    locationName: text("location_name"),
+    remarks: text("remarks"),
+    sceneDescription: text("scene_description"),
+    parsedAt: timestamp("parsed_at", { withTimezone: true }),
+    parser: text("parser"),
+    parseNotes: text("parse_notes"),
+    parseAttempts: integer("parse_attempts").notNull().default(0),
+    editedFields: text("edited_fields").array().notNull().default([]),
+    review: boolean("review").notNull().default(false),
+    status: text("status").notNull().default("pending"),
     frameId: uuid("frame_id").references(() => frames.id, { onDelete: "set null" }),
     ...timestamps,
   },
-  (t) => [uniqueIndex("captures_user_id_seq_unique").on(t.userId, t.seq)]
+  (t) => [
+    uniqueIndex("field_events_client_id_unique").on(t.clientId),
+    index("field_events_user_captured_idx").on(t.userId, t.capturedAt),
+    index("field_events_roll_status_idx").on(t.rollId, t.status),
+    // Partial index backing sweepUnparsed's scan: pending voice events not yet
+    // seen by tier 2 (or only regex-parsed), oldest first.
+    index("field_events_sweep_idx")
+      .on(t.capturedAt)
+      .where(sql`kind = 'voice' and status = 'pending' and (parser is null or parser = 'regex')`),
+  ]
 );
 
 // ── Tanks ──

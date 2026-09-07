@@ -143,44 +143,49 @@ export interface Frame extends Timestamps {
   isPortfolio: boolean;
 }
 
-// ── Field captures ──
+// ── Field events (V2 stream) ──
 
-export type CaptureStatus = "pending" | "assigned";
+export type FieldEventKind = "voice" | "photo";
+export type FieldEventStatus = "pending" | "pinned" | "roll_level";
 
-/** A field capture: spoken settings + (later) the phone photo, before it is a frame. */
-export interface Capture extends Timestamps {
+/** One thing captured in the field: a voice note (transcript + parsed fields) or a photo. */
+export interface FieldEvent extends Timestamps {
   id: string;
+  clientId: string;
   userId: string;
-  /** Per-user monotonic counter; shown as `C412`. */
-  seq: number;
-  status: CaptureStatus;
+  kind: FieldEventKind;
+  capturedAt: string;
+  latitude?: number;
+  longitude?: number;
   rollId?: string;
   cameraId?: string;
-  lensId?: string;
   frameNumber?: number;
-  /** When the settings were spoken (server time unless the caller overrides). ISO string. */
-  capturedAt: string;
-  shutterSpeed?: string;
-  aperture?: string;
-  compensation?: string;
-  meteringMode?: string;
-  subject?: string;
-  locationName?: string;
-  notes?: string;
-  /** What Claude saw in the phone photo. */
-  sceneDescription?: string;
+  frameProvisional: boolean;
+  sheetId?: string;
+  /** Verbatim dictation. Immutable. */
+  transcript?: string;
   fileKey?: string;
   fileUrl?: string;
   mimeType?: string;
   fileSizeBytes?: number;
   widthPx?: number;
   heightPx?: number;
-  /** From the phone photo's EXIF, set by the laptop sync. ISO string. */
-  photoTakenAt?: string;
-  latitude?: number;
-  longitude?: number;
-  /** Photos-library asset UUID; makes re-syncs idempotent. */
-  photoAssetId?: string;
+  shutterSpeed?: string;
+  aperture?: string;
+  compensation?: string;
+  meteringMode?: string;
+  lensId?: string;
+  subject?: string;
+  locationName?: string;
+  remarks?: string;
+  sceneDescription?: string;
+  parsedAt?: string;
+  parser?: string;
+  parseNotes?: string;
+  parseAttempts: number;
+  editedFields: string[];
+  review: boolean;
+  status: FieldEventStatus;
   frameId?: string;
 }
 

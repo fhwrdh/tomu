@@ -10,6 +10,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production"]).default("development"),
   /** Root for uploaded files (capture photos). Served at /uploads by fastify-static in dev and nginx in prod. */
   UPLOADS_DIR: z.string().default(fileURLToPath(new URL("../../../uploads", import.meta.url))),
+  /** Enables tier-2 (Claude) parsing of field events. Unset → tier 2 skipped. */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  FIELD_PARSE_MODEL: z.string().default("claude-haiku-4-5"),
 });
 
 export const config = envSchema.parse(process.env);
