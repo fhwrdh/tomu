@@ -132,6 +132,16 @@ server {
     location = /revoke        { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
     location = /oauth/consent { proxy_pass http://127.0.0.1:3457; proxy_set_header Host $host; }
 
+    # Field-capture photos, served by uuid-named URL (an <img> cannot send the JWT).
+    # Only that exact shape is served; anything else under /uploads/ is 404.
+    # Quote the regex — unquoted { } are nginx block syntax and {36} fails nginx -t.
+    location ~* "^/uploads/(events/[0-9a-f-]{36}\.jpe?g)$" {
+        alias /home/<user>/tomu/uploads/$1;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header Cache-Control "private, max-age=31536000, immutable" always;
+    }
+    location /uploads/ { return 404; }
+
     location / { try_files $uri $uri/ /index.html; }
 }
 ```
