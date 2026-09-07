@@ -16,6 +16,7 @@ import { db } from "../db/client.js";
 import {
   cameras,
   captures,
+  fieldEvents,
   filmInventory,
   filmStocks,
   frames,
@@ -292,7 +293,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
 
     if (!roll) return reply.status(404).send({ error: "Roll not found" });
 
-    const [rollFrames, rollNotes, pendingCaptures] = await Promise.all([
+    const [rollFrames, rollNotes, pendingCaptures, unpinnedEvents] = await Promise.all([
       db
         .select()
         .from(frames)
@@ -308,6 +309,9 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         .from(captures)
         .where(and(eq(captures.rollId, roll.id), eq(captures.status, "pending"), eq(captures.userId, request.userId)))
         .orderBy(asc(captures.capturedAt)),
+      db.select().from(fieldEvents)
+        .where(and(eq(fieldEvents.rollId, roll.id), eq(fieldEvents.status, "pending"), eq(fieldEvents.userId, request.userId)))
+        .orderBy(asc(fieldEvents.capturedAt)),
     ]);
 
     // Frame-level notes (joined through frame ids belonging to this roll)
@@ -328,6 +332,7 @@ export async function rollsRoutes(fastify: FastifyInstance) {
         notes: rollNotes,
         frameNotes,
         pendingCaptures: pendingCaptures.map((c) => ({ ...c, captureId: formatCaptureId(c.seq) })),
+        unpinnedEvents: unpinnedEvents.map((e) => ({ ...e, shortId: e.id.slice(0, 8) })),
       },
     };
   });

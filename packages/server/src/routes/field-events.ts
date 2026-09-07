@@ -6,14 +6,17 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   createFieldEventSchema,
+  eventToFrame,
   fieldEventPhotoMetaSchema,
   nextFrameNumber,
   parseTranscript,
+  pinFieldEventSchema,
+  rollLevelFieldEventSchema,
   updateFieldEventSchema,
 } from "@tomu/shared";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
-import { cameras, fieldEvents, frames, lenses, rolls } from "../db/schema.js";
+import { cameras, fieldEvents, frames, lenses, notes, rolls } from "../db/schema.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type FieldEventRow = typeof fieldEvents.$inferSelect;
@@ -259,6 +262,82 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
       updatedAt: new Date(),
     }).where(eq(fieldEvents.id, row.id)).returning();
     return { data: presentEvent(updated) };
+  });
+
+  // ── Pin: event becomes (or joins) a frame ───────────────────────────
+  fastify.post<{ Params: { id: string } }>("/:id/pin", async (request, reply) => {
+    const row = await findEvent(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Event not found" });
+    if (row.status !== "pending") return reply.status(409).send({ error: `Event is already ${row.status}` });
+    const body = pinFieldEventSchema.parse(request.body);
+    const rollId = body.rollId ?? row.rollId;
+    if (!rollId) return reply.status(400).send({ error: "Event is not linked to a roll; pass rollId" });
+    const roll = await userOwnsRoll(request.userId, rollId);
+    if (!roll) return reply.status(404).send({ error: "Roll not found" });
+
+    const [existing] = await db.select().from(frames)
+      .where(and(eq(frames.rollId, roll.id), eq(frames.frameNumber, body.frameNumber))).limit(1);
+
+    const result = await db.transaction(async (tx) => {
+      let frame = existing;
+      if (!frame) {
+        const f = eventToFrame(row, body.frameNumber);
+        [frame] = await tx.insert(frames).values({
+          rollId: roll.id, frameNumber: f.frameNumber, lensId: f.lensId, shutterSpeed: f.shutterSpeed, aperture: f.aperture,
+          compensation: f.compensation, meteringMode: f.meteringMode, subject: f.subject, notes: null,
+          latitude: f.latitude != null ? String(f.latitude) : null, longitude: f.longitude != null ? String(f.longitude) : null,
+          locationName: f.locationName, shotAt: new Date(f.shotAt), tags: [],
+        }).returning();
+      } else if (row.kind === "voice") {
+        // Joining an existing frame (e.g. a photo pinned after the voice note, or two notes on one frame):
+        // fill only empty frame fields; never overwrite what is there.
+        const f = eventToFrame(row, body.frameNumber);
+        const fill: Partial<typeof frames.$inferInsert> = {};
+        for (const k of ["lensId", "shutterSpeed", "aperture", "compensation", "meteringMode", "subject", "locationName"] as const) {
+          if (frame[k] == null && f[k] != null) (fill as Record<string, unknown>)[k] = f[k];
+        }
+        if (Object.keys(fill).length) [frame] = await tx.update(frames).set({ ...fill, updatedAt: new Date() }).where(eq(frames.id, frame.id)).returning();
+      }
+      if (row.kind === "voice" && row.transcript) {
+        await tx.insert(notes).values({ userId: request.userId, frameId: frame.id, type: "text", content: row.transcript, latitude: row.latitude, longitude: row.longitude });
+      }
+      if (row.kind === "photo" && row.fileKey) {
+        await tx.insert(notes).values({
+          userId: request.userId, frameId: frame.id, type: "photo", content: row.sceneDescription ?? null,
+          fileKey: row.fileKey, fileUrl: row.fileUrl, mimeType: row.mimeType, fileSizeBytes: row.fileSizeBytes, latitude: row.latitude, longitude: row.longitude,
+        });
+      }
+      if (roll.status === "loaded") await tx.update(rolls).set({ status: "shooting", updatedAt: new Date() }).where(eq(rolls.id, roll.id));
+      const [ev] = await tx.update(fieldEvents)
+        .set({ status: "pinned", rollId: roll.id, frameNumber: body.frameNumber, frameProvisional: false, frameId: frame.id, updatedAt: new Date() })
+        .where(eq(fieldEvents.id, row.id)).returning();
+      return { event: presentEvent(ev), frame, joined: !!existing };
+    });
+    return reply.status(201).send({ data: result });
+  });
+
+  // ── Roll-level: attach as a roll note, no frame ─────────────────────
+  fastify.post<{ Params: { id: string } }>("/:id/roll-level", async (request, reply) => {
+    const row = await findEvent(request.userId, request.params.id);
+    if (!row) return reply.status(404).send({ error: "Event not found" });
+    if (row.status !== "pending") return reply.status(409).send({ error: `Event is already ${row.status}` });
+    const body = rollLevelFieldEventSchema.parse(request.body ?? {});
+    const rollId = body.rollId ?? row.rollId;
+    if (!rollId) return reply.status(400).send({ error: "Event is not linked to a roll; pass rollId" });
+    const roll = await userOwnsRoll(request.userId, rollId);
+    if (!roll) return reply.status(404).send({ error: "Roll not found" });
+    const result = await db.transaction(async (tx) => {
+      await tx.insert(notes).values({
+        userId: request.userId, rollId: roll.id,
+        type: row.kind === "photo" ? "photo" : "text",
+        content: row.kind === "photo" ? row.sceneDescription ?? null : row.transcript ?? null,
+        fileKey: row.fileKey, fileUrl: row.fileUrl, mimeType: row.mimeType, fileSizeBytes: row.fileSizeBytes,
+        latitude: row.latitude, longitude: row.longitude,
+      });
+      const [ev] = await tx.update(fieldEvents).set({ status: "roll_level", rollId: roll.id, updatedAt: new Date() }).where(eq(fieldEvents.id, row.id)).returning();
+      return { event: presentEvent(ev) };
+    });
+    return reply.status(201).send({ data: result });
   });
 
   // ── Delete ──────────────────────────────────────────────────────────
