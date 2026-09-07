@@ -6,6 +6,8 @@ Running backlog of ideas, follow-ups, and known issues. Not prioritized unless n
 
 **Tomu is a "pit of success" for the photography — not just a log or a database. An everything.**
 
+**The film camera gets what it gets. Tomu enriches with everything else** (owner, 2026-09-06): the negative holds only light; the moment, the words, the place, the settings, the reference photo, the recipe, the scan are all Tomu's to add. A field capture is a field note — "the sound of the photo as much as the exposure stats" — with exposure as the extractable subset.
+
 The correct action should be the path of least resistance. Test every feature against this: does it make the right thing happen by default, or does it just record what happened? Concretely:
 
 - **Identity is automatic.** Dev Ids, display ids, session ids — assigned by the app at the moment the real-world event happens (tank time, unload time). The human never hand-tracks a counter again.
