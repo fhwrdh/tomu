@@ -155,6 +155,7 @@ export interface FieldEvent extends Timestamps {
   userId: string;
   kind: FieldEventKind;
   capturedAt: string;
+  /** Coerced to a number by the API; the DB column is `numeric`, which pg returns as a string. */
   latitude?: number;
   longitude?: number;
   rollId?: string;
@@ -170,6 +171,8 @@ export interface FieldEvent extends Timestamps {
   fileSizeBytes?: number;
   widthPx?: number;
   heightPx?: number;
+  /** Mac Photos library asset id, set by `photos:sync` so a photo is imported once. */
+  photoAssetId?: string;
   shutterSpeed?: string;
   aperture?: string;
   compensation?: string;

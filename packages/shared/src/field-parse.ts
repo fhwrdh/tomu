@@ -44,6 +44,8 @@ const TENS: Record<string, number> = {
  *   "twenty five"   → 25
  *   "two fifty"     → 250   (ones + tens, spoken as a shutter/time shorthand)
  *   "one sixty"     → 60    (numerator elision: "one" + tens, not 100+tens)
+ *   "one two-fifty" → 250   (same elision, spoken numerator + ones + tens)
+ *   "five hundred" / "one five hundred" → 500
  *   "one twenty five" / "one twenty-fifth" → 125
  */
 function spokenNumber(raw: string): number | null {
@@ -59,6 +61,7 @@ function spokenNumber(raw: string): number | null {
   if (w.length === 2) {
     const [a, b] = w;
     if (a in TENS && b in ONES) return TENS[a] + ONES[b]; // twenty five → 25
+    if (a in ONES && b === "hundred") return ONES[a] * 100; // five hundred → 500
     // "one" before a tens word is a numerator elision ("one sixty" = "1/60",
     // said the way "one two-fifty" means "1/250") rather than a multiplier,
     // so it reduces to the tens word alone.
@@ -69,11 +72,15 @@ function spokenNumber(raw: string): number | null {
   if (w.length === 3) {
     const [a, b, c] = w;
     if (a in ONES && b in TENS && c in ONES) return ONES[a] * 100 + TENS[b] + ONES[c]; // one twenty five → 125
+    // A leading "one" is the spoken numerator ("one two-fifty" = "1/250"), so the
+    // rest of the phrase carries the whole value.
+    if (a === "one" && b in ONES && c in TENS) return ONES[b] * 100 + TENS[c]; // one two fifty → 250
+    if (a === "one" && b in ONES && c === "hundred") return ONES[b] * 100; // one five hundred → 500
   }
   return null;
 }
 
-const NUM_WORD_UNIT = "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)";
+const NUM_WORD_UNIT = "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)";
 // A spoken number: 1-3 number words, or digits.
 const NUM_WORD = `(?:\\d+|${NUM_WORD_UNIT}(?:[\\s-]${NUM_WORD_UNIT}){0,2})`;
 
@@ -289,6 +296,12 @@ const METER_RULES: Rule[] = [
 
 const COMMAND_RE = /\b(scratch that|delete (?:last|that)(?: one)?|delete the last(?: one)?)\b/i;
 
+// Unit words carry no identity: a lens row with a null focal length can produce a
+// label whose only free-standing token is "mm", which would then match any note
+// that says it. Bare units never identify gear, so they are dropped as tokens
+// (a compound like "80mm" is unaffected — it splits to "80mm"/"80").
+const UNIT_TOKENS = new Set(["mm", "cm", "in", "ft"]);
+
 /**
  * Token-overlap gear match: the query label's tokens are checked against the
  * text; the longest (most specific) matching token wins, preferring tokens
@@ -302,7 +315,8 @@ function matchGear(
   const lower = text.toLowerCase();
   let best: { id: string; span: [number, number]; score: number } | null = null;
   for (const item of items) {
-    const rawTokens = item.label.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 2);
+    const rawTokens = item.label.toLowerCase().split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 2 && !UNIT_TOKENS.has(t));
     // A token like "80mm" or "f4" also contributes its leading digit run
     // ("80") as its own candidate, so a spoken focal length ("80") matches
     // even though the transcript never says "millimeters".

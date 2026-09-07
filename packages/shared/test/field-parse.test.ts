@@ -20,6 +20,10 @@ describe("shutter", () => {
     ["a two-fiftieth", "1/250"],
     ["two fifty", "1/250"],
     ["one sixty", "1/60"],
+    // Numerator spoken aloud: "one two-fifty" is how 1/250 is said in the field.
+    ["one two-fifty", "1/250"],
+    ["one two fifty", "1/250"],
+    ["one five hundred", "1/500"],
     ["1/1000", "1/1000"],
     ["two seconds", "2s"],
     ["2s", "2s"],
@@ -91,6 +95,13 @@ describe("gear", () => {
     expect(r.fields.lensId).toBe("lens-80");
     expect(r.fields.shutterSpeed).toBe("1/125");
     expect(r.fields.aperture).toBe("f/11");
+  });
+  it("never matches on a bare unit token from a label with no focal length", () => {
+    // A lens row with a null focal length can still yield a label whose only
+    // distinctive token is a unit ("mm"), which would otherwise match any note
+    // that happens to say it.
+    const thin = { cameras: [], lenses: [{ id: "lens-x", label: "mm" }] };
+    expect(parseTranscript("shot at 250, mm of rain on the lens", thin).fields.lensId).toBeUndefined();
   });
   it("leaves gear unset with no index", () => {
     expect(parseTranscript("m6 250 f8").fields.cameraId).toBeUndefined();

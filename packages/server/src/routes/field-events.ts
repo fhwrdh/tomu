@@ -24,8 +24,20 @@ import { loadGear } from "../services/gear.js";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type FieldEventRow = typeof fieldEvents.$inferSelect;
 
+/** pg returns `numeric` columns as strings; the wire type says number, so coerce here. */
+function coord(v: string | null): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function presentEvent(row: FieldEventRow) {
-  return { ...row, shortId: row.id.slice(0, 8) };
+  return {
+    ...row,
+    latitude: coord(row.latitude),
+    longitude: coord(row.longitude),
+    shortId: row.id.slice(0, 8),
+  };
 }
 
 /** uuid, uuid prefix (≥ 8 chars), or clientId. */

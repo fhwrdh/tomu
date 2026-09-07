@@ -54,7 +54,7 @@ Tools, by area:
 - **Shooting** — `tomu_load`, `tomu_shoot`, `tomu_unload`, `tomu_undo_load`, `tomu_rolls`, `tomu_log_shot_roll`, `tomu_correct_roll`
 - **Development** — `tomu_dev_candidates`, `tomu_dev_session`, `tomu_dilution`, `tomu_tanks`, `tomu_tank_plan`
 - **Other** — `tomu_gear`, `tomu_summary`, `tomu_note`
-- **Field** — `tomu_capture` (verbatim voice note → field event), `tomu_field_events`, `tomu_edit_event`, `tomu_pin_event`, `tomu_roll_level_event`, `tomu_reparse_events`. The PWA `/capture` screen is the primary field surface; photos never pass through Claude.
+- **Field** — `tomu_capture` (verbatim voice note → field event), `tomu_field_events`, `tomu_edit_event`, `tomu_pin_event`, `tomu_roll_level_event`, `tomu_reparse_events`, `tomu_delete_event` (the desk-side "scratch that"). The PWA `/capture` screen is the primary field surface; photos never pass through Claude.
 
 ## Deployment
 
