@@ -11,12 +11,14 @@ import {
   nextFrameNumber,
   parseTranscript,
   pinFieldEventSchema,
+  reparseFieldEventsSchema,
   rollLevelFieldEventSchema,
   updateFieldEventSchema,
 } from "@tomu/shared";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
 import { cameras, fieldEvents, frames, lenses, notes, rolls } from "../db/schema.js";
+import { parseEventWithModel, reparseMany, tier2Enabled } from "../services/field-parse-model.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type FieldEventRow = typeof fieldEvents.$inferSelect;
@@ -146,6 +148,9 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
         parsedAt: parser ? new Date() : null,
         editedFields: body.editedFields ?? [],
       }).returning();
+      if (row.kind === "voice" && row.transcript && tier2Enabled()) {
+        parseEventWithModel(row.id).catch((err) => request.log.warn({ err }, "tier-2 parse failed"));
+      }
       return reply.status(201).send({ data: presentEvent(row) });
     } catch (err) {
       if ((err as { code?: string }).code === "23505") {
@@ -188,6 +193,14 @@ export async function fieldEventsRoutes(fastify: FastifyInstance) {
     const limit = Math.min(Math.max(Number(q.limit ?? 100) || 100, 1), 500);
     const rows = await db.select().from(fieldEvents).where(and(...conds)).orderBy(desc(fieldEvents.capturedAt)).limit(limit);
     return { data: rows.map(presentEvent) };
+  });
+
+  // ── Reparse (tier 2 again) ──────────────────────────────────────────
+  fastify.post("/reparse", async (request, reply) => {
+    const body = reparseFieldEventsSchema.parse(request.body);
+    if (!tier2Enabled()) return reply.status(503).send({ error: "Tier-2 parsing is not configured (ANTHROPIC_API_KEY)" });
+    const r = await reparseMany(request.userId, body);
+    return { data: r };
   });
 
   // ── Get one ─────────────────────────────────────────────────────────
