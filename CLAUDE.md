@@ -54,13 +54,14 @@ Tools, by area:
 - **Shooting** — `tomu_load`, `tomu_shoot`, `tomu_unload`, `tomu_undo_load`, `tomu_rolls`, `tomu_log_shot_roll`, `tomu_correct_roll`
 - **Development** — `tomu_dev_candidates`, `tomu_dev_session`, `tomu_dilution`, `tomu_tanks`, `tomu_tank_plan`
 - **Other** — `tomu_gear`, `tomu_summary`, `tomu_note`
+- **Field** — `tomu_capture`, `tomu_captures`, `tomu_edit_capture`, `tomu_assign_capture` (photo attaches via `npm run photos:sync` on the laptop, never through Claude)
 
 ## Deployment
 
 - **URL**: `film.fhwrdh.net` → a DigitalOcean droplet
 - **Backend**: Fastify managed by PM2, behind nginx reverse proxy
 - **Frontend**: Static Vite build served by nginx
-- **Files**: DO Spaces (S3-compatible) for images and scans
+- **Files**: capture photos on droplet disk under `UPLOADS_DIR` (served at `/uploads/`); DO Spaces planned for scans
 
 ## Conventions
 

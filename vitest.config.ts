@@ -12,6 +12,8 @@ export default defineConfig({
         "packages/shared/src/dilution.ts",
         "packages/shared/src/dev-id.ts",
         "packages/shared/src/dev-shorthand.ts",
+        "packages/shared/src/capture.ts",
+        "packages/shared/src/photo-match.ts",
         "packages/mcp/src/matching.ts",
       ],
       reporter: ["text", "text-summary"],

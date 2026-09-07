@@ -1,11 +1,13 @@
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
+import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { config } from "./config.js";
 import authPlugin from "./plugins/auth.js";
 import { authRoutes } from "./routes/auth.js";
 import { camerasRoutes } from "./routes/cameras.js";
+import { capturesRoutes } from "./routes/captures.js";
 import { filmInventoryRoutes } from "./routes/film-inventory.js";
 import { filmStocksRoutes } from "./routes/film-stocks.js";
 import { lensesRoutes } from "./routes/lenses.js";
@@ -23,6 +25,13 @@ const fastify = Fastify({
 await fastify.register(cors, { origin: config.CORS_ORIGIN });
 await fastify.register(jwt, { secret: config.JWT_SECRET });
 await fastify.register(authPlugin);
+
+// Uploaded files (capture photos). nginx serves this path in prod; this is the dev path.
+await fastify.register(fastifyStatic, {
+  root: config.UPLOADS_DIR,
+  prefix: "/uploads/",
+  decorateReply: false,
+});
 
 // Map validation errors (routes parse request bodies with Zod `.parse()`) to 400
 // instead of the default unhandled-throw 500. Everything else keeps its status.
@@ -48,6 +57,7 @@ await fastify.register(filmInventoryRoutes, { prefix: "/api/v1/inventory" });
 await fastify.register(rollsRoutes, { prefix: "/api/v1/rolls" });
 await fastify.register(devSessionsRoutes, { prefix: "/api/v1/dev-sessions" });
 await fastify.register(tanksRoutes, { prefix: "/api/v1/tanks" });
+await fastify.register(capturesRoutes, { prefix: "/api/v1/captures" });
 
 // Health check
 fastify.get("/api/health", async () => ({ status: "ok" }));

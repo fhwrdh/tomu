@@ -91,6 +91,7 @@ import type {
   Roll, CreateRoll,
   Frame, CreateFrame,
   Note, CreateNote,
+  Capture,
 } from "@tomu/shared";
 
 export const cameras = crudApi<Camera, CreateCamera, UpdateCamera>("/cameras");
@@ -132,6 +133,7 @@ export type RollDetail = RollListItem & {
   frames: Frame[];
   notes: Note[];
   frameNotes: Note[];
+  pendingCaptures: (Capture & { captureId: string })[];
 };
 
 export const rolls = {

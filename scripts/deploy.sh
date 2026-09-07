@@ -30,6 +30,7 @@ rsync -az --delete \
   --exclude '.env' \
   --exclude '.deploy.env' \
   --exclude 'db-backups' \
+  --exclude 'uploads' \
   --exclude 'DEPLOY.md' \
   --exclude '*.log' \
   -e ssh ./ "${target}:${DEPLOY_PATH}/"

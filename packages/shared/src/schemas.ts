@@ -259,3 +259,37 @@ export const createNoteSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
 });
+
+// ── Field captures ──
+
+export const createCaptureSchema = z.object({
+  rollId: uuid.optional(),
+  cameraId: uuid.optional(),
+  lensId: uuid.optional(),
+  frameNumber: z.number().int().positive().optional(),
+  capturedAt: z.string().datetime().optional(),
+  shutterSpeed: z.string().max(20).optional(),
+  aperture: z.string().max(10).optional(),
+  compensation: z.string().max(10).optional(),
+  meteringMode: z.string().max(30).optional(),
+  subject: z.string().max(500).optional(),
+  locationName: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+  sceneDescription: z.string().max(2000).optional(),
+});
+
+export const updateCaptureSchema = createCaptureSchema.partial();
+
+/** Body for POST /captures/:id/assign. rollId required only when the capture is loose. */
+export const assignCaptureSchema = z.object({
+  rollId: uuid.optional(),
+  frameNumber: z.number().int().positive(),
+});
+
+/** Multipart text fields that ride along with the photo on POST /captures/:id/photo. */
+export const capturePhotoMetaSchema = z.object({
+  photoTakenAt: z.string().datetime().optional(),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
+  photoAssetId: z.string().max(100).optional(),
+});

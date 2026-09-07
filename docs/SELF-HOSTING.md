@@ -191,3 +191,18 @@ From your workstation, after setting `.deploy.env`:
 npm run deploy            # rsync -> build -> pm2 reload
 npm run deploy:migrate    # same, plus a schema push
 ```
+
+## Field captures and phone photos
+
+Captures (`tomu_capture`) hold spoken settings. Take the photo with the phone's
+**Camera app** (a picture taken from inside the Claude app is never saved to the
+camera roll, so it cannot sync or be matched); the photo is attached later
+from a Mac with the iCloud Photos library: `pip install osxphotos`, put
+`TOMU_API_URL` and `TOMU_API_TOKEN` in `.env`, then `npm run photos:sync`
+(`--dry-run` first). Photos are matched by time (window −10/+2 min around the
+capture) and uploaded to `UPLOADS_DIR` on the server (`/uploads/` in nginx).
+Uploads are **not** in the Postgres dump — back that directory up separately.
+Uploaded photos are served publicly by uuid-named URL and retain their original
+EXIF metadata including GPS coordinates; if that matters to you, strip EXIF on
+export (`osxphotos export --exiftool` options, or a post-processing step) or put
+`/uploads/` behind auth.

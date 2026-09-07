@@ -3,4 +3,6 @@ export * from "./types.js";
 export * from "./schemas.js";
 export * from "./dev-shorthand.js";
 export * from "./dev-id.js";
+export * from "./capture.js";
 export * from "./dilution.js";
+export * from "./photo-match.js";

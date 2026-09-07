@@ -143,6 +143,47 @@ export interface Frame extends Timestamps {
   isPortfolio: boolean;
 }
 
+// ── Field captures ──
+
+export type CaptureStatus = "pending" | "assigned";
+
+/** A field capture: spoken settings + (later) the phone photo, before it is a frame. */
+export interface Capture extends Timestamps {
+  id: string;
+  userId: string;
+  /** Per-user monotonic counter; shown as `C412`. */
+  seq: number;
+  status: CaptureStatus;
+  rollId?: string;
+  cameraId?: string;
+  lensId?: string;
+  frameNumber?: number;
+  /** When the settings were spoken (server time unless the caller overrides). ISO string. */
+  capturedAt: string;
+  shutterSpeed?: string;
+  aperture?: string;
+  compensation?: string;
+  meteringMode?: string;
+  subject?: string;
+  locationName?: string;
+  notes?: string;
+  /** What Claude saw in the phone photo. */
+  sceneDescription?: string;
+  fileKey?: string;
+  fileUrl?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  widthPx?: number;
+  heightPx?: number;
+  /** From the phone photo's EXIF, set by the laptop sync. ISO string. */
+  photoTakenAt?: string;
+  latitude?: number;
+  longitude?: number;
+  /** Photos-library asset UUID; makes re-syncs idempotent. */
+  photoAssetId?: string;
+  frameId?: string;
+}
+
 // ── Development ──
 
 export interface DevelopmentLog extends Timestamps {

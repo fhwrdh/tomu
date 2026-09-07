@@ -2,7 +2,8 @@
   "name": "tomu",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hostable film-photography management \u2014 gear, film inventory, rolls, development, and scans. API-first, with an MCP server so Claude is a first-class client alongside the web UI.",
+  "type": "module",
+  "description": "Self-hostable film-photography management — gear, film inventory, rolls, development, and scans. API-first, with an MCP server so Claude is a first-class client alongside the web UI.",
   "workspaces": [
     "packages/shared",
     "packages/server",
@@ -13,19 +14,22 @@
     "dev:server": "npm run dev -w packages/server",
     "dev:client": "npm run dev -w packages/client",
     "dev": "npm run dev:server & npm run dev:client",
-    "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client && npm run build -w packages/mcp",
+    "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client && npm run build -w packages/mcp && npm run typecheck:scripts",
     "build:shared": "npm run build -w packages/shared",
+    "typecheck:scripts": "tsc -p scripts",
     "lint": "npm run lint -w packages/client",
     "deploy": "bash scripts/deploy.sh",
     "deploy:migrate": "bash scripts/deploy.sh --migrate",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "photos:sync": "tsx --env-file-if-exists=.env scripts/photos-sync.ts"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.20.0",
+    "tsx": "^4.23.13",
     "vitest": "^4.1.10"
   }
 }
