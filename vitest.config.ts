@@ -38,7 +38,7 @@ export default defineConfig({
           // (it round-trips to `{}`), and the capture store puts photo Blobs in
           // IndexedDB. Node's Blob clones faithfully.
           include: ["packages/client/test/**/*.test.ts"],
-          exclude: ["packages/client/test/**/*.dom.test.ts"],
+          exclude: ["packages/client/test/**/*.dom.test.{ts,tsx}"],
           environment: "node",
         },
       },
@@ -46,10 +46,11 @@ export default defineConfig({
         resolve: { alias: sharedAlias },
         test: {
           name: "client-dom",
-          // Only the sync worker needs a DOM — it listens for `online` and
-          // `visibilitychange`.
-          include: ["packages/client/test/**/*.dom.test.ts"],
+          // The screens, and the sync worker (which listens for `online` and
+          // `visibilitychange`).
+          include: ["packages/client/test/**/*.dom.test.{ts,tsx}"],
           environment: "jsdom",
+          setupFiles: ["packages/client/test/dom-setup.ts"],
         },
       },
     ],
