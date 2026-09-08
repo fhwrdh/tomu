@@ -13,6 +13,8 @@ export interface SaveCaptureInput {
   blob?: Blob;
   /** ISO. Defaults to now; photos pass their EXIF time. */
   capturedAt?: string;
+  /** Overrides the Blob's own type, which storage does not reliably preserve. */
+  mimeType?: string;
   rollId?: string | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -85,7 +87,7 @@ export async function saveCapture(db: CaptureDb, input: SaveCaptureInput): Promi
     syncState: "queued",
     attempts: 0,
     hasPendingBlob: input.blob != null,
-    mimeType: input.blob?.type || undefined,
+    mimeType: input.mimeType ?? input.blob?.type ?? undefined,
   };
 
   await db.transaction("rw", db.events, db.blobs, async () => {

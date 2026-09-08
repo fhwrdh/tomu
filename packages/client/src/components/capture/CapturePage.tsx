@@ -10,6 +10,7 @@ import {
   type DeletedEvent,
 } from "../../offline/store.js";
 import { useSyncWorker } from "../../hooks/useSyncWorker.js";
+import { preparePhoto } from "../../offline/photo.js";
 import { useOnline } from "../../hooks/useOnline.js";
 import { LoadRollDialog, UnloadDialog } from "../rolls/RollDialogs.js";
 import { CaptureHeader } from "./CaptureHeader.js";
@@ -125,13 +126,14 @@ export function CapturePage() {
    * covers several frames, and the two are taken seconds apart at best.
    */
   async function takePhoto(file: File) {
-    const position = await currentPosition();
+    const [position, photo] = await Promise.all([currentPosition(), preparePhoto(file)]);
     await saveCapture(db, {
       kind: "photo",
-      blob: file,
-      // EXIF time would be better, but a file picked from the camera is "now"
+      blob: photo.blob,
+      mimeType: photo.mimeType,
+      // EXIF time would be better, but a file straight from the camera is "now"
       // to within seconds, and a wrong-but-confident time is worse than none.
-      capturedAt: new Date(file.lastModified || Date.now()).toISOString(),
+      capturedAt: photo.takenAt,
       rollId: roll?.id ?? null,
       latitude: position?.latitude ?? null,
       longitude: position?.longitude ?? null,

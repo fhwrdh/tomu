@@ -120,7 +120,7 @@ describe("pushing captures", () => {
     expect(await db.events.get(ev.clientId)).toBeDefined();
   });
 
-  it("keeps retrying a delete the server could not take, but drops it on 404", async () => {
+  it("keeps retrying a delete the network dropped, but gives up on any 4xx", async () => {
     const ev = await saveCapture(db, { transcript: "gone" });
     await syncOnce(db, api as unknown as SyncApi);
     await deleteEvent(db, ev.clientId);
@@ -129,7 +129,9 @@ describe("pushing captures", () => {
     await syncOnce(db, api as unknown as SyncApi);
     expect(await db.deletes.count()).toBe(1);
 
-    api.deleteEvent.mockRejectedValueOnce(Object.assign(new Error("Event not found"), { status: 404 }));
+    // A 400 the server will never accept must not be retried on every pass
+    // forever — which is exactly what a bodyless DELETE declaring JSON caused.
+    api.deleteEvent.mockRejectedValueOnce(Object.assign(new Error("Body cannot be empty"), { status: 400 }));
     await syncOnce(db, api as unknown as SyncApi);
     expect(await db.deletes.count()).toBe(0);
   });
@@ -282,6 +284,21 @@ describe("failure handling", () => {
     const after = await db.events.get(ev.clientId);
     expect(after?.syncState).toBe("synced");
     expect(after?.hasPendingBlob).toBe(true);
+    expect(await db.blobs.get(ev.clientId)).toBeDefined();
+  });
+
+  it("stops re-uploading a photo the server refuses, and says why", async () => {
+    const blob = new Blob(["jpeg"], { type: "image/jpeg" });
+    const ev = await saveCapture(db, { kind: "photo", blob });
+    api.uploadPhoto.mockRejectedValue(Object.assign(new Error("Photo exceeds 25 MB"), { status: 413 }));
+
+    await syncOnce(db, api as unknown as SyncApi);
+    await syncOnce(db, api as unknown as SyncApi);
+
+    expect(api.uploadPhoto).toHaveBeenCalledOnce();
+    const after = await db.events.get(ev.clientId);
+    expect(after?.error).toContain("exceeds");
+    // The bytes are kept: the note is not lost just because the upload was.
     expect(await db.blobs.get(ev.clientId)).toBeDefined();
   });
 });
