@@ -10,6 +10,23 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icons/film-roll.svg"],
+      workbox: {
+        // The service worker answers every same-origin navigation with the app
+        // shell, which is what makes /capture open with no signal — but the API,
+        // the uploads, and the OAuth authorization server live on this origin
+        // too. Without these exclusions a browser with the PWA installed gets
+        // the SPA shell at /authorize instead of the sign-in page, and the
+        // claude.ai connector can never finish its OAuth flow.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/uploads\//,
+          /^\/mcp$/,
+          /^\/[^/]+\/mcp$/,
+          /^\/\.well-known\//,
+          /^\/(authorize|token|register|revoke)$/,
+          /^\/oauth\//,
+        ],
+      },
       manifest: {
         name: "Tomu",
         short_name: "Tomu",
