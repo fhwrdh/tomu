@@ -221,9 +221,15 @@ app tree, and deploys rsync with `--delete`, so a missing exclude wipes every ph
 which is exactly what happened here on 2026-09-08. Set `UPLOADS_DIR=/home/<user>/tomu-data/uploads`
 in `.env` and nothing a deploy does can reach the data.
 
-Photos are uploaded to `uploads/events/` on the server (not in the Postgres dump). Back that directory up separately:
+Photos are uploaded to `UPLOADS_DIR/events/` on the server. Their bytes are **not** in
+the Postgres dump — the dump holds the rows that point at them — so `scripts/db-backup.sh`
+mirrors the directory into the backups repo alongside each nightly dump. Each photo is
+written once and never changes, so git keeps a single copy of it however many nights run.
+
+If you back the directory up yourself instead:
+
 ```bash
-rsync -a <user>@<host>:filmlog/uploads/events/ ./uploads/events/
+rsync -a <user>@<host>:tomu-data/uploads/events/ ./uploads/events/
 ```
 
 Uploaded photos are served publicly by uuid-named URL and retain their original EXIF metadata including GPS coordinates; if that matters to you, strip EXIF on export or put `/uploads/` behind auth.
