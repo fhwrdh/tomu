@@ -86,6 +86,8 @@ function applyRemote(local: LocalEvent, remote: RemoteEvent): LocalEvent {
     const value = remote[field];
     if (value !== undefined) (merged as unknown as Record<string, unknown>)[field] = value;
   }
+  // Once the photo is on the server, its URL is how the stream shows it.
+  if (typeof remote.fileUrl === "string") merged.fileUrl = remote.fileUrl;
   // The transcript is the source of truth and is never round-tripped back.
   merged.transcript = local.transcript;
   merged.parseNotes = remote.parseNotes ?? null;
@@ -166,9 +168,16 @@ export async function syncOnce(db: CaptureDb, api: SyncApi): Promise<SyncResult>
       continue;
     }
     try {
-      await api.uploadPhoto(event.serverId!, stored.blob, event.mimeType ?? stored.blob.type ?? "image/jpeg");
+      const uploaded = (await api.uploadPhoto(
+        event.serverId!,
+        stored.blob,
+        event.mimeType ?? stored.blob.type ?? "image/jpeg",
+      )) as { data?: { fileUrl?: string } } | undefined;
       await db.transaction("rw", db.events, db.blobs, async () => {
-        await db.events.update(event.clientId, { hasPendingBlob: false });
+        await db.events.update(event.clientId, {
+          hasPendingBlob: false,
+          fileUrl: uploaded?.data?.fileUrl ?? null,
+        });
         await db.blobs.delete(event.clientId);
       });
       result.photos++;

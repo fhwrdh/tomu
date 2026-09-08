@@ -161,7 +161,8 @@ describe("saving", () => {
     expect(saved.transcript).toBe("fog on the ferry deck");
     expect(saved.rollId).toBe("roll-1");
     expect(field).toHaveValue("");
-    expect((await screen.findByTestId("last-saved")).textContent).toContain("fog on the ferry deck");
+    // It appears in today's stream, transcript first.
+    expect((await screen.findByTestId("event-stream")).textContent).toContain("fog on the ferry deck");
   });
 
   it("saves on blur, so a note in progress is never lost", async () => {
@@ -190,18 +191,107 @@ describe("saving", () => {
 
     await user.type(await screen.findByRole("textbox", { name: "Field note" }), "at 250 f8");
     await user.click(screen.getByRole("button", { name: "Done" }));
-    await screen.findByTestId("last-saved");
 
-    const saved = await screen.findByTestId("last-saved");
-    const clear = await waitFor(() =>
-      saved.querySelector<HTMLButtonElement>('button[aria-label="Clear aperture"]')!,
-    );
-    await user.click(clear);
+    // Open the note in the stream: fields live behind the transcript, not in front.
+    const stream = await screen.findByTestId("event-stream");
+    await waitFor(() => expect(stream.textContent).toContain("at 250 f8"));
+    await user.click(screen.getByText("at 250 f8"));
+    await user.click(await screen.findByRole("button", { name: "Clear aperture" }));
 
     await waitFor(async () => {
       const [row] = await db.events.toArray();
       expect(row.editedFields).toContain("aperture");
       expect(row.aperture).toBeNull();
     });
+  });
+});
+
+describe("the stream", () => {
+  it("is empty and says so before anything is captured", async () => {
+    render(<CapturePage />);
+    expect(await screen.findByText(/Nothing captured yet today/)).toBeDefined();
+  });
+
+  it("shows what each note is waiting for, in the words of someone in a field", async () => {
+    const user = userEvent.setup();
+    render(<CapturePage />);
+
+    await user.type(await screen.findByRole("textbox", { name: "Field note" }), "grain elevator, backlit");
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    const [saved] = await waitFor(async () => {
+      const rows = await db.events.toArray();
+      expect(rows).toHaveLength(1);
+      return rows;
+    });
+    expect(screen.getByTestId(`state-${saved.clientId}`).textContent).toContain("waiting for signal");
+
+    // Once Claude has read it, the stream says so — this is the only place the
+    // tier-2 pass becomes visible to the person who dictated the note.
+    await db.events.update(saved.clientId, { syncState: "parsed", subject: "grain elevator" });
+    await waitFor(() =>
+      expect(screen.getByTestId(`state-${saved.clientId}`).textContent).toContain("read by Claude"),
+    );
+  });
+
+  it("keeps the transcript above the parsed fields", async () => {
+    const user = userEvent.setup();
+    render(<CapturePage />);
+
+    await user.type(await screen.findByRole("textbox", { name: "Field note" }), "at 250 f8, the light went flat");
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    const stream = await screen.findByTestId("event-stream");
+    await waitFor(() => expect(stream.textContent).toContain("the light went flat"));
+    await user.click(screen.getByText(/the light went flat/));
+
+    const text = stream.textContent ?? "";
+    expect(text.indexOf("the light went flat")).toBeLessThan(text.indexOf("1/250"));
+  });
+
+  it("deletes a note and puts it back on undo", async () => {
+    const user = userEvent.setup();
+    render(<CapturePage />);
+
+    await user.type(await screen.findByRole("textbox", { name: "Field note" }), "scratch this one");
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(async () => expect(await db.events.count()).toBe(1));
+
+    await user.click(await screen.findByText("scratch this one"));
+    await user.click(await screen.findByRole("button", { name: /Delete/ }));
+    await waitFor(async () => expect(await db.events.count()).toBe(0));
+
+    await user.click(await screen.findByRole("button", { name: /Undo/ }));
+    await waitFor(async () => {
+      const [back] = await db.events.toArray();
+      expect(back.transcript).toBe("scratch this one");
+    });
+  });
+});
+
+describe("photos", () => {
+  it("captures a photo as its own event, with its bytes held for upload", async () => {
+    const user = userEvent.setup();
+    render(<CapturePage />);
+
+    const file = new File(["jpeg bytes"], "shot.jpg", { type: "image/jpeg" });
+    await user.upload(screen.getByTestId("photo-input") as HTMLInputElement, file);
+
+    await waitFor(async () => {
+      const [photo] = await db.events.toArray();
+      expect(photo.kind).toBe("photo");
+      expect(photo.hasPendingBlob).toBe(true);
+      expect(photo.mimeType).toBe("image/jpeg");
+      // Attached to the roll in the selected camera, like a voice note.
+      expect(photo.rollId).toBe("roll-1");
+    });
+    expect(await db.blobs.count()).toBe(1);
+  });
+
+  it("opens the camera rather than a file browser on a phone", async () => {
+    render(<CapturePage />);
+    const input = (await screen.findByTestId("photo-input")) as HTMLInputElement;
+    expect(input.getAttribute("capture")).toBe("environment");
+    expect(input.getAttribute("accept")).toBe("image/*");
   });
 });

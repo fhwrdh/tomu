@@ -45,6 +45,8 @@ export interface LocalEvent extends ParsedFields {
   hasPendingBlob?: boolean;
   /** The photo's type, kept here because a Blob's own `type` can be lost in storage. */
   mimeType?: string;
+  /** Where the server serves the photo once uploaded; the local blob is dropped then. */
+  fileUrl?: string | null;
   /** Tier-2 output, pulled back after parsing. */
   subject?: string | null;
   locationName?: string | null;

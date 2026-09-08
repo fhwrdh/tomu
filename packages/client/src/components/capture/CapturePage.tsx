@@ -1,16 +1,21 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useRef, useState } from "react";
-import { Check, RefreshCw } from "lucide-react";
+import { Camera, RefreshCw, Undo2 } from "lucide-react";
 import { parseTranscript } from "@tomu/shared";
 import { Button } from "../ui/button.js";
 import { cn } from "../../lib/utils.js";
 import { db } from "../../offline/db.js";
-import { clearFilmChanged, editField, listEvents, markFilmChanged, saveCapture } from "../../offline/store.js";
+import {
+  clearFilmChanged, deleteEvent, editField, listEvents, markFilmChanged, saveCapture, undoDelete,
+  type DeletedEvent,
+} from "../../offline/store.js";
 import { useSyncWorker } from "../../hooks/useSyncWorker.js";
 import { useOnline } from "../../hooks/useOnline.js";
 import { LoadRollDialog, UnloadDialog } from "../rolls/RollDialogs.js";
 import { CaptureHeader } from "./CaptureHeader.js";
 import { chipsFor, FieldChips, storeField, type Chip } from "./FieldChips.js";
+import { EventStream } from "./EventStream.js";
+import type { LocalEvent } from "../../offline/db.js";
 
 /** The camera stays put between visits — you carry the same body all day. */
 const CAMERA_KEY = "tomu_capture_camera";
@@ -35,6 +40,9 @@ export function CapturePage() {
   const [justSaved, setJustSaved] = useState<string | null>(null);
   const [loadOpen, setLoadOpen] = useState(false);
   const [unloadOpen, setUnloadOpen] = useState(false);
+  const [undoable, setUndoable] = useState<DeletedEvent | null>(null);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const photoInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const { syncNow, syncing } = useSyncWorker();
   const online = useOnline();
@@ -57,6 +65,23 @@ export function CapturePage() {
     setCameraId(id);
     try { localStorage.setItem(CAMERA_KEY, id); } catch { /* private mode; the choice just will not stick */ }
   }
+
+  const pendingBlobs = useLiveQuery(async () => await db.blobs.toArray(), []);
+  useEffect(() => {
+    if (!pendingBlobs) return;
+    const urls: Record<string, string> = {};
+    for (const row of pendingBlobs) {
+      // A preview is a nicety; never let a value storage handed back that is not
+      // a usable Blob take the screen down with it.
+      if (!(row.blob instanceof Blob)) continue;
+      try {
+        urls[row.clientId] = URL.createObjectURL(row.blob);
+      } catch { /* no preview for this one */ }
+    }
+    setPreviews(urls);
+    // Object URLs leak until revoked, and a day of photos is a lot of them.
+    return () => Object.values(urls).forEach((u) => URL.revokeObjectURL(u));
+  }, [pendingBlobs]);
 
   const filmChanged = cameraState?.rollUnknownSince != null;
   const cameraRoll = gear?.activeRolls.find((r) => r.cameraId === cameraId);
@@ -95,15 +120,33 @@ export function CapturePage() {
     void syncNow();
   }
 
-  async function clearChip(chip: Chip) {
-    // Only a saved event has fields to correct; a draft chip clears by editing
-    // the words, which is what the transcript is for.
-    if (!justSaved) return;
-    await editField(db, justSaved, storeField(chip.key), null);
+  /**
+   * A photo is its own event, not a field on a note: one reference shot often
+   * covers several frames, and the two are taken seconds apart at best.
+   */
+  async function takePhoto(file: File) {
+    const position = await currentPosition();
+    await saveCapture(db, {
+      kind: "photo",
+      blob: file,
+      // EXIF time would be better, but a file picked from the camera is "now"
+      // to within seconds, and a wrong-but-confident time is worse than none.
+      capturedAt: new Date(file.lastModified || Date.now()).toISOString(),
+      rollId: roll?.id ?? null,
+      latitude: position?.latitude ?? null,
+      longitude: position?.longitude ?? null,
+    });
+    void syncNow();
   }
 
-  const savedEvent = today?.find((e) => e.clientId === justSaved);
-  const savedChips = savedEvent ? chipsFor(savedEvent, gear) : [];
+  async function clearChip(event: LocalEvent, chip: Chip) {
+    await editField(db, event.clientId, storeField(chip.key), null);
+  }
+
+  async function removeEvent(event: LocalEvent) {
+    setUndoable(await deleteEvent(db, event.clientId));
+    void syncNow();
+  }
 
   return (
     <div className="space-y-4">
@@ -144,20 +187,58 @@ export function CapturePage() {
 
       <FieldChips chips={chips} />
 
-      <Button className="h-12 w-full text-base" onClick={() => void save()} disabled={!text.trim()}>
-        Done
-      </Button>
+      <div className="flex gap-2">
+        <Button className="h-12 flex-1 text-base" onClick={() => void save()} disabled={!text.trim()}>
+          Done
+        </Button>
+        <Button
+          variant="outline"
+          className="h-12 w-14"
+          aria-label="Take a photo"
+          onClick={() => photoInput.current?.click()}
+        >
+          <Camera className="h-5 w-5" />
+        </Button>
+        <input
+          ref={photoInput}
+          type="file"
+          accept="image/*"
+          // Opens the camera directly on a phone, the library on a desktop.
+          capture="environment"
+          className="hidden"
+          data-testid="photo-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void takePhoto(file);
+          }}
+        />
+      </div>
 
-      {savedEvent && (
-        <div className="rounded-md border border-border bg-card p-3" data-testid="last-saved">
-          <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Check className="h-3.5 w-3.5 text-success" />
-            Saved{savedEvent.syncState === "queued" ? " · waiting for signal" : ""}
-          </div>
-          <p className="mb-2 whitespace-pre-wrap text-sm text-foreground">{savedEvent.transcript}</p>
-          <FieldChips chips={savedChips} editedFields={savedEvent.editedFields} onClear={clearChip} />
+      {undoable && (
+        <div className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Note deleted</span>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-primary"
+            onClick={async () => {
+              await undoDelete(db, undoable);
+              setUndoable(null);
+            }}
+          >
+            <Undo2 className="h-3.5 w-3.5" /> Undo
+          </button>
         </div>
       )}
+
+      <EventStream
+        events={today ?? []}
+        gear={gear}
+        previews={previews}
+        onClear={clearChip}
+        onDelete={removeEvent}
+        syncing={syncing}
+      />
 
       {loadOpen && (
         <LoadRollDialog
