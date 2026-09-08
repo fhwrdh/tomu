@@ -8,9 +8,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const list = vi.hoisted(() => vi.fn());
+const get = vi.hoisted(() => vi.fn());
 
 vi.mock("../src/services/api.js", () => ({
-  rolls: { list, get: vi.fn(), load: vi.fn(), unload: vi.fn(), undoLoad: vi.fn() },
+  rolls: { list, get, load: vi.fn(), unload: vi.fn(), undoLoad: vi.fn() },
   cameras: { list: vi.fn(async () => ({ data: [] })) },
   filmStocks: { list: vi.fn(async () => ({ data: [] })) },
   ApiError: class extends Error {},
@@ -36,6 +37,7 @@ function render(ui: React.ReactElement) {
 
 beforeEach(() => {
   list.mockReset();
+  get.mockReset();
 });
 
 afterEach(() => cleanup());
@@ -78,5 +80,35 @@ describe("format filter", () => {
 
     await waitFor(() => expect(screen.getAllByText(/Pan F Plus/)).toHaveLength(2));
     expect(screen.queryByRole("button", { name: "All formats" })).toBeNull();
+  });
+});
+
+describe("a roll with notes but no frames", () => {
+  it("explains itself instead of claiming there is nothing here", async () => {
+    const r = roll({ format: "35mm" });
+    list.mockResolvedValue({ data: [r] });
+    get.mockResolvedValue({
+      data: {
+        ...r,
+        frames: [],
+        notes: [],
+        frameNotes: [],
+        unpinnedEvents: [
+          { id: "e1", shortId: "e1", capturedAt: "2026-09-07T19:16:00Z", transcript: "frame 1, f/2", editedFields: [], review: false, parseAttempts: 0, status: "pending", kind: "voice", frameProvisional: false, clientId: "c1", userId: "u", createdAt: "", updatedAt: "" },
+          { id: "e2", shortId: "e2", capturedAt: "2026-09-07T19:17:00Z", transcript: "frame 2", editedFields: [], review: false, parseAttempts: 0, status: "pending", kind: "voice", frameProvisional: false, clientId: "c2", userId: "u", createdAt: "", updatedAt: "" },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+
+    // The old copy said "No frames or notes yet." directly above a list of notes,
+    // which reads as a bug rather than a state.
+    await waitFor(() =>
+      expect(screen.getByText(/No frames yet — 2 field notes below/)).toBeDefined(),
+    );
+    expect(screen.getByText(/not yet pinned/)).toBeDefined();
   });
 });

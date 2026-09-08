@@ -197,7 +197,14 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
       )}
 
       {timeline.length === 0 ? (
-        <div className="text-xs text-muted-foreground">No frames or notes yet.</div>
+        // A field note is not a frame until it is pinned, so a roll can honestly
+        // have zero frames while notes wait below. Saying only "nothing here"
+        // above a list of three notes reads as a bug rather than a state.
+        <div className="text-xs text-muted-foreground">
+          {detail.unpinnedEvents.length > 0
+            ? `No frames yet — ${detail.unpinnedEvents.length} field ${detail.unpinnedEvents.length === 1 ? "note" : "notes"} below, waiting to be pinned.`
+            : "No frames or notes yet."}
+        </div>
       ) : (
         <ul className="space-y-1.5 text-xs">
           {timeline.map((entry) => (
@@ -227,8 +234,14 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
 
       {detail.unpinnedEvents.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs font-medium text-muted-foreground">
-            Field notes ({detail.unpinnedEvents.length}) — pin with tomu_pin_event
+          <div className="space-y-0.5">
+            <div className="text-xs font-medium text-foreground">
+              Field notes ({detail.unpinnedEvents.length}) · not yet pinned
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Pinning turns a note into a frame with its settings. Ask Claude to “pin my field
+              notes to frames”, or use <code>tomu_pin_event</code>.
+            </div>
           </div>
           <ul className="space-y-2 text-xs">
             {detail.unpinnedEvents.map((e) => {
