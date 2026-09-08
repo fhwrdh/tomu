@@ -224,7 +224,10 @@ describe("the stream", () => {
       expect(rows).toHaveLength(1);
       return rows;
     });
-    expect(screen.getByTestId(`state-${saved.clientId}`).textContent).toContain("waiting for signal");
+    // The row reaches the DOM through a live query, a tick after the write.
+    await waitFor(() =>
+      expect(screen.getByTestId(`state-${saved.clientId}`).textContent).toContain("waiting for signal"),
+    );
 
     // Once Claude has read it, the stream says so — this is the only place the
     // tier-2 pass becomes visible to the person who dictated the note.
