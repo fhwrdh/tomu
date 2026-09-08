@@ -136,7 +136,7 @@ server {
     # Only that exact shape is served; anything else under /uploads/ is 404.
     # Quote the regex — unquoted { } are nginx block syntax and {36} fails nginx -t.
     location ~* "^/uploads/(events/[0-9a-f-]{36}\.jpe?g)$" {
-        alias /home/<user>/tomu/uploads/$1;
+        alias /home/<user>/tomu-data/uploads/$1;   # must match UPLOADS_DIR
         add_header X-Robots-Tag "noindex, nofollow" always;
         add_header Cache-Control "private, max-age=31536000, immutable" always;
     }
