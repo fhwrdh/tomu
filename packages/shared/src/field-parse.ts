@@ -149,7 +149,8 @@ const SHUTTER_ORDINALS: Record<string, number> = {
 };
 
 const SHUTTER_RULES_EXPLICIT: Rule[] = [
-  { field: "shutterSpeed", re: /\b1\/(\d{1,5})\b/gi, value: (m) => `1/${m[1]}` },
+  // The ordinal suffix is optional: dictation writes "1/125th of a second".
+  { field: "shutterSpeed", re: /\b1\/(\d{1,5})(?:st|nd|rd|th)?\b/gi, value: (m) => `1/${m[1]}` },
   { field: "shutterSpeed", re: /\bbulb\b/gi, value: () => "B" },
   { field: "shutterSpeed", re: /\bhalf an?\s+second\b/gi, value: () => "1/2" },
   {
@@ -222,10 +223,33 @@ const APERTURE_WORDS: Record<string, string> = {
   "sixty four": "64",
 };
 
+// An f-number that is not near a real stop is something else that happens to
+// look like one — most often a film name. "Ilford Pan F50" was read as f/50 in
+// the field on 2026-09-07, and only the model caught it. Matching the actual
+// series (full stops plus the halves and thirds people say) rejects that while
+// still accepting anything a lens can be set to. A rule returning null here
+// keeps scanning, so a real aperture later in the sentence still wins.
+const F_STOPS = [
+  0.7, 0.95, 1, 1.2, 1.4, 1.7, 1.8, 2, 2.2, 2.5, 2.8, 3.2, 3.5, 4, 4.5, 5, 5.6,
+  6.3, 7.1, 8, 9, 9.5, 10, 11, 13, 14, 16, 18, 20, 22, 25, 29, 32, 45, 64,
+];
+// Deliberately not listed: the third-stops between 32 and 64 (36, 40, 51, 57).
+// Nothing in the kit is marked with them, and including 51 would let "Pan F50"
+// back in — the exact mistake this table exists to prevent.
+/** How far off a listed stop a spoken number may be — "f/6" for f/5.6. */
+const APERTURE_TOLERANCE = 0.08;
+
+function plausibleAperture(raw: string): string | null {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  const near = F_STOPS.some((stop) => Math.abs(n - stop) / stop <= APERTURE_TOLERANCE);
+  return near ? `f/${raw}` : null;
+}
+
 const APERTURE_RULES: Rule[] = [
-  { field: "aperture", re: /\bf\s*\/\s*(\d{1,2}(?:\.\d)?)\b/gi, value: (m) => `f/${m[1]}` },
-  { field: "aperture", re: /\bf\s+(\d{1,2}(?:\.\d)?)\b/gi, value: (m) => `f/${m[1]}` },
-  { field: "aperture", re: /\bf(\d{1,2}(?:\.\d)?)\b/gi, value: (m) => `f/${m[1]}` },
+  { field: "aperture", re: /\bf\s*\/\s*(\d{1,2}(?:\.\d{1,2})?)\b/gi, value: (m) => plausibleAperture(m[1]) },
+  { field: "aperture", re: /\bf\s+(\d{1,2}(?:\.\d{1,2})?)\b/gi, value: (m) => plausibleAperture(m[1]) },
+  { field: "aperture", re: /\bf(\d{1,2}(?:\.\d{1,2})?)\b/gi, value: (m) => plausibleAperture(m[1]) },
   {
     field: "aperture",
     re: new RegExp(`\\bf\\s+(${Object.keys(APERTURE_WORDS).join("|")})\\b`, "gi"),
