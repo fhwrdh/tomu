@@ -51,7 +51,11 @@ describe("the header", () => {
     render(<CapturePage />);
 
     expect(await screen.findByRole("combobox", { name: "Camera" })).toHaveValue("cam-m6");
-    expect(screen.getByTestId("roll-state").textContent).toContain("Ilford Pan F · 11/36");
+    // The camera is chosen in an effect once the gear cache resolves, so the roll
+    // line lands a tick after the picker does.
+    await waitFor(() =>
+      expect(screen.getByTestId("roll-state").textContent).toContain("Ilford Pan F · 11/36"),
+    );
   });
 
   it("shows the roll for the selected camera, not just the first one", async () => {
@@ -103,7 +107,9 @@ describe("a film change with no signal", () => {
     const user = userEvent.setup();
     render(<CapturePage />);
 
-    await user.click(await screen.findByRole("button", { name: "Film changed" }));
+    // The button only exists once a roll is known for the selected camera.
+    await waitFor(() => expect(screen.getByTestId("roll-state").textContent).toContain("Ilford Pan F"));
+    await user.click(screen.getByRole("button", { name: "Film changed" }));
     await waitFor(() =>
       expect(screen.getByTestId("roll-state").textContent).toContain("Film changed"),
     );
