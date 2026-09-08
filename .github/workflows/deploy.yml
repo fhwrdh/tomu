@@ -64,6 +64,10 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
+      # NOTE: --delete removes anything on the droplet that is not in the repo,
+      # so every directory holding live data must be excluded. `uploads` holds
+      # the field-capture photos; leaving it out of this list deleted a real
+      # photo on the next deploy after it was taken (2026-09-08).
       - name: Rsync source to droplet
         env:
           TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
@@ -71,6 +75,7 @@ jobs:
         run: |
           rsync -az --delete \
             --exclude '.git' \
+            --exclude 'uploads' \
             --exclude 'node_modules' \
             --exclude 'dist' \
             --exclude '.env' \
