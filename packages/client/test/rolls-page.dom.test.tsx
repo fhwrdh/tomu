@@ -9,9 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const list = vi.hoisted(() => vi.fn());
 const get = vi.hoisted(() => vi.fn());
+const pin = vi.hoisted(() => vi.fn());
+const remove = vi.hoisted(() => vi.fn());
+const rollLevel = vi.hoisted(() => vi.fn());
 
 vi.mock("../src/services/api.js", () => ({
   rolls: { list, get, load: vi.fn(), unload: vi.fn(), undoLoad: vi.fn() },
+  fieldEvents: { pin, remove, rollLevel },
   cameras: { list: vi.fn(async () => ({ data: [] })) },
   filmStocks: { list: vi.fn(async () => ({ data: [] })) },
   ApiError: class extends Error {},
@@ -38,7 +42,28 @@ function render(ui: React.ReactElement) {
 beforeEach(() => {
   list.mockReset();
   get.mockReset();
+  pin.mockReset().mockResolvedValue({ data: {} });
+  remove.mockReset().mockResolvedValue(undefined);
+  rollLevel.mockReset().mockResolvedValue({ data: {} });
 });
+
+/** A roll detail with the given unpinned events and no frames. */
+function detailWith(events: Array<Record<string, unknown>>) {
+  const r = roll({ format: "35mm" });
+  list.mockResolvedValue({ data: [r] });
+  get.mockResolvedValue({
+    data: {
+      ...r, frames: [], notes: [], frameNotes: [],
+      unpinnedEvents: events.map((e, i) => ({
+        id: `e${i}`, shortId: `e${i}`, clientId: `c${i}`, userId: "u", kind: "voice",
+        capturedAt: "2026-09-07T19:16:00Z", editedFields: [], review: false,
+        parseAttempts: 0, status: "pending", frameProvisional: false,
+        createdAt: "", updatedAt: "", ...e,
+      })),
+    },
+  });
+  return r;
+}
 
 afterEach(() => cleanup());
 
@@ -110,5 +135,104 @@ describe("a roll with notes but no frames", () => {
       expect(screen.getByText(/No frames yet — 2 field notes below/)).toBeDefined(),
     );
     expect(screen.getByText(/not yet pinned/)).toBeDefined();
+  });
+});
+
+describe("acting on a field note", () => {
+  it("pins with the note's own frame number prefilled", async () => {
+    detailWith([{ transcript: "frame 12, at 250 f8", frameNumber: 12 }]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+    await user.click(await screen.findByRole("button", { name: "Pin to frame" }));
+
+    const input = await screen.findByRole("spinbutton", { name: /Frame number/ });
+    expect(input).toHaveValue(12);
+
+    await user.click(screen.getByRole("button", { name: "Pin" }));
+    await waitFor(() => expect(pin).toHaveBeenCalledWith("e0", { frameNumber: 12, rollId: expect.any(String) }));
+  });
+
+  it("warns when the number was the app's guess rather than spoken", async () => {
+    detailWith([{ transcript: "the light went flat", frameNumber: 3, frameProvisional: true }]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+    await user.click(await screen.findByRole("button", { name: "Pin to frame" }));
+
+    expect(await screen.findByText(/assigned by the app, not spoken/)).toBeDefined();
+  });
+
+  it("lets the number be corrected before committing", async () => {
+    detailWith([{ transcript: "frame 1 again", frameNumber: 1 }]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+    await user.click(await screen.findByRole("button", { name: "Pin to frame" }));
+
+    const input = await screen.findByRole("spinbutton", { name: /Frame number/ });
+    await user.clear(input);
+    await user.type(input, "2");
+    await user.click(screen.getByRole("button", { name: "Pin" }));
+
+    await waitFor(() => expect(pin).toHaveBeenCalledWith("e0", { frameNumber: 2, rollId: expect.any(String) }));
+  });
+
+  it("deletes a duplicate without leaving the page", async () => {
+    detailWith([{ transcript: "first take" }, { transcript: "second take" }]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+    const buttons = await screen.findAllByRole("button", { name: "Delete" });
+    await user.click(buttons[1]);
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("e1"));
+  });
+});
+
+describe("a photo whose file is gone", () => {
+  it("says so instead of showing a broken image", async () => {
+    detailWith([{ kind: "photo", fileUrl: "/uploads/events/missing.jpg", transcript: null }]);
+    render(<RollsPage />);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByText(/Pan F Plus/));
+
+    const img = await screen.findByRole("presentation", { hidden: true }).catch(() => null);
+    const image = img ?? document.querySelector("img");
+    (image as HTMLImageElement)?.dispatchEvent(new Event("error"));
+
+    await waitFor(() => expect(screen.getByText("photo missing")).toBeDefined());
+  });
+
+  it("keeps the timestamp on a photo row", async () => {
+    detailWith([{ kind: "photo", fileUrl: "/uploads/events/x.jpg", transcript: null }]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+    // The thumbnail used to replace the time, so photo events lost when they happened.
+    expect(await screen.findByText(/\d{1,2}:\d{2}/)).toBeDefined();
+  });
+});
+
+describe("a note that is not about one frame", () => {
+  it("attaches to the roll without asking for a frame number", async () => {
+    // A roll diary entry: a thought, or a phone snap of something never shot on
+    // film. Forcing a frame number on those would be a lie.
+    detailWith([{ transcript: "the fog never lifted all morning" }]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+    await user.click(await screen.findByRole("button", { name: "Attach to roll" }));
+
+    await waitFor(() => expect(rollLevel).toHaveBeenCalledWith("e0", { rollId: expect.any(String) }));
+    // No dialog, no number.
+    expect(pin).not.toHaveBeenCalled();
   });
 });

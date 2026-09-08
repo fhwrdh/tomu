@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Plus, Disc, Camera as CameraIcon, StickyNote, Square, ChevronRight, Undo2 } from "lucide-react";
 import { FILM_FORMATS, FILM_FORMAT_LABELS } from "@tomu/shared";
 import type { CreateRoll, CreateFrame, CreateNote } from "@tomu/shared";
-import { cameras, filmStocks, rolls, type RollListItem, type RollDetail } from "../../services/api.js";
+import { cameras, fieldEvents, filmStocks, rolls, type RollListItem, type RollDetail } from "../../services/api.js";
+import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.js";
 import { Badge } from "../ui/badge.js";
 import { Input } from "../ui/input.js";
@@ -244,26 +245,9 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
             </div>
           </div>
           <ul className="space-y-2 text-xs">
-            {detail.unpinnedEvents.map((e) => {
-              const settings = [e.shutterSpeed, e.aperture, e.compensation, e.meteringMode].filter(Boolean).join(" · ");
-              const frame = e.frameNumber != null ? `frame ${e.frameNumber}${e.frameProvisional ? "?" : ""}` : e.sheetId ? `sheet ${e.sheetId}` : null;
-              return (
-                <li key={e.id} className="flex gap-2">
-                  {e.kind === "photo" && e.fileUrl ? (
-                    <img src={e.fileUrl} alt="" className="h-14 w-14 shrink-0 rounded object-cover" loading="lazy" />
-                  ) : (
-                    <div className="w-14 shrink-0 text-muted-foreground tabular-nums">{formatTime(e.capturedAt)}</div>
-                  )}
-                  <div className="flex-1 space-y-0.5">
-                    {e.transcript && <div className="text-foreground whitespace-pre-wrap">{e.transcript}</div>}
-                    <div className="text-muted-foreground">
-                      {[frame, settings, e.review ? "needs review" : null].filter(Boolean).join(" · ")}
-                    </div>
-                    {e.parseNotes && <div className="text-muted-foreground italic">{e.parseNotes}</div>}
-                  </div>
-                </li>
-              );
-            })}
+            {detail.unpinnedEvents.map((e) => (
+              <FieldNoteRow key={e.id} event={e} rollId={rollId} />
+            ))}
           </ul>
         </div>
       )}
@@ -331,6 +315,165 @@ function buildTimeline(detail: RollDetail): TimelineEntry[] {
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * One unpinned field note. The transcript leads, clamped until tapped — a real
+ * field note is a ramble, and ten of them at full length bury the frames above.
+ */
+function FieldNoteRow({ event: e, rollId }: { event: RollDetail["unpinnedEvents"][number]; rollId: string }) {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [imageBroken, setImageBroken] = useState(false);
+
+  const settings = [e.shutterSpeed, e.aperture, e.compensation, e.meteringMode].filter(Boolean).join(" · ");
+  const frame = e.frameNumber != null ? `frame ${e.frameNumber}${e.frameProvisional ? "?" : ""}` : e.sheetId ? `sheet ${e.sheetId}` : null;
+
+  const remove = useMutation({
+    mutationFn: () => fieldEvents.remove(e.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roll", rollId] }),
+  });
+
+  // Not everything belongs to a frame. A thought about the light, a phone snap
+  // of something never shot on film — the roll is the right home for those, and
+  // forcing a frame number on them would be a lie.
+  const attach = useMutation({
+    mutationFn: () => fieldEvents.rollLevel(e.id, { rollId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roll", rollId] }),
+  });
+
+  return (
+    <li className="flex gap-2" data-testid={`note-${e.id}`}>
+      <div className="w-14 shrink-0 space-y-1">
+        <div className="text-muted-foreground tabular-nums">{formatTime(e.capturedAt)}</div>
+        {e.kind === "photo" &&
+          (e.fileUrl && !imageBroken ? (
+            <img
+              src={e.fileUrl}
+              alt=""
+              loading="lazy"
+              onError={() => setImageBroken(true)}
+              className="h-14 w-14 rounded object-cover"
+            />
+          ) : (
+            // A missing file is worth saying out loud: the note is still real,
+            // the bytes are not there.
+            <div className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-border text-[10px] text-muted-foreground">
+              {e.fileUrl ? "photo missing" : "no photo yet"}
+            </div>
+          ))}
+      </div>
+
+      <div className="flex-1 space-y-0.5">
+        {e.transcript && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className={cn("block w-full text-left text-foreground", !expanded && "line-clamp-2")}
+          >
+            {e.transcript}
+          </button>
+        )}
+        <div className="text-muted-foreground">
+          {[frame, settings, e.review ? "needs review" : null].filter(Boolean).join(" · ")}
+        </div>
+        {e.parseNotes && <div className="italic text-muted-foreground">{e.parseNotes}</div>}
+        <div className="flex gap-3 pt-0.5">
+          <button type="button" onClick={() => setPinOpen(true)} className="text-primary">
+            Pin to frame
+          </button>
+          <button
+            type="button"
+            onClick={() => attach.mutate()}
+            disabled={attach.isPending}
+            className="text-primary"
+          >
+            {attach.isPending ? "Attaching…" : "Attach to roll"}
+          </button>
+          <button
+            type="button"
+            onClick={() => remove.mutate()}
+            disabled={remove.isPending}
+            className="text-muted-foreground hover:text-danger"
+          >
+            {remove.isPending ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      </div>
+
+      {pinOpen && (
+        <PinNoteDialog
+          open
+          onClose={() => setPinOpen(false)}
+          eventId={e.id}
+          rollId={rollId}
+          suggested={e.frameNumber ?? null}
+          provisional={e.frameProvisional === true}
+        />
+      )}
+    </li>
+  );
+}
+
+/**
+ * Pinning asks for the frame number rather than assuming the note's own. A
+ * provisional number is a guess the app made — committing it silently is how a
+ * roll ends up with two frame 1s.
+ */
+function PinNoteDialog({
+  open, onClose, eventId, rollId, suggested, provisional,
+}: {
+  open: boolean; onClose: () => void; eventId: string; rollId: string;
+  suggested: number | null; provisional: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [frameNumber, setFrameNumber] = useState(suggested != null ? String(suggested) : "");
+
+  const mutation = useMutation({
+    mutationFn: () => fieldEvents.pin(eventId, { frameNumber: Number(frameNumber), rollId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roll", rollId] });
+      queryClient.invalidateQueries({ queryKey: ["rolls"] });
+      onClose();
+    },
+  });
+
+  const n = Number(frameNumber);
+  const valid = Number.isInteger(n) && n > 0;
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogHeader>
+        <DialogTitle>Pin to frame</DialogTitle>
+      </DialogHeader>
+      <DialogContent className="space-y-3">
+        <div className="text-xs text-muted-foreground">
+          Creates the frame from this note — settings, time and place — and attaches the
+          transcript to it.
+          {provisional && " This number was assigned by the app, not spoken; check it."}
+        </div>
+        <Field label="Frame number" required>
+          <Input
+            type="number"
+            min={1}
+            value={frameNumber}
+            autoFocus
+            onChange={(ev) => setFrameNumber(ev.target.value)}
+          />
+        </Field>
+        {mutation.isError && (
+          <div className="text-xs text-danger">{(mutation.error as Error).message}</div>
+        )}
+      </DialogContent>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button onClick={() => mutation.mutate()} disabled={!valid || mutation.isPending}>
+          {mutation.isPending ? "Pinning…" : "Pin"}
+        </Button>
+      </DialogFooter>
+    </Dialog>
+  );
 }
 
 // ── Dialogs ──────────────────────────────────────────────────────────

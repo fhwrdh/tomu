@@ -20,14 +20,16 @@ export function localDate(): string {
 }
 
 export function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  // The control lives inside the label, so it is implicitly associated: tapping
+  // the text focuses the input, and screen readers announce the two together.
   return (
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-foreground">
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-foreground">
         {label}
         {required && <span className="text-danger"> *</span>}
-      </label>
+      </span>
       {children}
-    </div>
+    </label>
   );
 }
 
