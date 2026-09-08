@@ -6,6 +6,7 @@ import { InventoryPage } from "./components/inventory/InventoryPage.js";
 import { GearPage } from "./components/gear/GearPage.js";
 import { RollsPage } from "./components/rolls/RollsPage.js";
 import { CapturePage } from "./components/capture/CapturePage.js";
+import { DevPage } from "./components/dev/DevPage.js";
 import { useAuth } from "./hooks/useAuth.js";
 
 export function App() {
@@ -26,6 +27,7 @@ export function App() {
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/rolls" element={<RollsPage />} />
           <Route path="/capture" element={<CapturePage />} />
+          <Route path="/dev" element={<DevPage />} />
           <Route path="/gear" element={<GearPage />} />
         </Routes>
       </main>

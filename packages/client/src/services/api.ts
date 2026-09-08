@@ -109,6 +109,7 @@ import type {
   Frame, CreateFrame,
   Note, CreateNote,
   FieldEvent,
+  DilutionResult,
 } from "@tomu/shared";
 
 export const cameras = crudApi<Camera, CreateCamera, UpdateCamera>("/cameras");
@@ -200,4 +201,96 @@ export const fieldEvents = {
   /** Pending notes delete outright; pinned ones need force and keep their frame. */
   remove: (id: string, force = false) =>
     request<void>(`/field-events/${id}${force ? "?force=true" : ""}`, { method: "DELETE" }),
+};
+
+// ── Dev pipeline ──
+// Shapes mirror the server's services/dev-candidates.ts and services/tank-plan.ts.
+// They are declared here rather than imported because those types live in the
+// server package, not @tomu/shared. Dates arrive as ISO strings over the wire.
+
+export interface CandidateRoll {
+  id: string;
+  displayId: string | null;
+  filmStockId: string;
+  ratedIso: number | null;
+  format: string;
+  manufacturer: string;
+  stockName: string;
+  stockIso: number;
+  loadedAt: string | null;
+  tags: string[];
+  intendedDeveloper: string | null;
+  intendedDilution: string | null;
+  intendedDilutionRaw: string | null;
+  intendedDevTimeSeconds: number | null;
+}
+
+export interface CandidateRecipe {
+  developer: string | null;
+  dilution: string | null;
+  devTimeSeconds: number | null;
+  temperatureC: string | null;
+  mdcAsaIso?: number | null;
+}
+
+export type CandidateTier = "intended" | "history" | "mdc" | "stock-iso";
+
+export interface CandidateGroup {
+  recipeKey: string;
+  tier: CandidateTier;
+  recipe: CandidateRecipe | null;
+  rolls: CandidateRoll[];
+}
+
+export interface PlannedLoad {
+  tankName: string;
+  tankVolumeMl: number;
+  tier: CandidateTier;
+  recipe: CandidateRecipe;
+  rolls: CandidateRoll[];
+  usedUnits: number;
+  capacityUnits: number;
+  oldestLoadedAt: string | null;
+  mix: DilutionResult | null;
+  warnings: string[];
+  score: number;
+}
+
+export interface TankPlan {
+  loads: PlannedLoad[];
+  remainder: { roll: CandidateRoll; reason: string }[];
+  warnings: string[];
+}
+
+export interface TankPlanRequest {
+  tanksAvailable?: string[];
+  excludeTanks?: string[];
+  maxTanks?: number;
+  includeRolls?: string[];
+  tags?: string[];
+  developer?: string;
+}
+
+export const devSessions = {
+  candidates: () => request<{ data: CandidateGroup[] }>("/dev-sessions/candidates"),
+};
+
+/** A tank row as returned by GET /tanks. reelUnits arrives as a numeric string. */
+export interface Tank {
+  id: string;
+  name: string;
+  kind: "roll" | "sheet";
+  volumeMl: number;
+  reelUnits: string | null;
+  sheetCapacity: number | null;
+  quantity: number;
+  agitation: string;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export const tanks = {
+  list: () => request<{ data: Tank[] }>("/tanks"),
+  plan: (body: TankPlanRequest = {}) =>
+    request<{ data: TankPlan }>("/tanks/plan", { method: "POST", body: JSON.stringify(body) }),
 };
