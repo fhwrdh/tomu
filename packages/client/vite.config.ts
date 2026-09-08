@@ -17,13 +17,16 @@ export default defineConfig({
         // too. Without these exclusions a browser with the PWA installed gets
         // the SPA shell at /authorize instead of the sign-in page, and the
         // claude.ai connector can never finish its OAuth flow.
+        // Workbox matches these against pathname + search, so anything anchored
+        // with `$` never matches a URL that carries a query string — which every
+        // OAuth authorize redirect does. Terminate with (?:\?|$) instead.
         navigateFallbackDenylist: [
           /^\/api\//,
           /^\/uploads\//,
-          /^\/mcp$/,
-          /^\/[^/]+\/mcp$/,
+          /^\/mcp(?:\?|$)/,
+          /^\/[^/]+\/mcp(?:\?|$)/,
           /^\/\.well-known\//,
-          /^\/(authorize|token|register|revoke)$/,
+          /^\/(?:authorize|token|register|revoke)(?:\?|$)/,
           /^\/oauth\//,
         ],
       },
