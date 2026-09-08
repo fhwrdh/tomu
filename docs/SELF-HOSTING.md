@@ -216,6 +216,11 @@ Voice notes and text entries go through `tomu_capture` (MCP) or `/api/v1/field-e
    npm run photos:sync                 # create photo events, matched by time (−10/+2 min)
    ```
 
+**Point `UPLOADS_DIR` outside the deploy target.** It defaults to `uploads/` inside the
+app tree, and deploys rsync with `--delete`, so a missing exclude wipes every photo —
+which is exactly what happened here on 2026-09-08. Set `UPLOADS_DIR=/home/<user>/tomu-data/uploads`
+in `.env` and nothing a deploy does can reach the data.
+
 Photos are uploaded to `uploads/events/` on the server (not in the Postgres dump). Back that directory up separately:
 ```bash
 rsync -a <user>@<host>:filmlog/uploads/events/ ./uploads/events/
