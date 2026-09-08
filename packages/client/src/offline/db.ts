@@ -68,10 +68,30 @@ export interface PendingDelete {
   deletedAt: string;
 }
 
+/**
+ * What the phone knows about a camera that the server cannot: that the film in
+ * it was changed while offline. Until the change is reconciled, notes for that
+ * camera save loose rather than being attached to a roll that is no longer in
+ * the body — a wrong roll is worse than no roll.
+ */
+export interface CameraState {
+  cameraId: string;
+  /** ISO time the film was changed offline, or null once reconciled. */
+  rollUnknownSince: string | null;
+}
+
 /** One row, id `"gear"` — the cameras, lenses and active rolls the parser and header need offline. */
 export interface GearCache extends GearIndex {
   id: "gear";
-  activeRolls: Array<{ id: string; cameraId: string | null; label: string; framesShot: number; frameCount: number }>;
+  activeRolls: Array<{
+    id: string;
+    cameraId: string | null;
+    /** Which camera it is in — the thing that says whether this is the right roll. */
+    cameraLabel: string | null;
+    label: string;
+    framesShot: number;
+    frameCount: number;
+  }>;
   refreshedAt: string;
 }
 
@@ -80,6 +100,7 @@ export class CaptureDb extends Dexie {
   blobs!: EntityTable<LocalBlob, "clientId">;
   gear!: EntityTable<GearCache, "id">;
   deletes!: EntityTable<PendingDelete, "serverId">;
+  cameraState!: EntityTable<CameraState, "cameraId">;
 
   constructor(name = "tomu-capture") {
     super(name);
@@ -90,6 +111,7 @@ export class CaptureDb extends Dexie {
       gear: "id",
       deletes: "serverId",
     });
+    this.version(2).stores({ cameraState: "cameraId" });
   }
 }
 

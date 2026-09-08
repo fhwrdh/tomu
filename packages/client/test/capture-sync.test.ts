@@ -10,7 +10,7 @@ let api: { [K in keyof SyncApi]: ReturnType<typeof vi.fn> };
 const gear = {
   cameras: [{ id: "cam-m6", label: "Leica M6" }],
   lenses: [],
-  activeRolls: [{ id: "roll-1", cameraId: "cam-m6", label: "Pan F", framesShot: 0, frameCount: 36 }],
+  activeRolls: [{ id: "roll-1", cameraId: "cam-m6", cameraLabel: "Leica M6", label: "Pan F", framesShot: 0, frameCount: 36 }],
 };
 
 /** A server response for an event the API has just accepted. */
@@ -291,7 +291,7 @@ describe("gear cache", () => {
     await saveCapture(db, { transcript: "x" });
     api.fetchGear.mockResolvedValue({
       ...gear,
-      activeRolls: [{ id: "roll-2", cameraId: "cam-m6", label: "HP5", framesShot: 3, frameCount: 36 }],
+      activeRolls: [{ id: "roll-2", cameraId: "cam-m6", cameraLabel: "Leica M6", label: "HP5", framesShot: 3, frameCount: 36 }],
     });
 
     await syncOnce(db, api as unknown as SyncApi);

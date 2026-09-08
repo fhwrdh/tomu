@@ -4,7 +4,7 @@
  * point of the whole design is that a note is safe the moment it is spoken.
  */
 import { nextFrameNumber, parseTranscript, type GearIndex, type ParsedFields } from "@tomu/shared";
-import { db as defaultDb, type CaptureDb, type GearCache, type LocalEvent } from "./db.js";
+import { db as defaultDb, type CameraState, type CaptureDb, type GearCache, type LocalEvent } from "./db.js";
 
 export interface SaveCaptureInput {
   kind?: "voice" | "photo";
@@ -124,6 +124,23 @@ export async function editField(
   };
   await db.events.put(updated);
   return updated;
+}
+
+/**
+ * Marks the film in a camera as changed while offline. Notes captured for it
+ * stay loose until the roll is unloaded and a new one loaded with signal.
+ */
+export async function markFilmChanged(db: CaptureDb, cameraId: string): Promise<void> {
+  await db.cameraState.put({ cameraId, rollUnknownSince: new Date().toISOString() });
+}
+
+/** Clears the marker once the camera's roll is known again (loaded or unloaded). */
+export async function clearFilmChanged(db: CaptureDb, cameraId: string): Promise<void> {
+  await db.cameraState.put({ cameraId, rollUnknownSince: null });
+}
+
+export function filmChangedSince(state: CameraState | undefined): string | null {
+  return state?.rollUnknownSince ?? null;
 }
 
 export async function listEvents(

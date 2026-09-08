@@ -1,17 +1,30 @@
 const API_BASE = "/api/v1";
 
-let authToken: string | null = localStorage.getItem("tomu_token");
+// Read on first use, not at import: importing a module should not touch storage,
+// and storage is not always there (private mode, a test environment without it).
+let authToken: string | null | undefined;
 
-export function setToken(token: string | null) {
-  authToken = token;
-  if (token) {
-    localStorage.setItem("tomu_token", token);
-  } else {
-    localStorage.removeItem("tomu_token");
+function storage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
   }
 }
 
-export function getToken() {
+export function setToken(token: string | null) {
+  authToken = token;
+  const store = storage();
+  if (!store) return;
+  if (token) {
+    store.setItem("tomu_token", token);
+  } else {
+    store.removeItem("tomu_token");
+  }
+}
+
+export function getToken(): string | null {
+  if (authToken === undefined) authToken = storage()?.getItem("tomu_token") ?? null;
   return authToken;
 }
 
@@ -21,8 +34,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
+  const token = getToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
