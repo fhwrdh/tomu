@@ -1,4 +1,4 @@
-import { Film, Disc, Camera, Mic } from "lucide-react";
+import { Film, Disc, Camera, Mic, FlaskConical } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../../lib/utils.js";
 
@@ -8,6 +8,7 @@ const navItems = [
   // The field surface. Reachable in one tap because it is used standing up,
   // in the rain, with one hand.
   { path: "/capture", label: "Capture", icon: Mic },
+  { path: "/dev", label: "Dev", icon: FlaskConical },
   { path: "/gear", label: "Gear", icon: Camera },
 ];
 
