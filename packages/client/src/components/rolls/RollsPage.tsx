@@ -344,62 +344,70 @@ function FieldNoteRow({ event: e, rollId }: { event: RollDetail["unpinnedEvents"
   });
 
   return (
-    <li className="flex gap-2" data-testid={`note-${e.id}`}>
-      <div className="w-14 shrink-0 space-y-1">
-        <div className="text-muted-foreground tabular-nums">{formatTime(e.capturedAt)}</div>
-        {e.kind === "photo" &&
-          (e.fileUrl && !imageBroken ? (
-            <img
-              src={e.fileUrl}
-              alt=""
-              loading="lazy"
-              onError={() => setImageBroken(true)}
-              className="h-14 w-14 rounded object-cover"
-            />
-          ) : (
-            // A missing file is worth saying out loud: the note is still real,
-            // the bytes are not there.
-            <div className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-border text-[10px] text-muted-foreground">
-              {e.fileUrl ? "photo missing" : "no photo yet"}
-            </div>
-          ))}
+    // Two rows, not two columns: the actions are a footer for the whole note, so
+    // they sit in the same place whether the note is a paragraph or a bare photo.
+    // Hanging them off the content column made them drift up beside the
+    // timestamp when there was nothing to say.
+    <li className="space-y-1" data-testid={`note-${e.id}`}>
+      <div className="flex gap-2">
+        <div className="w-14 shrink-0 space-y-1">
+          <div className="tabular-nums text-muted-foreground">{formatTime(e.capturedAt)}</div>
+          {e.kind === "photo" &&
+            (e.fileUrl && !imageBroken ? (
+              <img
+                src={e.fileUrl}
+                alt=""
+                loading="lazy"
+                onError={() => setImageBroken(true)}
+                className="h-14 w-14 rounded object-cover"
+              />
+            ) : (
+              // A missing file is worth saying out loud: the note is still real,
+              // the bytes are not there.
+              <div className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-border text-[10px] text-muted-foreground">
+                {e.fileUrl ? "photo missing" : "no photo yet"}
+              </div>
+            ))}
+        </div>
+
+        <div className="flex-1 space-y-0.5">
+          {e.transcript && (
+            <button
+              type="button"
+              onClick={() => setExpanded(!expanded)}
+              className={cn("block w-full text-left text-foreground", !expanded && "line-clamp-2")}
+            >
+              {e.transcript}
+            </button>
+          )}
+          <div className="text-muted-foreground">
+            {[frame, settings, e.review ? "needs review" : null].filter(Boolean).join(" · ")}
+          </div>
+          {e.parseNotes && <div className="italic text-muted-foreground">{e.parseNotes}</div>}
+        </div>
       </div>
 
-      <div className="flex-1 space-y-0.5">
-        {e.transcript && (
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            className={cn("block w-full text-left text-foreground", !expanded && "line-clamp-2")}
-          >
-            {e.transcript}
-          </button>
-        )}
-        <div className="text-muted-foreground">
-          {[frame, settings, e.review ? "needs review" : null].filter(Boolean).join(" · ")}
-        </div>
-        {e.parseNotes && <div className="italic text-muted-foreground">{e.parseNotes}</div>}
-        <div className="flex gap-3 pt-0.5">
-          <button type="button" onClick={() => setPinOpen(true)} className="text-primary">
-            Pin to frame
-          </button>
-          <button
-            type="button"
-            onClick={() => attach.mutate()}
-            disabled={attach.isPending}
-            className="text-primary"
-          >
-            {attach.isPending ? "Attaching…" : "Attach to roll"}
-          </button>
-          <button
-            type="button"
-            onClick={() => remove.mutate()}
-            disabled={remove.isPending}
-            className="text-muted-foreground hover:text-danger"
-          >
-            {remove.isPending ? "Deleting…" : "Delete"}
-          </button>
-        </div>
+      {/* pl-16 lines the actions up with the text column above (w-14 + gap-2). */}
+      <div className="flex gap-3 pl-16">
+        <button type="button" onClick={() => setPinOpen(true)} className="text-primary">
+          Pin to frame
+        </button>
+        <button
+          type="button"
+          onClick={() => attach.mutate()}
+          disabled={attach.isPending}
+          className="text-primary"
+        >
+          {attach.isPending ? "Attaching…" : "Attach to roll"}
+        </button>
+        <button
+          type="button"
+          onClick={() => remove.mutate()}
+          disabled={remove.isPending}
+          className="text-muted-foreground hover:text-danger"
+        >
+          {remove.isPending ? "Deleting…" : "Delete"}
+        </button>
       </div>
 
       {pinOpen && (
