@@ -30,7 +30,10 @@ export function getToken(): string | null {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    // Only when there is a body: Fastify rejects a bodyless request that
+    // declares application/json with "Body cannot be empty" — a 400 that looks
+    // like a server fault and is not.
+    ...(options.body != null ? { "Content-Type": "application/json" } : {}),
     ...((options.headers as Record<string, string>) || {}),
   };
 
@@ -177,4 +180,18 @@ export const rolls = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+};
+
+// ── Field events ──
+
+export const fieldEvents = {
+  /** Turns a note into a frame: settings copied over, transcript attached as a note. */
+  pin: (id: string, body: { frameNumber: number; rollId?: string }) =>
+    request<{ data: { event: FieldEvent; frame: Frame; joined: boolean } }>(
+      `/field-events/${id}/pin`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  /** Pending notes delete outright; pinned ones need force and keep their frame. */
+  remove: (id: string, force = false) =>
+    request<void>(`/field-events/${id}${force ? "?force=true" : ""}`, { method: "DELETE" }),
 };

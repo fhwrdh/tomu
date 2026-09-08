@@ -7,6 +7,11 @@ interface DialogProps {
   children: ReactNode;
 }
 
+/** Whether this environment can actually open a modal dialog. */
+const SUPPORTS_MODAL =
+  typeof HTMLDialogElement !== "undefined" &&
+  typeof HTMLDialogElement.prototype.showModal === "function";
+
 export function Dialog({ open, onClose, children }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -26,6 +31,9 @@ export function Dialog({ open, onClose, children }: DialogProps) {
   return (
     <dialog
       ref={ref}
+      // Where showModal exists it owns the open state; where it does not, the
+      // attribute keeps the dialog visible instead of leaving it display:none.
+      open={SUPPORTS_MODAL ? undefined : open}
       onClose={onClose}
       className="fixed inset-0 z-50 m-0 h-full w-full max-h-full max-w-full border-none bg-transparent p-0 backdrop:bg-black/70"
     >
