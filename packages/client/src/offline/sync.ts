@@ -128,11 +128,10 @@ export async function syncOnce(db: CaptureDb, api: SyncApi): Promise<SyncResult>
       await db.deletes.delete(pending.serverId);
       result.deleted++;
     } catch (err) {
-      // A 404 means someone else already removed it — done either way. Anything
-      // else stays queued; a stale row on the server beats a stuck queue.
-      if ((err as { status?: number }).status === 404) {
-        await db.deletes.delete(pending.serverId);
-      }
+      // Any 4xx is final: the row is gone, or the request is one the server will
+      // never accept. Retrying it every pass forever helps nobody, and the event
+      // is already gone locally. Only a network or 5xx failure stays queued.
+      if (isPermanent(err)) await db.deletes.delete(pending.serverId);
     }
   }
 
@@ -181,8 +180,15 @@ export async function syncOnce(db: CaptureDb, api: SyncApi): Promise<SyncResult>
         await db.blobs.delete(event.clientId);
       });
       result.photos++;
-    } catch {
-      // Keep the blob and try again next pass; the event itself is safe.
+    } catch (err) {
+      if (isPermanent(err)) {
+        // Too large, wrong type, gone: nothing changes by asking again. Stop the
+        // loop, keep the bytes, and say why on the card so it can be retried by
+        // hand or fixed at the desk.
+        const message = err instanceof Error ? err.message : String(err);
+        await db.events.update(event.clientId, { hasPendingBlob: false, error: message });
+      }
+      // Otherwise keep the blob and try again next pass; the event itself is safe.
     }
   }
 

@@ -14,7 +14,10 @@ async function json<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      // Only claim a JSON body when there is one: Fastify rejects a bodyless
+      // request that declares application/json with "Body cannot be empty",
+      // which is a 400 no amount of retrying can fix.
+      ...(options.body != null ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...((options.headers as Record<string, string>) || {}),
     },
