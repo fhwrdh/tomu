@@ -245,8 +245,19 @@ function RollDetailView({ rollId, active }: { rollId: string; active: boolean })
             </div>
           </div>
           <ul className="space-y-2 text-xs">
-            {detail.unpinnedEvents.map((e) => (
-              <FieldNoteRow key={e.id} event={e} rollId={rollId} />
+            {/* A roll can sit in a camera for weeks, so a bare time says nothing.
+                The day is stated once per group rather than on every note. */}
+            {groupByDay(detail.unpinnedEvents).map((group) => (
+              <li key={group.day} className="space-y-2">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {group.heading}
+                </div>
+                <ul className="space-y-2">
+                  {group.events.map((e) => (
+                    <FieldNoteRow key={e.id} event={e} rollId={rollId} />
+                  ))}
+                </ul>
+              </li>
             ))}
           </ul>
         </div>
@@ -315,6 +326,41 @@ function buildTimeline(detail: RollDetail): TimelineEntry[] {
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** Local calendar day, for grouping. */
+function localDay(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** "Today", "Yesterday", else a dated heading — with the year once it is not this one. */
+function dayHeading(iso: string): string {
+  const day = localDay(iso);
+  const today = localDay(new Date().toISOString());
+  if (day === today) return "Today";
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  if (day === localDay(y.toISOString())) return "Yesterday";
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+/** Consecutive notes from the same local day, in the order given. */
+function groupByDay<T extends { capturedAt: string }>(events: T[]): Array<{ day: string; heading: string; events: T[] }> {
+  const groups: Array<{ day: string; heading: string; events: T[] }> = [];
+  for (const e of events) {
+    const day = localDay(e.capturedAt);
+    const last = groups[groups.length - 1];
+    if (last && last.day === day) last.events.push(e);
+    else groups.push({ day, heading: dayHeading(e.capturedAt), events: [e] });
+  }
+  return groups;
 }
 
 /**

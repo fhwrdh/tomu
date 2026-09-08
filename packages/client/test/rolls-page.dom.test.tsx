@@ -236,3 +236,31 @@ describe("a note that is not about one frame", () => {
     expect(pin).not.toHaveBeenCalled();
   });
 });
+
+describe("notes across days", () => {
+  it("states the day once per group, not on every note", async () => {
+    // A roll sits in a camera for weeks; a bare time cannot say which week.
+    const today = new Date();
+    const older = new Date(today);
+    older.setDate(older.getDate() - 9);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    detailWith([
+      { transcript: "first outing", capturedAt: older.toISOString() },
+      { transcript: "same outing, later", capturedAt: new Date(older.getTime() + 3600_000).toISOString() },
+      { transcript: "picked it up again", capturedAt: yesterday.toISOString() },
+      { transcript: "this evening", capturedAt: today.toISOString() },
+    ]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+
+    expect(await screen.findByText("Today")).toBeDefined();
+    expect(screen.getByText("Yesterday")).toBeDefined();
+    // The older pair shares one dated heading between them.
+    const dated = older.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    expect(screen.getAllByText(dated)).toHaveLength(1);
+  });
+});
