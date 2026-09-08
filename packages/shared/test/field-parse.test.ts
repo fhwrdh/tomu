@@ -25,6 +25,10 @@ describe("shutter", () => {
     ["one two fifty", "1/250"],
     ["one five hundred", "1/500"],
     ["1/1000", "1/1000"],
+    // Spoken aloud and transcribed with the ordinal suffix, which is how
+    // dictation writes it: "one twenty-fifth of a second" → "1/125th".
+    ["1/125th of a second", "1/125"],
+    ["1/60th", "1/60"],
     ["two seconds", "2s"],
     ["2s", "2s"],
     ["half a second", "1/2"],
@@ -48,6 +52,26 @@ describe("aperture", () => {
     ["wide open", undefined],
   ])("%s → %s", (text, want) => {
     expect(parseTranscript(text).fields.aperture).toBe(want);
+  });
+});
+
+describe("aperture plausibility", () => {
+  it.each([
+    // Film names are not exposure settings. Real dictation, 2026-09-07:
+    // "Ilford Pan F50, frame 1, f/2, 1/125th" was read as aperture f/50.
+    ["Ilford Pan F50, frame 1, f/2, one twenty-fifth", "f/2"],
+    ["shot a roll of Pan F 50 today", undefined],
+    ["Tri-X 400 at f8", "f/8"],
+  ])("%s → %s", (text, want) => {
+    expect(parseTranscript(text).fields.aperture).toBe(want);
+  });
+
+  it.each(["f/0.5", "f/70", "f/50"])("ignores the implausible %s", (text) => {
+    expect(parseTranscript(text).fields.aperture).toBeUndefined();
+  });
+
+  it.each(["f/0.95", "f/1.4", "f/2", "f/5.6", "f/22", "f/64"])("still accepts %s", (text) => {
+    expect(parseTranscript(text).fields.aperture).toBe(text);
   });
 });
 
