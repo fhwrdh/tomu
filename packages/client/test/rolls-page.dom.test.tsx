@@ -11,10 +11,11 @@ const list = vi.hoisted(() => vi.fn());
 const get = vi.hoisted(() => vi.fn());
 const pin = vi.hoisted(() => vi.fn());
 const remove = vi.hoisted(() => vi.fn());
+const rollLevel = vi.hoisted(() => vi.fn());
 
 vi.mock("../src/services/api.js", () => ({
   rolls: { list, get, load: vi.fn(), unload: vi.fn(), undoLoad: vi.fn() },
-  fieldEvents: { pin, remove },
+  fieldEvents: { pin, remove, rollLevel },
   cameras: { list: vi.fn(async () => ({ data: [] })) },
   filmStocks: { list: vi.fn(async () => ({ data: [] })) },
   ApiError: class extends Error {},
@@ -43,6 +44,7 @@ beforeEach(() => {
   get.mockReset();
   pin.mockReset().mockResolvedValue({ data: {} });
   remove.mockReset().mockResolvedValue(undefined);
+  rollLevel.mockReset().mockResolvedValue({ data: {} });
 });
 
 /** A roll detail with the given unpinned events and no frames. */
@@ -215,5 +217,22 @@ describe("a photo whose file is gone", () => {
     await user.click(await screen.findByText(/Pan F Plus/));
     // The thumbnail used to replace the time, so photo events lost when they happened.
     expect(await screen.findByText(/\d{1,2}:\d{2}/)).toBeDefined();
+  });
+});
+
+describe("a note that is not about one frame", () => {
+  it("attaches to the roll without asking for a frame number", async () => {
+    // A roll diary entry: a thought, or a phone snap of something never shot on
+    // film. Forcing a frame number on those would be a lie.
+    detailWith([{ transcript: "the fog never lifted all morning" }]);
+    const user = userEvent.setup();
+    render(<RollsPage />);
+
+    await user.click(await screen.findByText(/Pan F Plus/));
+    await user.click(await screen.findByRole("button", { name: "Attach to roll" }));
+
+    await waitFor(() => expect(rollLevel).toHaveBeenCalledWith("e0", { rollId: expect.any(String) }));
+    // No dialog, no number.
+    expect(pin).not.toHaveBeenCalled();
   });
 });

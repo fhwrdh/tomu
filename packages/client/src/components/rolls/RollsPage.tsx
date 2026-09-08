@@ -335,6 +335,14 @@ function FieldNoteRow({ event: e, rollId }: { event: RollDetail["unpinnedEvents"
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roll", rollId] }),
   });
 
+  // Not everything belongs to a frame. A thought about the light, a phone snap
+  // of something never shot on film — the roll is the right home for those, and
+  // forcing a frame number on them would be a lie.
+  const attach = useMutation({
+    mutationFn: () => fieldEvents.rollLevel(e.id, { rollId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roll", rollId] }),
+  });
+
   return (
     <li className="flex gap-2" data-testid={`note-${e.id}`}>
       <div className="w-14 shrink-0 space-y-1">
@@ -374,6 +382,14 @@ function FieldNoteRow({ event: e, rollId }: { event: RollDetail["unpinnedEvents"
         <div className="flex gap-3 pt-0.5">
           <button type="button" onClick={() => setPinOpen(true)} className="text-primary">
             Pin to frame
+          </button>
+          <button
+            type="button"
+            onClick={() => attach.mutate()}
+            disabled={attach.isPending}
+            className="text-primary"
+          >
+            {attach.isPending ? "Attaching…" : "Attach to roll"}
           </button>
           <button
             type="button"

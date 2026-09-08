@@ -191,6 +191,12 @@ export const fieldEvents = {
       `/field-events/${id}/pin`,
       { method: "POST", body: JSON.stringify(body) },
     ),
+  /** Attaches to the roll with no frame — a thought, or a phone snap of something not shot on film. */
+  rollLevel: (id: string, body: { rollId?: string } = {}) =>
+    request<{ data: { event: FieldEvent } }>(`/field-events/${id}/roll-level`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** Pending notes delete outright; pinned ones need force and keep their frame. */
   remove: (id: string, force = false) =>
     request<void>(`/field-events/${id}${force ? "?force=true" : ""}`, { method: "DELETE" }),
