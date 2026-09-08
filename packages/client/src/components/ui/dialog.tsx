@@ -13,9 +13,12 @@ export function Dialog({ open, onClose, children }: DialogProps) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Guarded: <dialog> is not implemented everywhere the tree is rendered (jsdom
+    // has the element but not showModal/close), and a missing modal API should
+    // degrade to a plain block rather than throw during render.
     if (open) {
-      el.showModal();
-    } else {
+      if (typeof el.showModal === "function") el.showModal();
+    } else if (typeof el.close === "function" && el.open) {
       el.close();
     }
   }, [open]);

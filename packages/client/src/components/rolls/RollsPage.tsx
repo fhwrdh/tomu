@@ -19,6 +19,7 @@ const STATUS_FILTERS = [
 
 export function RollsPage() {
   const [status, setStatus] = useState("active");
+  const [format, setFormat] = useState<string>("all");
   const [loadOpen, setLoadOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -27,7 +28,11 @@ export function RollsPage() {
     queryFn: () => rolls.list(status),
   });
 
-  const items = listQuery.data?.data ?? [];
+  const all = listQuery.data?.data ?? [];
+  // Only offer formats actually present, and only when there is more than one:
+  // a filter row that cannot change anything is just noise.
+  const formats = FILM_FORMATS.filter((f) => all.some((r) => r.format === f));
+  const items = format === "all" ? all : all.filter((r) => r.format === format);
 
   return (
     <div className="space-y-4">
@@ -54,6 +59,25 @@ export function RollsPage() {
           </button>
         ))}
       </div>
+
+      {/* Format filter — a dozen 4x5 sheets should not bury the roll in the camera. */}
+      {formats.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          {["all", ...formats].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFormat(f)}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                format === f
+                  ? "bg-secondary text-foreground"
+                  : "bg-card text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {f === "all" ? "All formats" : f}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Roll list */}
       {items.length === 0 && !listQuery.isLoading && (
