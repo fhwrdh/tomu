@@ -2,40 +2,24 @@
  * Tier-2 parse: Claude reads the transcript (+ a nearby photo) and fills what the
  * regex could not. Never modifies the transcript; never overwrites hand-edited
  * fields; a failure leaves the event untouched (retried by the sweep).
+ *
+ * The model call itself lives in `field-parse-client.ts` (no database, so the eval
+ * harness can call it too). This module owns the event row: what to send, what the
+ * merge is allowed to write back, and what a failure costs.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
-// `zodOutputFormat` requires a zod/v4 `ZodType`; the rest of the codebase uses the zod v3
-// classic API (package.json pins zod ^3.25, which ships a `zod/v4` compat entry point), so
-// this schema — local to the tier-2 SDK call — is built against `zod/v4` specifically.
-import { z } from "zod/v4";
 import { mergeParse, PARSED_FIELD_NAMES, type Tier2Result } from "@tomu/shared";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
 import { fieldEvents, rolls } from "../db/schema.js";
 import { loadGear } from "./gear.js";
-
-const Field = z.object({ value: z.string().nullable(), confidence: z.number().min(0).max(1) });
-const Output = z.object({
-  shutterSpeed: Field, aperture: Field, compensation: Field, meteringMode: Field,
-  lensId: Field, subject: Field, locationName: Field,
-  cameraId: z.string().nullable(),
-  remarks: z.string().nullable(),
-  sceneDescription: z.string().nullable(),
-  reviewReason: z.string().nullable(),
-});
+import { requestTier2 } from "./field-parse-client.js";
 
 /** Max size of a photo attached to a tier-2 request; larger photos are skipped. */
 export const TIER2_MAX_IMAGE_BYTES = 3_500_000;
-
-let promptCache: string | null = null;
-async function prompt(): Promise<string> {
-  if (!promptCache) promptCache = await readFile(new URL("./field-parse-prompt.md", import.meta.url), "utf8");
-  return promptCache;
-}
 
 const client = config.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: config.ANTHROPIC_API_KEY }) : null;
 
@@ -57,46 +41,30 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
     ev.rollId ? eq(fieldEvents.rollId, ev.rollId) : isNull(fieldEvents.rollId),
   )).orderBy(desc(fieldEvents.capturedAt)).limit(1);
 
-  const context = [
-    `Cameras: ${gear.cameras.map((c) => `${c.id} = ${c.label}`).join("; ") || "none"}`,
-    `Lenses: ${gear.lenses.map((l) => `${l.id} = ${l.label}`).join("; ") || "none"}`,
-    `Roll format: ${roll[0]?.format ?? "unknown"}`,
-    `Already parsed (keep unless the note clearly says otherwise): ${PARSED_FIELD_NAMES.map((k) => `${k}=${(ev as Record<string, unknown>)[k] ?? "null"}`).join(", ")}`,
-  ].join("\n");
-
-  const userContent: Anthropic.MessageParam["content"] = [];
+  let imageBase64: string | null = null;
   if (photo?.fileKey) {
     if (photo.fileSizeBytes != null && photo.fileSizeBytes <= TIER2_MAX_IMAGE_BYTES) {
       const buf = await readFile(join(config.UPLOADS_DIR, photo.fileKey)).catch(() => null);
-      if (buf) userContent.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } });
+      if (buf) imageBase64 = buf.toString("base64");
     } else {
       console.debug(`skipping oversized photo for tier-2 (event ${ev.id}, photo ${photo.id})`);
     }
   }
-  userContent.push({ type: "text", text: `${context}\n\nTranscript:\n"""\n${ev.transcript}\n"""` });
+
+  // What the event already holds: sent to the model as "keep unless the note says
+  // otherwise", and the left-hand side of the merge.
+  const current = Object.fromEntries(
+    PARSED_FIELD_NAMES.map((k) => [k, (ev as Record<string, unknown>)[k] as string | null]),
+  ) as Parameters<typeof mergeParse>[0];
 
   try {
-    const res = await client.messages.parse({
-      model: config.FIELD_PARSE_MODEL,
-      max_tokens: 2000,
-      // No cache_control: the prompt is ~260 tokens, far below the minimum cacheable
-      // prefix (2048 for Haiku, 1024 for Sonnet/Opus), so a cache breakpoint here is
-      // silently ignored. Add one back if the prompt grows past that.
-      system: [{ type: "text", text: await prompt() }],
-      messages: [{ role: "user", content: userContent }],
-      output_config: { format: zodOutputFormat(Output) },
+    const tier2: Tier2Result = await requestTier2(client, config.FIELD_PARSE_MODEL, {
+      transcript: ev.transcript,
+      gear,
+      rollFormat: roll[0]?.format ?? null,
+      current,
+      imageBase64,
     });
-    const out = res.parsed_output;
-    if (!out) throw new Error("tier-2 parse returned no structured output");
-
-    const tier2: Tier2Result = {
-      fields: Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, out[k].value])) as Tier2Result["fields"],
-      confidence: Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, out[k].confidence])) as Tier2Result["confidence"],
-      cameraId: out.cameraId, remarks: out.remarks ?? undefined, sceneDescription: out.sceneDescription ?? undefined, reviewReason: out.reviewReason,
-    };
-    // lensId must be a real lens of this user; drop hallucinated ids.
-    if (tier2.fields.lensId && !gear.lenses.some((l) => l.id === tier2.fields.lensId)) { tier2.fields.lensId = null; }
-    const current = Object.fromEntries(PARSED_FIELD_NAMES.map((k) => [k, (ev as Record<string, unknown>)[k] as string | null])) as Parameters<typeof mergeParse>[0];
     const merged = mergeParse(current, tier2, ev.editedFields);
 
     const set: Partial<typeof fieldEvents.$inferInsert> = {

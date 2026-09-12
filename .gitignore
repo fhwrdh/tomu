@@ -10,3 +10,4 @@ DEPLOY.md
 .DS_Store
 .playwright-mcp/
 uploads/
+evals/field-parse/recordings/

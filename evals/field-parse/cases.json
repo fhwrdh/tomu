@@ -1,0 +1,132 @@
+[
+  {
+    "id": "pan-f50",
+    "source": "field",
+    "provenance": "The 2026-09-07 dictation that produced the f/50 bug. Wording verbatim from packages/shared/test/field-parse.test.ts:63, itself taken from the transcript quoted in 93ad38a.",
+    "transcript": "Ilford Pan F50, frame 1, f/2, one twenty-fifth",
+    "expect": { "frameNumber": "1", "shutterSpeed": "1/125", "aperture": "f/2" }
+  },
+  {
+    "id": "pan-f50-mention",
+    "source": "field",
+    "provenance": "Same bug, reduced: a film name with no exposure data at all. Verbatim from field-parse.test.ts:64.",
+    "transcript": "shot a roll of Pan F 50 today",
+    "expect": {}
+  },
+  {
+    "id": "ordinal-of-a-second",
+    "source": "field",
+    "provenance": "Quoted verbatim in 93ad38a: dictation writes the ordinal suffix, which the pattern originally rejected.",
+    "transcript": "1/125th of a second",
+    "expect": { "shutterSpeed": "1/125" }
+  },
+  {
+    "id": "kitchen-window-ramble",
+    "source": "field",
+    "provenance": "The fixture ramble the V2 spec §8 asks for ('one fixture transcript recorded from the owner'). Verbatim from field-parse.test.ts:153.",
+    "transcript": "okay so this is the kitchen window again, um, two fifty at f eight, plus one because of the backlight, the sound of the fridge is in this one somehow, frame nine I think",
+    "expect": { "shutterSpeed": "1/250", "aperture": "f/8", "compensation": "+1", "frameNumber": "9" },
+    "tier2Expect": { "subject": "kitchen window" }
+  },
+  {
+    "id": "misheard-m6",
+    "source": "reconstructed",
+    "provenance": "93ad38a records that the 2026-09-07 dictations reached the parser as 'Like an M6' and 'Mica M6' and still resolved to the M6. The mishearings are real; this sentence around them is approximate.",
+    "transcript": "Like an M6, Ilford Pan F 50, frame 1, f/2, 1/125th of a second",
+    "expect": { "cameraId": "cam-m6", "frameNumber": "1", "shutterSpeed": "1/125", "aperture": "f/2" }
+  },
+  {
+    "id": "misheard-mica-m6",
+    "source": "reconstructed",
+    "provenance": "The second mishearing from 93ad38a. Wording approximate.",
+    "transcript": "Mica M6, frame 1, f/2, 1/125th of a second",
+    "expect": { "cameraId": "cam-m6", "frameNumber": "1", "shutterSpeed": "1/125", "aperture": "f/2" }
+  },
+  {
+    "id": "spoken-numerator",
+    "source": "synthetic",
+    "provenance": "Spoken-number family from the V2 spec §4: the numerator said aloud before the denominator.",
+    "transcript": "one two-fifty at f eight",
+    "expect": { "shutterSpeed": "1/250", "aperture": "f/8" }
+  },
+  {
+    "id": "sheet-holder",
+    "source": "synthetic",
+    "provenance": "Large-format path: sheet id, camera by name, incident metering, fractional compensation.",
+    "transcript": "holder 3b on the Crown Graphic, incident, plus a third",
+    "expect": { "sheetId": "3B", "cameraId": "cam-crown", "meteringMode": "incident", "compensation": "+1/3" }
+  },
+  {
+    "id": "lens-by-focal-length",
+    "source": "synthetic",
+    "provenance": "Gear resolution: a bare focal length must find the lens, and the body must not steal it.",
+    "transcript": "the 80 on the Mamiya, two fifty at five six",
+    "expect": { "cameraId": "cam-m7", "lensId": "lens-80", "shutterSpeed": "1/250", "aperture": "f/5.6" }
+  },
+  {
+    "id": "bulb-on-tripod",
+    "source": "synthetic",
+    "provenance": "Bulb, plus a metering word in the same breath.",
+    "transcript": "bulb, on the tripod, Mamiya 7, spot metered",
+    "expect": { "shutterSpeed": "B", "cameraId": "cam-m7", "meteringMode": "spot" }
+  },
+  {
+    "id": "compensation-fraction",
+    "source": "synthetic",
+    "provenance": "Spoken thirds, which is how compensation is actually said.",
+    "transcript": "minus two thirds, spot",
+    "expect": { "compensation": "-2/3", "meteringMode": "spot" }
+  },
+  {
+    "id": "sunny-sixteen",
+    "source": "synthetic",
+    "provenance": "A named metering method rather than a mode word.",
+    "transcript": "sunny 16, f eleven",
+    "expect": { "meteringMode": "sunny 16", "aperture": "f/11" }
+  },
+  {
+    "id": "negative-party",
+    "source": "synthetic",
+    "provenance": "A number that is not an exposure setting. Verbatim from field-parse.test.ts:186 — the class of false positive the bare-number rule exists to avoid.",
+    "transcript": "sixteen people at the party",
+    "expect": {}
+  },
+  {
+    "id": "negative-exposures",
+    "source": "synthetic",
+    "provenance": "Same class: a count on the film box.",
+    "transcript": "the film box says thirty-six exposures",
+    "expect": {}
+  },
+  {
+    "id": "negative-walk",
+    "source": "synthetic",
+    "provenance": "Same class: a duration that is not a shutter speed.",
+    "transcript": "we walked for twenty minutes to get here",
+    "expect": {}
+  },
+  {
+    "id": "command-scratch",
+    "source": "synthetic",
+    "provenance": "The one spoken command (V2 spec §2). A command must parse no fields.",
+    "transcript": "scratch that",
+    "expect": {},
+    "expectCommand": "delete_last"
+  },
+  {
+    "id": "mood-only",
+    "source": "synthetic",
+    "provenance": "The note the north star is about: no settings at all, and tier 1 must invent none. Tier 2 earns its place here.",
+    "transcript": "the light came off the wet road and the whole street went silver for about a second",
+    "expect": {},
+    "tier2Expect": { "subject": "wet road" }
+  },
+  {
+    "id": "location-and-settings",
+    "source": "synthetic",
+    "provenance": "A place name is tier-2 only; the settings alongside it are tier 1's.",
+    "transcript": "shot this one on Beacon Hill, two fifty at f eight",
+    "expect": { "shutterSpeed": "1/250", "aperture": "f/8" },
+    "tier2Expect": { "locationName": "Beacon Hill" }
+  }
+]

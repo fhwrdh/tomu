@@ -27,4 +27,16 @@ describe("mergeParse", () => {
     const r = mergeParse(current, { fields: { shutterSpeed: "1/500" }, confidence: {} }, []);
     expect(r.fields).toEqual({});
   });
+  // The threshold is a parameter only so the eval harness can sweep it
+  // (evals/field-parse --sweep). Production always takes the default.
+  it("takes an explicit threshold in place of the default", () => {
+    const tier2 = { fields: { aperture: "f/11" }, confidence: { aperture: 0.7 } };
+    expect(mergeParse(current, tier2, []).fields).toEqual({});
+    expect(mergeParse(current, tier2, [], 0.6).fields).toEqual({ aperture: "f/11" });
+    expect(mergeParse(current, tier2, [], 0.8).fields).toEqual({});
+  });
+  it("still refuses a hand-edited field at any threshold", () => {
+    const tier2 = { fields: { aperture: "f/11" }, confidence: { aperture: 1 } };
+    expect(mergeParse(current, tier2, ["aperture"], 0).fields).toEqual({});
+  });
 });

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Self-hostable film-photography management — gear, film inventory, rolls, development, and scans. API-first, with an MCP server so Claude is a first-class client alongside the web UI.",
+  "description": "Self-hostable film-photography management \u2014 gear, film inventory, rolls, development, and scans. API-first, with an MCP server so Claude is a first-class client alongside the web UI.",
   "workspaces": [
     "packages/shared",
     "packages/server",
@@ -14,7 +14,7 @@
     "dev:server": "npm run dev -w packages/server",
     "dev:client": "npm run dev -w packages/client",
     "dev": "npm run dev:server & npm run dev:client",
-    "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client && npm run build -w packages/mcp && npm run typecheck:scripts",
+    "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/client && npm run build -w packages/mcp && npm run typecheck:scripts && npm run typecheck:evals",
     "build:shared": "npm run build -w packages/shared",
     "typecheck:scripts": "tsc -p scripts",
     "lint": "npm run lint -w packages/client",
@@ -22,7 +22,10 @@
     "deploy:migrate": "bash scripts/deploy.sh --migrate",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "photos:sync": "tsx --env-file-if-exists=.env scripts/photos-sync.ts"
+    "photos:sync": "tsx --env-file-if-exists=.env scripts/photos-sync.ts",
+    "typecheck:evals": "tsc -p evals",
+    "parse": "npm run build:shared --silent && tsx scripts/parse-demo.ts",
+    "eval:field-parse": "npm run build:shared --silent && tsx evals/field-parse/run.ts"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",

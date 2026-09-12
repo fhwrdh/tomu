@@ -37,7 +37,7 @@ export default defineConfig({
           // mechanical link between the copies (the two deploy exclude lists). Its own
           // project because it needs neither the DOM nor the server's Postgres setup.
           name: "repo",
-          include: ["test/**/*.test.ts"],
+          include: ["test/**/*.test.ts", "evals/**/*.test.ts"],
           environment: "node",
         },
       },
