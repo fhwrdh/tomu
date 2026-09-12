@@ -33,6 +33,17 @@ export default defineConfig({
       {
         resolve: { alias: sharedAlias },
         test: {
+          // Repo-level invariants: rules that live in more than one file and have no
+          // mechanical link between the copies (the two deploy exclude lists). Its own
+          // project because it needs neither the DOM nor the server's Postgres setup.
+          name: "repo",
+          include: ["test/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        resolve: { alias: sharedAlias },
+        test: {
           name: "client",
           // Node, not jsdom: fake-indexeddb cannot structured-clone a jsdom Blob
           // (it round-trips to `{}`), and the capture store puts photo Blobs in
