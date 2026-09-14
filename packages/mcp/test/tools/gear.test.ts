@@ -41,6 +41,65 @@ describe("tomu_gear", () => {
   });
 });
 
+describe("tomu_gear updates", () => {
+  const cube = camera({ id: "cam-cube", make: "Chroma", model: "Cube", format: "4x5" });
+
+  it("corrects a camera found by fuzzy name, sending only what changed", async () => {
+    api
+      .answer("GET", "/cameras", { data: [camera(), cube] })
+      .answer("PATCH", "/cameras/cam-cube", { data: { ...cube, format: "35mm" } });
+
+    const reply = await tomu.call("tomu_gear", { action: "update_camera", name: "chroma cube", format: "35MM" });
+
+    expect(api.sent("PATCH", "/cameras/cam-cube")).toEqual({ format: "35mm" });
+    expect(reply).toBe("Updated camera **Chroma Cube**: format 4x5 → 35mm");
+  });
+
+  it("retires a lens without deleting it", async () => {
+    const nokton = lens({ id: "lens-40", make: "Voigtlander", model: "Nokton", focalLengthMm: 40, maxAperture: "1.4" });
+    api
+      .answer("GET", "/lenses", { data: [lens(), nokton] })
+      .answer("PATCH", "/lenses/lens-40", { data: { ...nokton, isActive: false } });
+
+    const reply = await tomu.call("tomu_gear", { action: "update_lens", name: "nokton", isActive: false });
+
+    expect(api.sent("PATCH", "/lenses/lens-40")).toEqual({ isActive: false });
+    expect(reply).toBe("Updated lens **Voigtlander Nokton**: isActive — → false");
+  });
+
+  it("refuses to guess when the name matches more than one camera", async () => {
+    api.answer("GET", "/cameras", {
+      data: [camera({ id: "cam-f3", make: "Nikon", model: "F3" }), camera({ id: "cam-ftn", make: "Nikon", model: "FTn2" })],
+    });
+
+    const reply = await tomu.call("tomu_gear", { action: "update_camera", name: "Nikon", notes: "x" });
+
+    expect(reply).toBe('"Nikon" is ambiguous: Nikon F3, Nikon FTn2.');
+    expect(api.requests.some((r) => r.method === "PATCH")).toBe(false);
+  });
+
+  it("says when nothing matches", async () => {
+    api.answer("GET", "/cameras", { data: [camera()] });
+    expect(await tomu.call("tomu_gear", { action: "update_camera", name: "hasselblad", notes: "x" })).toBe(
+      'No camera matching "hasselblad".',
+    );
+  });
+
+  it("explains an unknown format without calling the API", async () => {
+    const reply = await tomu.call("tomu_gear", { action: "update_camera", name: "cube", format: "6x9" });
+
+    expect(reply).toContain('"6x9" is not a format Tomu knows');
+    expect(api.requests).toHaveLength(0);
+  });
+
+  it("needs a name and at least one field", async () => {
+    expect(await tomu.call("tomu_gear", { action: "update_lens", notes: "x" })).toBe("update_lens needs a name to find the lens.");
+    expect(await tomu.call("tomu_gear", { action: "update_camera", name: "cube" })).toBe(
+      "Nothing to change: give at least one camera field to update.",
+    );
+  });
+});
+
 describe("tomu_tanks", () => {
   it("lists the fleet", async () => {
     api.answer("GET", "/tanks", { data: [tank()] });
