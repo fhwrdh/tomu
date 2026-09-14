@@ -42,7 +42,7 @@ not making a mistake.
 
 ## The corpus
 
-`cases.json`, 18 cases, each tagged with where it came from — because "here is my eval
+`cases.json`, 23 cases, each tagged with where it came from — because "here is my eval
 set" should be answerable with provenance rather than a shrug:
 
 - **`field`** — the wording itself is real. A dictation from the field, preserved in the
@@ -58,7 +58,25 @@ written to pass. **Re-tag anything you know better than the repo does** — thes
 set from repo evidence, not from memory of the day.
 
 Adding a case: append to `cases.json` with a real `provenance`, then run the eval. Tier
-1 should stay at `harm 0`; a new `miss` is a finding, not a failure.
+1 should stay at `harm 0` outside the known gaps; a new `miss` is a finding, not a failure.
+
+### Known gaps
+
+`KNOWN_TIER1_GAPS` in `eval.test.ts` lists, by id, the cases tier 1 currently gets
+wrong. It is a ratchet: every other case stays under the strict gates, and a listed case
+that starts passing fails the build until it is taken off the list.
+
+The list exists because of five **conflict cases** added 2026-09-14. The first sweep was
+flat from 0.5 to 1.0: no case had the tiers disagreeing, so the corpus could not say
+anything about the threshold. The conflict cases (spoken self-corrections, a retracted
+setting, a push ISO next to settings, a spoken decimal f-number) found:
+
+- a first-match rule in tier 1 that keeps a value the speaker corrected ("f eight,
+  actually f eleven" → f/8) or retracted ("plus one, never mind" → +1);
+- a **policy** gap rather than a model one: `mergeParse` skips null tier-2 values, so
+  tier 2 cannot clear a value tier 1 invented, at any threshold;
+- the first real shape in the sweep: at 0.95 and above, the model's f/11 correction is
+  refused and harm rises.
 
 ## Recordings
 
@@ -88,7 +106,7 @@ call, and this is how it stops being one. Read it for two things: where harm sta
 rising (the model overriding correct tier-1 values), and where hits stop improving
 (the model's confidence no longer earning the override).
 
-With 18 cases this is a smoke test, not a measurement — the corpus needs to be tens of
+With 23 cases this is a smoke test, not a measurement — the corpus needs to be tens of
 real dictations before the sweep should move the constant.
 
 ## Why it can run at all

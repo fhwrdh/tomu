@@ -128,5 +128,40 @@
     "transcript": "shot this one on Beacon Hill, two fifty at f eight",
     "expect": { "shutterSpeed": "1/250", "aperture": "f/8" },
     "tier2Expect": { "locationName": "Beacon Hill" }
+  },
+  {
+    "id": "self-correction-shutter",
+    "source": "synthetic",
+    "provenance": "Conflict case, added 2026-09-14 because the threshold sweep came back flat: no case had tiers disagreeing. Dictation self-corrects mid-breath; the spoken correction is the truth, and a first-match rule takes the retracted value.",
+    "transcript": "two fifty, no wait, five hundred, f eight",
+    "expect": { "shutterSpeed": "1/500", "aperture": "f/8" }
+  },
+  {
+    "id": "self-correction-aperture",
+    "source": "synthetic",
+    "provenance": "Conflict case, 2026-09-14. Same family as self-correction-shutter, on aperture, with 'actually' as the correction word.",
+    "transcript": "f eight, actually f eleven, a hundred twenty-fifth",
+    "expect": { "aperture": "f/11", "shutterSpeed": "1/125" }
+  },
+  {
+    "id": "retracted-compensation",
+    "source": "synthetic",
+    "provenance": "Conflict case, 2026-09-14. A setting said and then taken back. The expected log has no compensation; mergeParse skips null tier-2 values, so tier 2 cannot clear a tier-1 value at any threshold. This case measures that policy gap rather than the model.",
+    "transcript": "plus one, never mind, no compensation, f four",
+    "expect": { "aperture": "f/4" }
+  },
+  {
+    "id": "iso-not-shutter",
+    "source": "synthetic",
+    "provenance": "Conflict case, 2026-09-14. A push ISO spoken next to settings: 'sixteen hundred' is the film speed, not 1/1600.",
+    "transcript": "HP5 pushed to sixteen hundred, f four, sixtieth",
+    "expect": { "aperture": "f/4", "shutterSpeed": "1/60" }
+  },
+  {
+    "id": "wide-open-decimal",
+    "source": "synthetic",
+    "provenance": "Conflict case, 2026-09-14. A spoken decimal f-number after 'wide open'; 'one point four' must not split into f/1 or a shutter of 1/4.",
+    "transcript": "wide open at one point four, a thirtieth, frame twelve",
+    "expect": { "aperture": "f/1.4", "shutterSpeed": "1/30", "frameNumber": "12" }
   }
 ]

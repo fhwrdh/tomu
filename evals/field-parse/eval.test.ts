@@ -64,9 +64,22 @@ describe("scorer", () => {
   });
 });
 
+/**
+ * Cases tier 1 is known to get wrong, by id. A ratchet, not an exemption: every other
+ * case stays under the strict gates below, and a listed case that starts passing fails
+ * the build until it is removed from the list. Added 2026-09-14 with the conflict cases —
+ * a first-match rule keeps a value the speaker corrected or retracted.
+ */
+const KNOWN_TIER1_GAPS = new Set([
+  "self-correction-aperture", // "f eight, actually f eleven" keeps f/8; misses "a hundred twenty-fifth"
+  "retracted-compensation", //   "plus one, never mind" keeps +1; misses "f four"
+  "iso-not-shutter", //          misses "f four" after "sixteen hundred" (a miss, no harm)
+]);
+const gated = CASES.filter((c) => !KNOWN_TIER1_GAPS.has(c.id));
+
 describe("tier 1 over the corpus", () => {
-  it("invents nothing: no wrong or spurious value in any case", () => {
-    const offenders = CASES.flatMap((c) =>
+  it("invents nothing: no wrong or spurious value outside the known gaps", () => {
+    const offenders = gated.flatMap((c) =>
       scoreCase(c, tier1Of(c))
         .filter((s) => s.outcome === "wrong" || s.outcome === "spurious")
         .map((s) => `${c.id}: ${s.field} expected ${s.expected ?? "—"}, got ${s.observed}`),
@@ -74,13 +87,24 @@ describe("tier 1 over the corpus", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("misses only fields tier 1 cannot produce", () => {
+  it("misses only fields tier 1 cannot produce, outside the known gaps", () => {
     // Every structured field is tier 1's job; subject and locationName are tier 2's.
     // If this list grows a structured field, tier 1 regressed.
     const missed = new Set(
-      CASES.flatMap((c) => scoreCase(c, tier1Of(c)).filter((s) => s.outcome === "miss").map((s) => s.field)),
+      gated.flatMap((c) => scoreCase(c, tier1Of(c)).filter((s) => s.outcome === "miss").map((s) => s.field)),
     );
     expect([...missed].sort()).toEqual(["locationName", "subject"]);
+  });
+
+  it.each([...KNOWN_TIER1_GAPS])("known gap %s still fails — remove it from the list once fixed", (id) => {
+    const c = CASES.find((x) => x.id === id);
+    expect(c, `${id} is listed as a gap but is not in cases.json`).toBeDefined();
+    const structuredMiss = (s: { field: string; outcome: string }) =>
+      s.outcome === "miss" && s.field !== "subject" && s.field !== "locationName";
+    const failing = scoreCase(c!, tier1Of(c!)).some(
+      (s) => s.outcome === "wrong" || s.outcome === "spurious" || structuredMiss(s),
+    );
+    expect(failing).toBe(true);
   });
 });
 
