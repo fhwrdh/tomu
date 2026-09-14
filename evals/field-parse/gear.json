@@ -1,0 +1,11 @@
+{
+  "cameras": [
+    { "id": "cam-m6", "label": "Leica M6" },
+    { "id": "cam-m7", "label": "Mamiya 7" },
+    { "id": "cam-crown", "label": "Graflex Crown Graphic" }
+  ],
+  "lenses": [
+    { "id": "lens-35", "label": "Leica Summicron 35mm" },
+    { "id": "lens-80", "label": "Mamiya 80mm f/4" }
+  ]
+}

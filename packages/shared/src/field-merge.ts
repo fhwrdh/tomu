@@ -14,10 +14,16 @@ export interface Tier2Result {
 
 export const TIER2_OVERRIDE_CONFIDENCE = 0.9;
 
+/**
+ * @param threshold Confidence at or above which tier 2 may overwrite a tier-1 value.
+ * A parameter only so the eval harness can sweep it (`evals/field-parse`); production
+ * always takes the default. Changing the default changes the policy.
+ */
 export function mergeParse(
   current: Record<ParsedFieldName, string | null | undefined>,
   tier2: Tier2Result,
   editedFields: string[],
+  threshold: number = TIER2_OVERRIDE_CONFIDENCE,
 ): { fields: Partial<Record<ParsedFieldName, string | null>>; changed: ParsedFieldName[] } {
   const out: Partial<Record<ParsedFieldName, string | null>> = {};
   const edited = new Set(editedFields);
@@ -27,7 +33,7 @@ export function mergeParse(
     if (edited.has(name)) continue;
     const have = current[name];
     const conf = tier2.confidence[name] ?? 0;
-    if (have == null || have === "" || conf >= TIER2_OVERRIDE_CONFIDENCE) {
+    if (have == null || have === "" || conf >= threshold) {
       if (have !== v) out[name] = v;
     }
   }

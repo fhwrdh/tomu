@@ -56,6 +56,22 @@ Tools, by area:
 - **Other** — `tomu_gear`, `tomu_summary`, `tomu_note`
 - **Field** — `tomu_capture` (verbatim voice note → field event), `tomu_field_events`, `tomu_edit_event`, `tomu_pin_event`, `tomu_roll_level_event`, `tomu_reparse_events`, `tomu_delete_event` (the desk-side "scratch that"). The PWA `/capture` screen is the primary field surface; photos never pass through Claude.
 
+## Parser tools
+
+The field-note parser has two surfaces of its own, both offline:
+
+```bash
+npm run parse                        # interactive: type a note, see tier 1 + the merge policy
+npm run parse -- "two fifty at f eight"
+npm run eval:field-parse             # score tier 1 / tier 2 / merged over evals/field-parse/cases.json
+npm run eval:field-parse -- --sweep  # what the 0.9 merge threshold buys
+```
+
+Both go through `npm` rather than `tsx` directly: they read `@tomu/shared` through its
+package entry (`dist/`), so the scripts rebuild it first. Tier-2 scoring needs recordings
+— see `evals/field-parse/README.md`. Repo-level invariants (rules duplicated across
+files, e.g. the two rsync exclude lists) live in `test/` as the `repo` Vitest project.
+
 ## Deployment
 
 - **URL**: `film.fhwrdh.net` → a DigitalOcean droplet
