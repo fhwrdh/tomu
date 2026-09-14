@@ -67,12 +67,18 @@ export async function parseEventWithModel(eventId: string): Promise<{ skipped: b
     });
     const merged = mergeParse(current, tier2, ev.editedFields);
 
+    // A retraction never erases the value; it sends the event to review with the value named.
+    const retractionNote = merged.retracted.length
+      ? `speaker took back ${merged.retracted.map((f) => `${f} (${current[f]} still recorded)`).join(", ")}`
+      : null;
+    const parseNotes = [tier2.reviewReason, retractionNote].filter(Boolean).join("; ") || null;
+
     const set: Partial<typeof fieldEvents.$inferInsert> = {
       ...merged.fields,
       parsedAt: new Date(),
       parser: `claude:${config.FIELD_PARSE_MODEL}`,
-      parseNotes: tier2.reviewReason ?? null,
-      review: !!tier2.reviewReason,
+      parseNotes,
+      review: parseNotes != null,
       parseAttempts: 0,
       updatedAt: new Date(),
     };

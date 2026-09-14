@@ -141,6 +141,8 @@ const SHUTTER_ORDINALS: Record<string, number> = {
   "two fiftieth": 250,
   "one twenty fifth": 125,
   "one twentyfifth": 125,
+  "hundred twenty fifth": 125,
+  "one hundred twenty fifth": 125,
   fifteenth: 15,
   thirtieth: 30,
   sixtieth: 60,
@@ -164,7 +166,7 @@ const SHUTTER_RULES_EXPLICIT: Rule[] = [
   { field: "shutterSpeed", re: /\b(\d+)\s*s\b/gi, value: (m) => `${m[1]}s` },
   {
     field: "shutterSpeed",
-    re: /\b(?:a |an )?(two[\s-]fiftieth|one[\s-]twenty[\s-]?fifth|fifteenth|thirtieth|sixtieth|thousandth|five[\s-]hundredth)\b/gi,
+    re: /\b(?:a |an )?(two[\s-]fiftieth|(?:one[\s-])?hundred[\s-]twenty[\s-]?fifth|one[\s-]twenty[\s-]?fifth|fifteenth|thirtieth|sixtieth|thousandth|five[\s-]hundredth)\b/gi,
     value: (m) => {
       const norm = m[1].toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ");
       const n = SHUTTER_ORDINALS[norm] ?? SHUTTER_ORDINALS[norm.replace(" ", "")];
@@ -212,8 +214,12 @@ const APERTURE_WORDS: Record<string, string> = {
   "one point four": "1.4",
   "two point eight": "2.8",
   "two eight": "2.8",
+  "three point five": "3.5",
   "five six": "5.6",
   "five point six": "5.6",
+  // Single words only ever count after an explicit "f" ("f four"); see APERTURE_RULES.
+  two: "2",
+  four: "4",
   eight: "8",
   eleven: "11",
   sixteen: "16",
@@ -252,7 +258,8 @@ const APERTURE_RULES: Rule[] = [
   { field: "aperture", re: /\bf(\d{1,2}(?:\.\d{1,2})?)\b/gi, value: (m) => plausibleAperture(m[1]) },
   {
     field: "aperture",
-    re: new RegExp(`\\bf\\s+(${Object.keys(APERTURE_WORDS).join("|")})\\b`, "gi"),
+    // Longest first, so "f two point eight" is not read as "f two".
+    re: new RegExp(`\\bf\\s+(${Object.keys(APERTURE_WORDS).sort((a, b) => b.length - a.length).join("|")})\\b`, "gi"),
     value: (m) => `f/${APERTURE_WORDS[m[1].toLowerCase()]}`,
   },
   // spoken f-number without the leading "f": only unambiguous compound
@@ -320,6 +327,63 @@ const METER_RULES: Rule[] = [
 
 const COMMAND_RE = /\b(scratch that|delete (?:last|that)(?: one)?|delete the last(?: one)?)\b/i;
 
+// ── spoken corrections ──
+//
+// Dictation corrects itself mid-breath: "f eight, actually f eleven". The rules above
+// take the first match, so on their own they keep the value the photographer took back.
+// A correction is recognised only when a cue word sits *directly* after the matched
+// value and a new value for the same field follows the cue — two values without a cue
+// ("f8 for the sky, f4 for the shadows") keep first-match, which is the conservative
+// reading. A bare "no" is deliberately not a cue ("f eight, no flash").
+const CORRECTION_CUE = /^[\s,;:.—-]*(?:no,?\s+wait|actually|i\s+mean|sorry|rather|make\s+that|correction)\b[\s,;:.—-]*/i;
+/** How far past the cue the corrected value may start ("actually, at f eleven"). */
+const CORRECTION_GAP = 4;
+const MAX_CORRECTIONS = 5;
+
+const CORRECTABLE: Array<[keyof ParsedFields, Rule[]]> = [
+  ["frameNumber", FRAME_RULES.filter((r) => r.field === "frameNumber")],
+  ["shutterSpeed", [...SHUTTER_RULES_EXPLICIT, ...SHUTTER_BARE_RULES]],
+  ["aperture", APERTURE_RULES],
+  ["compensation", COMP_RULES],
+  ["meteringMode", METER_RULES],
+];
+
+/** The earliest valid match of any rule starting in [from, from + CORRECTION_GAP]. */
+function matchNear(rules: Rule[], text: string, from: number, others: ParseSpan[]) {
+  let best: { value: string | number; start: number; end: number } | null = null;
+  for (const rule of rules) {
+    const re = new RegExp(rule.re.source, rule.re.flags.includes("g") ? rule.re.flags : rule.re.flags + "g");
+    re.lastIndex = from;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) && m.index <= from + CORRECTION_GAP) {
+      const s = m.index;
+      const e = s + m[0].length;
+      const v = overlaps(others, s, e) ? null : rule.value(m);
+      if (v != null) {
+        if (!best || s < best.start) best = { value: v, start: s, end: e };
+        break;
+      }
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+  }
+  return best;
+}
+
+function applyCorrections(text: string, fields: ParsedFields, spans: ParseSpan[]) {
+  for (const [field, rules] of CORRECTABLE) {
+    for (let hop = 0; hop < MAX_CORRECTIONS; hop++) {
+      const i = spans.findIndex((s) => s[2] === field);
+      if (i < 0) break;
+      const cue = CORRECTION_CUE.exec(text.slice(spans[i][1]));
+      if (!cue) break;
+      const next = matchNear(rules, text, spans[i][1] + cue[0].length, spans.filter((_, j) => j !== i));
+      if (!next) break;
+      (fields as Record<string, unknown>)[field] = next.value;
+      spans[i] = [next.start, next.end, field];
+    }
+  }
+}
+
 // Unit words carry no identity: a lens row with a null focal length can produce a
 // label whose only free-standing token is "mm", which would then match any note
 // that says it. Bare units never identify gear, so they are dropped as tokens
@@ -361,6 +425,26 @@ function matchGear(
   return best ? { id: best.id, span: best.span } : null;
 }
 
+/**
+ * Whether a note names this lens by something that is the lens's own: a label token no
+ * camera label also has (a focal length, a lens model). A shared brand word does not
+ * count — "Mamiya 7" names the camera, and the model read it as the Mamiya 80mm on 3 of
+ * 3 calls on 2026-09-14. Used to drop a tier-2 lensId the note gives no evidence for; a
+ * spoken focal length the tokens cannot see ("the eighty") becomes a miss, not a lie.
+ */
+export function lensNamedIn(text: string, lensLabel: string, cameraLabels: string[]): boolean {
+  const tokensOf = (label: string) => {
+    const raw = label.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 2 && !UNIT_TOKENS.has(t));
+    const digits = raw.map((t) => t.match(/^(\d+)[a-z]+$/)?.[1]).filter((t): t is string => !!t && t.length >= 2);
+    return new Set([...raw, ...digits]);
+  };
+  const cameraTokens = new Set(cameraLabels.flatMap((l) => [...tokensOf(l)]));
+  const lower = text.toLowerCase();
+  return [...tokensOf(lensLabel)]
+    .filter((t) => !cameraTokens.has(t))
+    .some((t) => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower));
+}
+
 export function parseTranscript(text: string, gear?: GearIndex): ParseResult {
   const fields: ParsedFields = {};
   const spans: ParseSpan[] = [];
@@ -380,6 +464,7 @@ export function parseTranscript(text: string, gear?: GearIndex): ParseResult {
   apply(COMP_RULES, text, fields, spans);
   apply(METER_RULES, text, fields, spans);
   apply(SHUTTER_BARE_RULES, text, fields, spans);
+  applyCorrections(text, fields, spans);
 
   if (gear) {
     const cam = matchGear(text, gear.cameras);

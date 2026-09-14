@@ -40,3 +40,36 @@ describe("mergeParse", () => {
     expect(mergeParse(current, tier2, ["aperture"], 0).fields).toEqual({});
   });
 });
+
+// A retraction ("plus one, never mind") is reported, never applied: the merge must not
+// erase a value, so the event goes to review and a person decides (owner, 2026-09-14).
+describe("mergeParse retractions", () => {
+  const withComp = { ...current, compensation: "+1" };
+
+  it("reports a retracted field that still holds a value, and leaves the value alone", () => {
+    const r = mergeParse(withComp, { fields: {}, confidence: {}, retracted: ["compensation"] }, []);
+    expect(r.fields).toEqual({});
+    expect(r.retracted).toEqual(["compensation"]);
+  });
+
+  it("does not report a retracted field that is already empty", () => {
+    const r = mergeParse(current, { fields: {}, confidence: {}, retracted: ["compensation"] }, []);
+    expect(r.retracted).toEqual([]);
+  });
+
+  it("does not report a hand-edited field — the person already decided", () => {
+    const r = mergeParse(withComp, { fields: {}, confidence: {}, retracted: ["compensation"] }, ["compensation"]);
+    expect(r.retracted).toEqual([]);
+  });
+
+  it("never fills a field the model says was taken back", () => {
+    const r = mergeParse(current, { fields: { compensation: "+1" }, confidence: { compensation: 1 }, retracted: ["compensation"] }, []);
+    expect(r.fields).toEqual({});
+    expect(r.retracted).toEqual([]);
+  });
+
+  it("reports nothing when the model lists no retractions", () => {
+    expect(mergeParse(withComp, { fields: {}, confidence: {} }, []).retracted).toEqual([]);
+    expect(mergeParse(withComp, { fields: {}, confidence: {}, retracted: null }, []).retracted).toEqual([]);
+  });
+});
