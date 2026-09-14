@@ -19,6 +19,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { createServer } from "./server.js";
 import { handleConsent, tomuOAuthProvider } from "./oauth/provider.js";
+import { containsInitialize, routeSession } from "./session.js";
 
 const PORT = Number(process.env.MCP_PORT || 3457);
 const ISSUER = process.env.OAUTH_ISSUER_URL || `http://localhost:${PORT}`;
@@ -43,21 +44,21 @@ async function handleMcp(req: Request, res: Response): Promise<void> {
   const body = req.method === "POST" ? req.body : undefined;
   let transport = sessionId ? transports.get(sessionId) : undefined;
 
-  if (!transport) {
-    const isInit =
-      req.method === "POST" &&
-      body != null &&
-      (Array.isArray(body)
-        ? body.some((m: { method?: string }) => m?.method === "initialize")
-        : (body as { method?: string })?.method === "initialize");
-    if (!isInit) {
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: { code: -32000, message: "No valid session. Send initialize first." },
-        id: null,
-      });
-      return;
-    }
+  const route = routeSession({
+    sessionId,
+    known: transport !== undefined,
+    isInitialize: req.method === "POST" && containsInitialize(body),
+  });
+  if (route.kind === "reject") {
+    res.status(route.status).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: route.message },
+      id: null,
+    });
+    return;
+  }
+
+  if (route.kind === "initialize") {
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sid) => {
@@ -70,7 +71,8 @@ async function handleMcp(req: Request, res: Response): Promise<void> {
     await createServer().connect(transport);
   }
 
-  await transport.handleRequest(req, res, body);
+  // "existing" found it in the map; "initialize" just created it.
+  await transport!.handleRequest(req, res, body);
 }
 
 // ── dual-mode auth: OAuth access token, else legacy static bearer / path secret ──
