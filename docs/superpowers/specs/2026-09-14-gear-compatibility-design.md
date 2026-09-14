@@ -24,6 +24,7 @@ and both are needed.
 |---|---|
 | Model | Mount on bodies and lenses, owned adapters as records, built-in lenses for fixed-lens bodies. Compatibility is derived, not hand-maintained. |
 | Gear changes | Compatibility is computed from current gear every time it is asked, never stored as pairs. Adding an adapter (bought or found) immediately widens what fits: an M42→Nikon F adapter makes every owned M42 lens fit the F3, with nothing to backfill (owner, 2026-09-14). |
+| Defaults, not constraints | Mount categories, compatibility ordering, fixed-lens fill and lens filters are **pit-of-success optimizations, never inescapable constraints** (owner, 2026-09-14). Test for every piece of this spec: it makes the likely answer the easiest one, and there is always a one-tap way past it. No API call is rejected, and no choice is hidden or removed, on the grounds of a category or a compatibility result. |
 | Reality first | **Record what happened; fix the model after the fact** (owner, 2026-09-14). The model never blocks or dead-ends a note in the field: every lens stays choosable, an unlisted lens can be named in free text, and a mismatch is a warning, not a gate. |
 | Wrong lens | A warning, **derived when the event is read** from current gear, never written into the event. Fixing the model (a mount, an adapter, a new lens) clears it everywhere at once, with nothing stale to clean up. The value is never rejected or cleared. |
 | Built-in lenses | Real `lenses` rows, so a frame from the XA carries a `lensId` like any other. |
@@ -74,7 +75,9 @@ returns a listed `MountId` or a custom slug, and `null` only for empty input.
 ### 3.2 Schema (additive only)
 
 - `cameras.mount text null` — a `MountId`.
-- `cameras.built_in_lens_id uuid null → lenses.id` — required when `mount = 'fixed'`.
+- `cameras.built_in_lens_id uuid null → lenses.id` — the built-in lens of a `fixed`
+  body. Optional even then: a fixed body whose lens is not recorded yet is valid, fills
+  nothing, and lists as "built-in lens not recorded".
 - `lenses.mount text null` — a `MountId`; built-in lenses carry `fixed`.
 - New `adapters` table: `id`, `user_id`, `name`, `lens_mount`, `body_mount`,
   `acquired_on date null`, `notes`, `is_active`, timestamps. One row means "a
@@ -135,7 +138,9 @@ built-in lens is filled in:
   from pinned events (`field-events.ts` pin path, `routes/rolls.ts`);
 - never over a hand-edited `lensId`, and never on a `none` (pinhole) body.
 
-This is identity, not inference, so it needs no review flag.
+This is a default, not a lock: the filled lens is an ordinary value the photographer can
+change or clear like any other, and a change marks it hand-edited so it is never
+refilled. It needs no review flag.
 
 ### 4.2 Capture narrows choices
 
@@ -182,14 +187,21 @@ the event has none), at the event's capture time, keeps its value and carries a 
 - New `tomu_gear` actions: `set_mount` (camera or lens, alias-tolerant) and `add_adapter`.
   Implemented in `packages/mcp/src/tools/gear.ts` after #47.
 - `GET /frames?lensId=` and a `lens` filter on `tomu_rolls` (fuzzy lens name) answer
-  "what did I shoot with the Nokton". The question gets reliable once 4.1 backfills
-  fixed-lens frames.
+  "what did I shoot with the Nokton". The fuzzy filter also matches `lens_note` text, so a
+  lens recorded before it existed in Tomu is not lost to the filter (lens names only; a
+  missed match is a gap to fix, not a rule). The question gets
+  reliable once 4.1 backfills fixed-lens frames.
+- Filters narrow a view; they never define what exists. Any filtered list shows how many
+  items it left out and offers "show all".
 
 ## 5. API
 
-- `createCameraSchema` / `updateCameraSchema`: optional `mount` (accepts aliases,
-  stores the canonical id) and `builtInLensId`. Setting `mount: "fixed"` without a
-  built-in lens is a 400 that says so.
+- `createCameraSchema` / `updateCameraSchema`: optional `mount` (accepts aliases and
+  custom names, stores the canonical id or custom slug) and `builtInLensId`. No
+  combination of mount and built-in lens is rejected; the only 4xx is a
+  `builtInLensId` that is not the user's lens.
+- Event and frame writes never validate `lensId` against the camera. Ownership is still
+  checked (a lens that is not the user's is a 404, as today); compatibility never is.
 - `createLensSchema` / `updateLensSchema`: optional `mount`.
 - `/adapters`: list, create, update (`isActive` to retire). No delete, matching gear.
 - Responses stay `{ data }`; mount returns as `{ id, label }`.
@@ -235,8 +247,8 @@ unknown above is left unknown, not guessed.
 - **Server tests:** fixed-lens fill on create and on pin, never over an edited `lensId`;
   an incompatible lens is saved as given and returns a `gearWarning` naming both mounts;
   adding the bridging adapter makes the same event return no warning, with nothing
-  rewritten; `lens_note` round-trips; mount aliases on the gear routes; the
-  `fixed`-without-built-in-lens 400.
+  rewritten; `lens_note` round-trips; mount aliases and custom mounts on the gear routes;
+  a `fixed` body with no built-in lens is accepted and listed as "not recorded".
 - **Never a dead end:** creating an event with an incompatible lens, a lens on a pinhole,
   or only a `lens_note` always succeeds (online and through the offline queue).
 - **Eval:** `gear.json` gains mounts, and new cases cover a fixed-lens body with no lens
