@@ -1,15 +1,12 @@
 // ── Standing summary ──
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { api } from "../api.js";
 import type { InventoryItem } from "../types.js";
 
 // Tool bodies are intentionally not re-indented: they moved verbatim out of the
 // old single-file server.ts, so the split stays reviewable line by line.
 export function register(server: McpServer) {
-
-
 server.tool(
   "tomu_summary",
   "Get a dashboard overview: inventory totals, expiring film, and gear count.",
@@ -49,7 +46,4 @@ server.tool(
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 );
-
-// ── Rolls: shared helpers ─────────────────────────────────────────────
-
 }

@@ -1,18 +1,17 @@
 // ── Field captures ──
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { api } from "../api.js";
-import { fuzzyMatch, rankedMatch } from "../matching.js";
-import type { FieldEventRow } from "../types.js";
 import { describeRoll, eventLine } from "../format.js";
+import { fuzzyMatch, rankedMatch } from "../matching.js";
 import { pickActiveRoll, resolveRollHandle, rollsIndex } from "../resolve.js";
-import { randomUUID } from "node:crypto";
+import type { FieldEventRow } from "../types.js";
 
 // Tool bodies are intentionally not re-indented: they moved verbatim out of the
 // old single-file server.ts, so the split stays reviewable line by line.
 export function register(server: McpServer) {
-
 server.tool(
   "tomu_capture",
   "FIELD USE (fallback when the Tomu app isn't handy). Record a spoken field note verbatim. Pass the user's words as " +
@@ -174,7 +173,4 @@ server.tool(
     return { content: [{ type: "text" as const, text: `Deleted ${line}` }] };
   }
 );
-
-// ── Tool: tomu_note ───────────────────────────────────────────────────
-
 }

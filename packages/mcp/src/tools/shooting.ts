@@ -4,14 +4,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { api } from "../api.js";
 import { bestMatch, cleanStockName, displayStock, fuzzyMatch, rankedMatch, strictStockMatch } from "../matching.js";
-import type { ActiveRoll } from "../types.js";
 import { pickActiveRoll } from "../resolve.js";
+import type { ActiveRoll } from "../types.js";
 
 // Tool bodies are intentionally not re-indented: they moved verbatim out of the
 // old single-file server.ts, so the split stays reviewable line by line.
 export function register(server: McpServer) {
-
-
 server.tool(
   "tomu_load",
   "Load a roll of film into a camera. Fuzzy-matches film stock and camera by name. " +
@@ -83,9 +81,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_shoot ──────────────────────────────────────────────────
-
-
 server.tool(
   "tomu_shoot",
   "Log a frame on an active roll. Frame number is auto-incremented if omitted. " +
@@ -142,9 +137,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_unload ─────────────────────────────────────────────────
-
-
 server.tool(
   "tomu_unload",
   "Unload a roll from a camera. Assigns a display ID (YYYYMMDD.N) based on your local date. " +
@@ -175,13 +167,6 @@ server.tool(
   }
 );
 
-// ── Field events ──────────────────────────────────────────────────────
-//
-// The field stream: voice notes (verbatim transcript + parsed fields) and photos.
-// This tool path is the Claude-app fallback; the PWA is the primary field surface.
-// The photo never passes through Claude.
-
-
 server.tool(
   "tomu_note",
   "Add a timestamped note to the active roll, or to a specific frame on it. " +
@@ -206,9 +191,6 @@ server.tool(
     return { content: [{ type: "text" as const, text: `Note added to ${target}.` }] };
   }
 );
-
-// ── Tool: tomu_undo_load ──────────────────────────────────────────────
-
 
 server.tool(
   "tomu_undo_load",
@@ -236,9 +218,6 @@ server.tool(
     };
   }
 );
-
-// ── Tool: tomu_rolls ──────────────────────────────────────────────────
-
 
 server.tool(
   "tomu_rolls",
@@ -299,9 +278,6 @@ server.tool(
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 );
-
-// ── Tool: tomu_log_shot_roll ──────────────────────────────────────────
-
 
 server.tool(
   "tomu_log_shot_roll",
@@ -395,9 +371,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_dev_candidates ─────────────────────────────────────────
-
-
 server.tool(
   "tomu_correct_roll",
   "Fix fields on an already-logged roll, found by its CURRENT displayId (e.g. '20260528.01'). " +
@@ -470,7 +443,4 @@ server.tool(
     };
   }
 );
-
-// ── Tool: tomu_set_stock_aliases ──────────────────────────────────────
-
 }

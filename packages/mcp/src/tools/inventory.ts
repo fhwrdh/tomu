@@ -3,16 +3,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { api } from "../api.js";
-import { cleanStockName, displayStock, fuzzyMatch, normalize, strictStockMatch } from "../matching.js";
-import type { InventoryItem, InventoryRow } from "../types.js";
 import { coerceExpiration, describeItem, describeLot } from "../format.js";
+import { cleanStockName, displayStock, fuzzyMatch, normalize, strictStockMatch } from "../matching.js";
 import { resolveLot } from "../resolve.js";
+import type { InventoryItem, InventoryRow } from "../types.js";
 
 // Tool bodies are intentionally not re-indented: they moved verbatim out of the
 // old single-file server.ts, so the split stays reviewable line by line.
 export function register(server: McpServer) {
-
-
 server.tool(
   "tomu_inventory",
   "Query film inventory. Shows what film you have, quantities, and expiration alerts. " +
@@ -65,9 +63,6 @@ server.tool(
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 );
-
-// ── Tool: tomu_add_inventory ──
-
 
 server.tool(
   "tomu_add_inventory",
@@ -190,8 +185,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_edit_inventory ─────────────────────────────────────────
-
 server.tool(
   "tomu_edit_inventory",
   "Patch an existing inventory lot in place (does NOT add a new one). Use to fix or fill in " +
@@ -251,9 +244,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_delete_inventory ───────────────────────────────────────
-
-
 server.tool(
   "tomu_delete_inventory",
   "Remove an inventory lot entirely. Use this to undo a mistaken add — zeroing the " +
@@ -297,9 +287,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_gear ──
-
-
 server.tool(
   "tomu_set_stock_aliases",
   "Add (or replace) alternate names on a film stock so fuzzy matching recognises shorthand. " +
@@ -339,7 +326,4 @@ server.tool(
     };
   }
 );
-
-// ── Tool: tomu_tanks ──────────────────────────────────────────────────
-
 }

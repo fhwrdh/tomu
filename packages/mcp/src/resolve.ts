@@ -3,12 +3,11 @@
 // Turning what was said ("the M6", "Tri-X", a short id) into a specific record.
 // Scoring lives in matching.ts; these wrap it with the API lookups.
 
-import { api } from "./api.js";
-import { bestMatch, cleanStockName, fuzzyMatch, normalize, rankedMatch, strictStockMatch } from "./matching.js";
-import type { ActiveRoll, AnyRoll, InventoryRow } from "./types.js";
 import { formatDevId } from "@tomu/shared";
-import { displayStock } from "./matching.js";
+import { api } from "./api.js";
 import { describeLot } from "./format.js";
+import { displayStock, fuzzyMatch, rankedMatch } from "./matching.js";
+import type { ActiveRoll, AnyRoll, InventoryRow } from "./types.js";
 
 /**
  * Resolve exactly one inventory lot from a loose identifier, or explain why not.

@@ -2,16 +2,15 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { computeDilution, findTank, rollEquivalents, TANKS } from "@tomu/shared";
 import { api } from "../api.js";
-import { TANKS, computeDilution, findTank, rollEquivalents } from "@tomu/shared";
+import { formatTime, groupLabel, TIER_LABEL } from "../format.js";
 import { displayStock } from "../matching.js";
 import type { CandidateGroup, CandidateRoll, DevSession, PlanResponse, PlanRoll } from "../types.js";
-import { TIER_LABEL, formatTime, groupLabel } from "../format.js";
 
 // Tool bodies are intentionally not re-indented: they moved verbatim out of the
 // old single-file server.ts, so the split stays reviewable line by line.
 export function register(server: McpServer) {
-
 server.tool(
   "tomu_dev_candidates",
   "List rolls awaiting development, grouped by recipe. Tier 1: explicit intended-dev (from labels). Tier 2: matched against past sessions. Tier 3: MDC recipe lookup by stock+ISO. Tier 4: clustered by stock+ISO when no recipe exists anywhere.",
@@ -65,8 +64,6 @@ server.tool(
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 );
-
-// ── Tool: tomu_dev_session ────────────────────────────────────────────
 
 server.tool(
   "tomu_dev_session",
@@ -221,9 +218,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_dilution ───────────────────────────────────────────────
-
-
 server.tool(
   "tomu_dilution",
   "Compute developer mix volumes: (developer, dilution, tank-or-volume) → ml of concentrate + water, with minimum-concentrate warnings. " +
@@ -256,8 +250,6 @@ server.tool(
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 );
-
-// ── Tool: tomu_correct_roll ───────────────────────────────────────────
 
 server.tool(
   "tomu_tank_plan",
@@ -327,5 +319,4 @@ server.tool(
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 );
-
 }

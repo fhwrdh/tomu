@@ -4,17 +4,8 @@
 // re-derive presentation from rows. These are the shared pieces of that.
 
 import { formatDevId } from "@tomu/shared";
-import type {
-  ActiveRoll,
-  AnyRoll,
-  CandidateGroup,
-  FieldEventRow,
-  InventoryItem,
-  InventoryRow,
-  PlanLoad,
-  TankRow,
-} from "./types.js";
 import { displayStock } from "./matching.js";
+import type { ActiveRoll, AnyRoll, FieldEventRow, InventoryItem, InventoryRow, PlanLoad, TankRow } from "./types.js";
 
 export function describeItem(item: InventoryItem): string {
   if (item.form === "bulk_roll") {
@@ -27,9 +18,6 @@ export function describeItem(item: InventoryItem): string {
   }
   return `${item.quantity} rolls ${item.format}`;
 }
-
-// ── Tool: tomu_inventory ──
-
 
 /**
  * Normalize a loose expiration string to YYYY-MM-DD. Film boxes print month
@@ -67,8 +55,6 @@ export function describeRoll(r: ActiveRoll): string {
   const cam = r.cameraMake ? `${r.cameraMake} ${r.cameraModel}` : "no camera";
   return `${displayStock(r.manufacturer, r.stockName)} (${r.format}) in ${cam} — ${r.framesShot}/${r.frameCount} frames`;
 }
-
-// ── Tool: tomu_load ───────────────────────────────────────────────────
 
 export function rollLabel(r: { displayId?: string | null; devDate?: string | null; devSeq?: number | null; id: string }): string {
   return r.displayId ?? formatDevId(r.devDate, r.devSeq) ?? r.id.slice(0, 8);

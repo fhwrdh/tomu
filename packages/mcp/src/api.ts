@@ -27,10 +27,3 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (res.status === 204) return undefined as T;
   return res.json();
 }
-
-// ── Server ──
-//
-// createServer() builds a fully tool-registered McpServer. Entry points pick
-// the transport: index.ts (stdio, local) and http.ts (streamable HTTP, remote).
-// Tool registrations below are intentionally not re-indented — everything down
-// to the closing `return server` is the factory body.

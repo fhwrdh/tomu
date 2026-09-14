@@ -4,7 +4,6 @@
 // them. Declared here rather than imported from the server package, which the
 // MCP server deliberately does not depend on at runtime.
 
-
 export interface InventoryItem {
   id: string;
   filmStockId: string;
@@ -39,7 +38,6 @@ export interface InventoryRow {
   source?: string | null;
 }
 
-
 export interface ActiveRoll {
   id: string;
   cameraId: string | null;
@@ -56,7 +54,6 @@ export interface ActiveRoll {
   cameraMake: string | null;
   cameraModel: string | null;
 }
-
 
 export interface FieldEventRow {
   id: string; shortId: string; clientId: string; kind: "voice" | "photo";
@@ -79,7 +76,6 @@ export interface AnyRoll {
   cameraMake: string | null;
   cameraModel: string | null;
 }
-
 
 export interface CandidateRoll {
   id: string;
@@ -104,7 +100,6 @@ export interface CandidateGroup {
   rolls: CandidateRoll[];
 }
 
-
 export interface SessionRoll {
   id: string;
   displayId: string | null;
@@ -128,7 +123,6 @@ export interface DevSession {
   rolls?: SessionRoll[];
 }
 
-
 export interface TankRow {
   id: string;
   name: string;
@@ -141,7 +135,6 @@ export interface TankRow {
   notes: string | null;
   isActive: boolean;
 }
-
 
 export interface PlanRoll {
   id: string;

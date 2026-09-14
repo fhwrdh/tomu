@@ -3,15 +3,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { api } from "../api.js";
+import { tankLine } from "../format.js";
 import { fuzzyMatch } from "../matching.js";
 import type { TankRow } from "../types.js";
-import { tankLine } from "../format.js";
 
 // Tool bodies are intentionally not re-indented: they moved verbatim out of the
 // old single-file server.ts, so the split stays reviewable line by line.
 export function register(server: McpServer) {
-
-
 server.tool(
   "tomu_gear",
   "List, add, or query cameras and lenses.",
@@ -96,8 +94,6 @@ server.tool(
   }
 );
 
-// ── Tool: tomu_summary ──
-
 server.tool(
   "tomu_tanks",
   "Manage the developing-tank fleet (stored in Tomu, editable anytime). action='list' shows the fleet; " +
@@ -156,7 +152,4 @@ server.tool(
     return { content: [{ type: "text" as const, text: `Updated:\n${tankLine(data)}` }] };
   }
 );
-
-// ── Tool: tomu_tank_plan ──────────────────────────────────────────────
-
 }
