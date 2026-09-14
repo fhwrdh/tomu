@@ -9,7 +9,7 @@ A lens is only ever on a body it fits. Tomu does not know that today, so it cann
 
 - fill in the lens for a fixed-lens camera (the XA only ever shoots its own 35mm);
 - narrow the lens choices on `/capture` once a camera is picked;
-- flag a lens that cannot be on the camera a note or roll names;
+- warn about a lens that cannot be on the camera a note or roll names;
 - answer history questions ("what did I shoot with the Nokton") from consistent data.
 
 The owner asked for all four (2026-09-14). The trigger was the tier-2 lens regression
@@ -23,7 +23,9 @@ and both are needed.
 | Decision | Choice |
 |---|---|
 | Model | Mount on bodies and lenses, owned adapters as records, built-in lenses for fixed-lens bodies. Compatibility is derived, not hand-maintained. |
-| Wrong lens | Flag for review and keep the value. Never rejected, never cleared — same rule as retractions. |
+| Gear changes | Compatibility is computed from current gear every time it is asked, never stored as pairs. Adding an adapter (bought or found) immediately widens what fits: an M42→Nikon F adapter makes every owned M42 lens fit the F3, with nothing to backfill (owner, 2026-09-14). |
+| Reality first | **Record what happened; fix the model after the fact** (owner, 2026-09-14). The model never blocks or dead-ends a note in the field: every lens stays choosable, an unlisted lens can be named in free text, and a mismatch is a warning, not a gate. |
+| Wrong lens | A warning, **derived when the event is read** from current gear, never written into the event. Fixing the model (a mount, an adapter, a new lens) clears it everywhere at once, with nothing stale to clean up. The value is never rejected or cleared. |
 | Built-in lenses | Real `lenses` rows, so a frame from the XA carries a `lensId` like any other. |
 | Adapter use | Derived, not stored: a mount mismatch bridged by an owned adapter implies the adapter. |
 | Mount names | A constant list in `@tomu/shared` with aliases, matched case-insensitively (Postel). |
@@ -45,6 +47,14 @@ export const MOUNTS = {
   "pentax-67":     { label: "Pentax 6×7",     aliases: ["pentax 67", "p67", "6x7"] },
   "olympus-pen-f": { label: "Olympus Pen F",  aliases: ["pen f"] },
   "nikonos":       { label: "Nikonos",        aliases: [] },
+  // Not in the kit today, listed so a found lens or a new adapter has a mount to name.
+  "m42":           { label: "M42",            aliases: ["m42x1", "pentax screw", "universal screw", "praktica screw"] },
+  "pentax-k":      { label: "Pentax K",       aliases: ["pk", "k mount", "k-mount"] },
+  "olympus-om":    { label: "Olympus OM",     aliases: ["om"] },
+  "contax-yashica":{ label: "Contax/Yashica", aliases: ["c/y", "cy"] },
+  "canon-ef":      { label: "Canon EF",       aliases: ["ef"] },
+  "exakta":        { label: "Exakta",         aliases: [] },
+  "hasselblad-v":  { label: "Hasselblad V",   aliases: ["hasselblad"] },
   "lens-board":    { label: "Lens board (4x5)", aliases: ["board", "large format"] },
   "fixed":         { label: "Fixed lens",     aliases: ["built-in", "built in"] },
   "none":          { label: "No lens (pinhole)", aliases: ["pinhole"] },
@@ -55,13 +65,26 @@ export function normalizeMount(input: string): MountId | null;
 
 `null` means unknown and is always allowed: an unknown mount never flags anything.
 
+The list is a convenience, not a gate. A mount name that matches no id or alias is kept
+as a **custom mount**: slugified (`"Leica R"` → `leica-r`), stored as-is, and matched
+exactly like a listed one. Otherwise a lens or adapter with a mount this list forgot
+would silently count as unknown and never fit anything. `normalizeMount` therefore
+returns a listed `MountId` or a custom slug, and `null` only for empty input.
+
 ### 3.2 Schema (additive only)
 
 - `cameras.mount text null` — a `MountId`.
 - `cameras.built_in_lens_id uuid null → lenses.id` — required when `mount = 'fixed'`.
 - `lenses.mount text null` — a `MountId`; built-in lenses carry `fixed`.
-- New `adapters` table: `id`, `user_id`, `name`, `lens_mount`, `body_mount`, `notes`,
-  `is_active`, timestamps. One row means "a `lens_mount` lens goes on a `body_mount` body".
+- New `adapters` table: `id`, `user_id`, `name`, `lens_mount`, `body_mount`,
+  `acquired_on date null`, `notes`, `is_active`, timestamps. One row means "a
+  `lens_mount` lens goes on a `body_mount` body". `acquired_on` is optional: a found
+  adapter with no known date simply counts from always.
+
+- `field_events.lens_note text null` and `frames.lens_note text null` — the escape hatch:
+  a lens named in free text ("old Elmar") when Tomu has no row for it. Kept verbatim;
+  reconciled later by adding the lens and setting `lens_id`, after which the note stays
+  as provenance.
 
 No column or table is dropped, so `drizzle-kit push` stays prompt-free (it only asks
 "created or renamed?" when a change adds and removes a table). The unused
@@ -76,9 +99,14 @@ type Fit =
   | { kind: "adapter"; adapterId: string }
   | { kind: "no"; reason: string }
   | { kind: "unknown" };
-export function lensFits(camera, lens, adapters): Fit;
-export function compatibleLenses(camera, lenses, adapters): Array<{ lens; fit }>;
+export function lensFits(camera, lens, adapters, at?: Date): Fit;
+export function compatibleLenses(camera, lenses, adapters, at?: Date): Array<{ lens; fit }>;
 ```
+
+`at` is when the photograph happened. Checking a note or frame passes its capture time,
+so an adapter with `acquired_on` after that date does not bridge it — a 2025 frame is not
+explained by an adapter found in 2027. Capture, gear listings and "what fits the F3"
+omit `at` and use all active adapters.
 
 In order:
 
@@ -86,7 +114,8 @@ In order:
 2. Camera `fixed`: only its built-in lens fits.
 3. Either mount unknown: `unknown`.
 4. Same mount: `direct`.
-5. An active owned adapter with `lens_mount = lens.mount` and `body_mount = camera.mount`: `adapter`.
+5. An active owned adapter with `lens_mount = lens.mount` and `body_mount = camera.mount`,
+   and either no `acquired_on` or `acquired_on` on or before `at`: `adapter`.
 6. Otherwise `no` (`"<lens> is <mount>, <camera> is <mount>"`).
 
 Pure and shared, so the phone, the server, the MCP server and the eval all compute the
@@ -113,24 +142,38 @@ This is identity, not inference, so it needs no review flag.
 In `CaptureHeader.tsx` / `FieldChips.tsx`, once a camera is chosen the lens chip offers:
 
 - compatible lenses first, with adapter fits labelled (`Summicron V3 · via LTM→M`);
-- lenses with unknown mount after a divider, so missing data never hides a lens;
-- incompatible lenses behind "show all", never removed outright;
-- a fixed body shows its built-in lens as the value, not a picker; a pinhole shows no lens chip.
+- lenses with unknown mount next, so missing data never hides a lens;
+- lenses the model says do not fit last, marked but **always listed and tappable** —
+  the model can be wrong, and it must never stand between the photographer and the note;
+- **"Other lens…"**: free text saved to `lens_note`, for a lens Tomu has no row for yet;
+- a fixed body shows its built-in lens as the value, still changeable (a body can be
+  mis-recorded as fixed); a pinhole shows no lens chip, but "Other lens…" is still offered.
+
+Choosing a lens that does not fit records it as chosen and shows the warning inline. It
+never asks for confirmation, and it works offline.
+
+The offline gear cache refreshes on the same schedule as cameras and lenses, and
+immediately after an adapter is added from the app, so a new adapter shows up on the
+phone without a reinstall.
 
 No preselection for interchangeable bodies, even when only one lens fits: the M6 has
 three M lenses and an adapted LTM lens, and a guessed lens is the f/50 class of error.
 
-### 4.3 Wrong lens goes to review
+### 4.3 A lens that does not fit is a derived warning
 
 A `lensId` that fails `lensFits` against the event's camera (or its roll's camera when
-the event has none) keeps its value and marks the event for review:
+the event has none), at the event's capture time, keeps its value and carries a warning:
 
-- tier 1 gear match and tier-2 `lensId` both pass through the same check in
-  `field-parse-model.ts` and on event create;
-- the note names both mounts, e.g. `lens Mamiya N 80mm (mamiya-7) does not fit Leica M6 (leica-m)`,
-  joined with any `reviewReason` and retraction note (#51);
-- `lensNamedIn` (#51) runs first and still drops a lens the note gives no evidence for;
-  compatibility only judges a lens that survived it.
+- **computed on read**, not stored: event and frame responses gain
+  `gearWarning: string | null`, e.g. `Mamiya N 80mm (mamiya-7) does not fit Leica M6 (leica-m)`,
+  and review lists include events whose `gearWarning` is set;
+- nothing is written to `review` or `parseNotes` for it, so fixing the model — setting a
+  mount, adding the adapter, adding the lens — clears the warning everywhere at once,
+  with no re-parse and nothing stale left behind;
+- the phone computes the same warning from its gear cache, so it shows offline;
+- `lensNamedIn` (#51) still runs first on tier-2 output and drops a lens the note gives no
+  evidence for; that is about the model inventing a lens, not about compatibility, and it
+  never touches a lens the photographer chose.
 
 ### 4.4 History
 
@@ -185,14 +228,23 @@ unknown above is left unknown, not guessed.
 
 - **Shared unit tests** for `lensFits` covering direct, adapter, inactive adapter, fixed
   (own lens and any other), pinhole, unknown on either side, and alias normalisation.
+- **Gear changes change answers:** with an M42 lens and a Nikon F3, `lensFits` is `no`;
+  add an `m42 → nikon-f` adapter and the same call is `adapter`, with no other change.
+  An adapter acquired after `at` does not bridge; one with no date always does. A custom
+  mount (`"Leica R"`) round-trips and matches an adapter naming it.
 - **Server tests:** fixed-lens fill on create and on pin, never over an edited `lensId`;
-  an incompatible lens sets review with both mounts named; mount aliases on the gear
-  routes; the `fixed`-without-built-in-lens 400.
+  an incompatible lens is saved as given and returns a `gearWarning` naming both mounts;
+  adding the bridging adapter makes the same event return no warning, with nothing
+  rewritten; `lens_note` round-trips; mount aliases on the gear routes; the
+  `fixed`-without-built-in-lens 400.
+- **Never a dead end:** creating an event with an incompatible lens, a lens on a pinhole,
+  or only a `lens_note` always succeeds (online and through the offline queue).
 - **Eval:** `gear.json` gains mounts, and new cases cover a fixed-lens body with no lens
   spoken (expect the built-in lens) and a named lens that cannot fit the named camera
-  (expect `flagged`). `bulb-on-tripod` stays as the case where the lens fits but is not named.
-- **Client:** the lens chip ordering (compatible, then unknown, with incompatible hidden)
-  and the fixed-body display.
+  (expect the lens kept as recorded, with a gear warning). `bulb-on-tripod` stays as the case where the lens fits but is not named.
+- **Client:** the lens chip ordering (compatible, unknown, then incompatible — all
+  tappable), "Other lens…" saving `lens_note` offline, the inline warning, and the
+  fixed-body display staying changeable.
 
 ## 8. Rollout
 
@@ -200,7 +252,7 @@ unknown above is left unknown, not guessed.
 2. Shared (`mounts.ts`, `compat.ts`) and schema, with tests. Additive migration.
 3. API and MCP (`set_mount`, `add_adapter`, list output).
 4. Seed script against prod, reviewed output, Chroma Cube format corrected.
-5. Server behaviour (fill, review) and eval cases.
+5. Server behaviour (fixed-lens fill, derived gear warning, `lens_note`) and eval cases.
 6. Client capture chips.
 7. Backfill of fixed-lens frames and events: report counts first, then write. Events
    the owner already edited are skipped.
