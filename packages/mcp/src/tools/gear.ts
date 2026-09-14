@@ -4,7 +4,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { api } from "../api.js";
 import { tankLine } from "../format.js";
-import { fuzzyMatch } from "../matching.js";
+import { buildGearPatch, describeChanges, type GearKind } from "../gear-update.js";
+import { fuzzyMatch, rankedMatch } from "../matching.js";
 import type { TankRow } from "../types.js";
 
 // Tool bodies are intentionally not re-indented: they moved verbatim out of the
@@ -12,17 +13,23 @@ import type { TankRow } from "../types.js";
 export function register(server: McpServer) {
 server.tool(
   "tomu_gear",
-  "List, add, or query cameras and lenses.",
+  "List, add, correct, or query cameras and lenses. update_camera / update_lens find the gear by fuzzy " +
+    "name and change only the fields given (e.g. name='Chroma Cube', format='35mm'); retire gear with isActive=false.",
   {
-    action: z.enum(["list", "add_camera", "add_lens"]).describe("Action to perform"),
-    make: z.string().optional().describe("Camera/lens manufacturer (e.g. 'Nikon', 'Hasselblad')"),
-    model: z.string().optional().describe("Camera/lens model (e.g. 'F3', '500C/M', 'Nikkor 50mm f/1.4')"),
-    format: z.string().optional().describe("Camera format: '35mm', '120', '4x5'"),
+    action: z.enum(["list", "add_camera", "add_lens", "update_camera", "update_lens"]).describe("Action to perform"),
+    name: z.string().optional().describe("update_camera / update_lens: the existing camera or lens to change, fuzzy (e.g. 'chroma cube', 'nokton')"),
+    make: z.string().optional().describe("Camera/lens manufacturer (e.g. 'Nikon', 'Hasselblad'); on update, a new make"),
+    model: z.string().optional().describe("Camera/lens model (e.g. 'F3', '500C/M', 'Nikkor 50mm f/1.4'); on update, a new model"),
+    format: z.string().optional().describe("Camera format: '35mm', '120', '4x5', '8x10', 'other' (case and spaces ignored)"),
+    frameCount: z.number().int().positive().optional().describe("update_camera: default frames per roll for this camera"),
     focalLengthMm: z.number().int().optional().describe("Lens focal length in mm"),
     maxAperture: z.string().optional().describe("Lens max aperture (e.g. '1.4', '2.8')"),
+    serialNumber: z.string().optional().describe("update_camera / update_lens: serial number"),
+    notes: z.string().optional().describe("update_camera / update_lens: free-text notes"),
+    isActive: z.boolean().optional().describe("update_camera / update_lens: false retires the gear without deleting its history"),
     query: z.string().optional().describe("Search query for listing (filters by name)"),
   },
-  async ({ action, make, model, format, focalLengthMm, maxAperture, query }) => {
+  async ({ action, name, make, model, format, frameCount, focalLengthMm, maxAperture, serialNumber, notes, isActive, query }) => {
     if (action === "list") {
       const [camerasRes, lensesRes] = await Promise.all([
         api<any>("/cameras"),
@@ -88,6 +95,26 @@ server.tool(
       return {
         content: [{ type: "text" as const, text: `Added lens: **${lens.make} ${lens.model}**${specs ? ` (${specs})` : ""}` }],
       };
+    }
+
+    if (action === "update_camera" || action === "update_lens") {
+      const kind: GearKind = action === "update_camera" ? "camera" : "lens";
+      const reply = (text: string) => ({ content: [{ type: "text" as const, text }] });
+      if (!name) return reply(`${action} needs a name to find the ${kind}.`);
+
+      const patch = buildGearPatch(kind, { make, model, format, frameCount, focalLengthMm, maxAperture, serialNumber, notes, isActive });
+      if (patch.error) return reply(patch.error);
+
+      const path = kind === "camera" ? "/cameras" : "/lenses";
+      const { data: items } = await api<{ data: any[] }>(path);
+      const label = (g: any) => `${g.make} ${g.model}`;
+      const match = rankedMatch(name, items, (g: any) => [label(g), g.model, g.make, String(g.focalLengthMm ?? "")]);
+      if (match.kind === "none") return reply(`No ${kind} matching "${name}".`);
+      if (match.kind === "tied") return reply(`"${name}" is ambiguous: ${match.items.map(label).join(", ")}.`);
+
+      const before = match.item;
+      const { data: after } = await api<{ data: any }>(`${path}/${before.id}`, { method: "PATCH", body: JSON.stringify(patch.body) });
+      return reply(`Updated ${kind} **${label(after)}**: ${describeChanges(before, after, Object.keys(patch.body!))}`);
     }
 
     return { content: [{ type: "text" as const, text: "Unknown action." }] };
