@@ -18,7 +18,7 @@ import { readFile } from "node:fs/promises";
 // this schema — local to the tier-2 SDK call — is built against `zod/v4` specifically.
 import { z } from "zod/v4";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { PARSED_FIELD_NAMES, type GearIndex, type ParsedFieldName, type Tier2Result } from "@tomu/shared";
+import { PARSED_FIELD_NAMES, lensNamedIn, type GearIndex, type ParsedFieldName, type Tier2Result } from "@tomu/shared";
 
 const Field = z.object({ value: z.string().nullable(), confidence: z.number().min(0).max(1) });
 export const Tier2Output = z.object({
@@ -28,6 +28,7 @@ export const Tier2Output = z.object({
   remarks: z.string().nullable(),
   sceneDescription: z.string().nullable(),
   reviewReason: z.string().nullable(),
+  retracted: z.array(z.enum(PARSED_FIELD_NAMES)),
 });
 
 export interface Tier2Request {
@@ -89,9 +90,12 @@ export async function requestTier2(client: Anthropic, model: string, req: Tier2R
     remarks: out.remarks ?? undefined,
     sceneDescription: out.sceneDescription ?? undefined,
     reviewReason: out.reviewReason,
+    retracted: out.retracted ?? [],
   };
-  // lensId must be a real lens of this user; drop hallucinated ids.
-  if (result.fields.lensId && !req.gear.lenses.some((l) => l.id === result.fields.lensId)) {
+  // lensId must be a real lens of this user, and the note must name it by something that
+  // is the lens's own — a brand it shares with a camera is not evidence. Drop it otherwise.
+  const lens = req.gear.lenses.find((l) => l.id === result.fields.lensId);
+  if (result.fields.lensId && (!lens || !lensNamedIn(req.transcript, lens.label, req.gear.cameras.map((c) => c.label)))) {
     result.fields.lensId = null;
   }
   return result;

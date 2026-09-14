@@ -32,7 +32,7 @@ import { TIER2_OVERRIDE_CONFIDENCE } from "@tomu/shared";
 import { requestTier2, tier2Prompt } from "../../packages/server/src/services/field-parse-client.js";
 import { harm, scoreCase, scored, tally, type EvalCase, type FieldScore, type Tally } from "./score.js";
 import {
-  CASES, GEAR, MODEL, RECORDINGS_DIR, currentFrom, keyFor, loadRecordings, mergedOf, tier1Of, tier2Of,
+  CASES, GEAR, MODEL, RECORDINGS_DIR, currentFrom, keyFor, loadRecordings, mergedFlags, mergedOf, tier1Of, tier2Of,
   type Recording,
 } from "./observe.js";
 
@@ -50,7 +50,8 @@ const pct = (n: number, d: number) => (d === 0 ? "  — " : `${Math.round((n / d
 function row(label: string, t: Tally): string {
   const h = harm(t);
   const harmText = h === 0 ? green("0") : red(String(h));
-  return `  ${label.padEnd(22)}${pct(t.hit, scored(t))}  ${String(t.hit).padStart(3)} hit  ${String(t.miss).padStart(3)} miss  ${String(t.wrong).padStart(3)} wrong  ${String(t.spurious).padStart(3)} spurious   harm ${harmText}`;
+  const flaggedText = t.flagged ? `   ${yellow(`${t.flagged} flagged`)}` : "";
+  return `  ${label.padEnd(22)}${pct(t.hit, scored(t))}  ${String(t.hit).padStart(3)} hit  ${String(t.miss).padStart(3)} miss  ${String(t.wrong).padStart(3)} wrong  ${String(t.spurious).padStart(3)} spurious   harm ${harmText}${flaggedText}`;
 }
 
 function bySource(scores: Map<string, FieldScore[]>): string[] {
@@ -107,7 +108,7 @@ async function main(): Promise<void> {
     const rec = byKey.get(keyFor(MODEL, promptSha, c.transcript));
     if (!rec) { missing.push(c.id); continue; }
     t2Scores.set(c.id, scoreCase(c, tier2Of(rec)));
-    mScores.set(c.id, scoreCase(c, mergedOf(c, rec, TIER2_OVERRIDE_CONFIDENCE)));
+    mScores.set(c.id, scoreCase(c, mergedOf(c, rec, TIER2_OVERRIDE_CONFIDENCE), mergedFlags(c, rec, TIER2_OVERRIDE_CONFIDENCE)));
   }
 
   const flat = (m: Map<string, FieldScore[]>) => [...m.values()].flat();
@@ -155,7 +156,7 @@ async function main(): Promise<void> {
         const th = Math.round(t * 100) / 100;
         const s = CASES.flatMap((c) => {
           const rec = byKey.get(keyFor(MODEL, promptSha, c.transcript));
-          return rec ? scoreCase(c, mergedOf(c, rec, th)) : [];
+          return rec ? scoreCase(c, mergedOf(c, rec, th), mergedFlags(c, rec, th)) : [];
         });
         const mark = th === TIER2_OVERRIDE_CONFIDENCE ? ` ${yellow("← production")}` : "";
         console.log(`${row(`  @ ${th.toFixed(2)}`, tally(s))}${mark}`);
@@ -170,7 +171,7 @@ async function main(): Promise<void> {
       console.log(`\n  ${bold(c.id)} ${dim(`[${c.source}]`)} ${harm(t1) ? red("harm") : ""}`);
       console.log(`    ${dim(`"${c.transcript}"`)}`);
       for (const s of t1Scores.get(c.id) ?? []) {
-        const mark = s.outcome === "hit" ? green("✓") : s.outcome === "miss" ? yellow("○") : red("✗");
+        const mark = s.outcome === "hit" ? green("✓") : s.outcome === "miss" ? yellow("○") : s.outcome === "flagged" ? yellow("⚑") : red("✗");
         console.log(`    ${mark} ${s.field.padEnd(13)}${dim(`expected ${s.expected ?? "—"}, got ${s.observed ?? "—"}`)}`);
       }
     }

@@ -15,3 +15,4 @@ Also return:
 - remarks: sentences worth keeping as notes that are not settings (light, mood, sound, ideas). Verbatim phrases, not paraphrase.
 - sceneDescription: if a photo is attached, two sentences describing it; else null.
 - reviewReason: a short reason if something was ambiguous or contradictory (e.g. two apertures spoken), else null.
+- retracted: the field names the speaker explicitly took back ("plus one, never mind", "no compensation after all"). Leave those fields null. A correction to a new value ("f eight, actually f eleven") is not a retraction: return the new value instead. Empty list if nothing was taken back.

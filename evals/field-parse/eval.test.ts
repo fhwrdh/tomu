@@ -14,7 +14,7 @@
 import { describe, expect, it } from "vitest";
 import { PARSED_FIELD_NAMES, TIER2_OVERRIDE_CONFIDENCE, mergeParse } from "@tomu/shared";
 import { harm, scoreCase, tally, type EvalCase } from "./score.js";
-import { CASES, MODEL, currentFrom, keyFor, loadRecordings, mergedOf, tier1Of } from "./observe.js";
+import { CASES, MODEL, currentFrom, keyFor, loadRecordings, mergedFlags, mergedOf, tier1Of } from "./observe.js";
 
 const { byKey, all } = loadRecordings();
 
@@ -62,18 +62,32 @@ describe("scorer", () => {
   it("never scores free text the corpus does not ask for", () => {
     expect(scoreCase(base, { aperture: "f/8", subject: "volunteered" })).toHaveLength(1);
   });
+
+  it("counts an untrue value on a field sent to review as flagged, not harm", () => {
+    const c: EvalCase = { ...base, expect: {} };
+    const scores = scoreCase(c, { compensation: "+1" }, new Set(["compensation"]));
+    expect(scores[0].outcome).toBe("flagged");
+    expect(harm(tally(scores))).toBe(0);
+    expect(tally(scores).flagged).toBe(1);
+  });
+
+  it("does not let a flag hide an untrue value on a different field", () => {
+    const c: EvalCase = { ...base, expect: {} };
+    const scores = scoreCase(c, { aperture: "f/50" }, new Set(["compensation"]));
+    expect(scores[0].outcome).toBe("spurious");
+  });
 });
 
 /**
  * Cases tier 1 is known to get wrong, by id. A ratchet, not an exemption: every other
  * case stays under the strict gates below, and a listed case that starts passing fails
- * the build until it is removed from the list. Added 2026-09-14 with the conflict cases —
- * a first-match rule keeps a value the speaker corrected or retracted.
+ * the build until it is removed from the list. Added 2026-09-14 with the conflict cases.
+ * Spoken corrections, "f four" and "a hundred twenty-fifth" were fixed the same day and
+ * came off the list; a retraction stays, by design — tier 1 does not interpret "never
+ * mind", and the merge sends it to review instead of clearing the value.
  */
 const KNOWN_TIER1_GAPS = new Set([
-  "self-correction-aperture", // "f eight, actually f eleven" keeps f/8; misses "a hundred twenty-fifth"
-  "retracted-compensation", //   "plus one, never mind" keeps +1; misses "f four"
-  "iso-not-shutter", //          misses "f four" after "sixteen hundred" (a miss, no harm)
+  "retracted-compensation", // "plus one, never mind" keeps +1 (flagged for review after tier 2)
 ]);
 const gated = CASES.filter((c) => !KNOWN_TIER1_GAPS.has(c.id));
 
@@ -153,7 +167,7 @@ describe.skipIf(all.length === 0)("recordings", () => {
       const c = CASES.find((x) => x.id === r.caseId);
       if (!c) continue;
       const t1 = harm(tally(scoreCase(c, tier1Of(c))));
-      const merged = harm(tally(scoreCase(c, mergedOf(c, r, TIER2_OVERRIDE_CONFIDENCE))));
+      const merged = harm(tally(scoreCase(c, mergedOf(c, r, TIER2_OVERRIDE_CONFIDENCE), mergedFlags(c, r, TIER2_OVERRIDE_CONFIDENCE))));
       expect(merged, `${c.id}: merging ${MODEL} made it worse`).toBeLessThanOrEqual(t1);
     }
   });

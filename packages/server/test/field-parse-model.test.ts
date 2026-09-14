@@ -135,6 +135,37 @@ describe("merge policy", () => {
     expect((await reload(ev.id)).lensId).toBeNull();
   });
 
+  it("flags a retracted setting for review and leaves the value recorded", async () => {
+    const ev = await insertEvent({ transcript: "plus one, never mind, no compensation", compensation: "+1", parser: "regex" });
+    parse.mockResolvedValue(modelOutput({}, { retracted: ["compensation"] }));
+
+    const res = await parseEventWithModel(ev.id);
+    const after = await reload(ev.id);
+    expect(after.compensation).toBe("+1");
+    expect(res.changed).not.toContain("compensation");
+    expect(after.review).toBe(true);
+    expect(after.parseNotes).toContain("compensation");
+    expect(after.parseNotes).toContain("+1");
+  });
+
+  it("keeps the model's own review reason alongside a retraction", async () => {
+    const ev = await insertEvent({ compensation: "+1" });
+    parse.mockResolvedValue(modelOutput({}, { retracted: ["compensation"], reviewReason: "two apertures spoken" }));
+
+    await parseEventWithModel(ev.id);
+    const after = await reload(ev.id);
+    expect(after.parseNotes).toContain("two apertures spoken");
+    expect(after.parseNotes).toContain("compensation");
+  });
+
+  it("does not flag a retraction of a field the person already edited", async () => {
+    const ev = await insertEvent({ compensation: "+1", editedFields: ["compensation"] });
+    parse.mockResolvedValue(modelOutput({}, { retracted: ["compensation"] }));
+
+    await parseEventWithModel(ev.id);
+    expect((await reload(ev.id)).review).toBe(false);
+  });
+
   it("sets review when the model gives a reason", async () => {
     const ev = await insertEvent();
     parse.mockResolvedValue(modelOutput({}, { reviewReason: "camera named has no active roll" }));

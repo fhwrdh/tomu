@@ -24,7 +24,12 @@ export const STRUCTURED_FIELDS = [
  */
 export const FREE_TEXT_FIELDS = ["subject", "locationName"] as const;
 
-export type Outcome = "hit" | "miss" | "wrong" | "spurious";
+/**
+ * `flagged` is a wrong or spurious value on a field the merge sent to review (a
+ * retraction): still untrue, but not silent — a person sees it before trusting it. It is
+ * counted apart from harm, which stays the number of lies nobody was told about.
+ */
+export type Outcome = "hit" | "miss" | "wrong" | "spurious" | "flagged";
 
 export interface EvalCase {
   id: string;
@@ -57,15 +62,16 @@ const textMatches = (expected: string, observed: string) => {
  * back empty, which is what turns a hallucinated aperture into a reported `spurious`
  * rather than an unnoticed extra.
  */
-export function scoreCase(c: EvalCase, observed: Observed): FieldScore[] {
+export function scoreCase(c: EvalCase, observed: Observed, flagged: ReadonlySet<string> = new Set()): FieldScore[] {
   const out: FieldScore[] = [];
 
   for (const field of STRUCTURED_FIELDS) {
     const expected = c.expect[field] ?? null;
     const got = observed[field] == null ? null : String(observed[field]);
     if (expected == null && got == null) continue;
-    const outcome: Outcome =
+    let outcome: Outcome =
       expected == null ? "spurious" : got == null ? "miss" : got === expected ? "hit" : "wrong";
+    if ((outcome === "wrong" || outcome === "spurious") && flagged.has(field)) outcome = "flagged";
     out.push({ field, expected, observed: got, outcome });
   }
 
@@ -90,14 +96,14 @@ export function scoreCase(c: EvalCase, observed: Observed): FieldScore[] {
   return out;
 }
 
-export interface Tally { hit: number; miss: number; wrong: number; spurious: number }
+export interface Tally { hit: number; miss: number; wrong: number; spurious: number; flagged: number }
 
 export function tally(scores: FieldScore[]): Tally {
-  const t: Tally = { hit: 0, miss: 0, wrong: 0, spurious: 0 };
+  const t: Tally = { hit: 0, miss: 0, wrong: 0, spurious: 0, flagged: 0 };
   for (const s of scores) t[s.outcome]++;
   return t;
 }
 
-/** Values that are not true. The metric to minimise; a missing field is not in it. */
+/** Untrue values nobody was warned about. The metric to minimise; misses and flagged values are not in it. */
 export const harm = (t: Tally) => t.wrong + t.spurious;
-export const scored = (t: Tally) => t.hit + t.miss + t.wrong + t.spurious;
+export const scored = (t: Tally) => t.hit + t.miss + t.wrong + t.spurious + t.flagged;

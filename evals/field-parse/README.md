@@ -21,12 +21,15 @@ Three configurations over one corpus:
 | `tier 2` | the model's answer alone, from a recording. As in production it is *told what tier 1 already found*, so it is not an independent oracle. |
 | `merged @ T` | the real `mergeParse` policy at threshold `T`. Production is `TIER2_OVERRIDE_CONFIDENCE` (0.9). |
 
-Four outcomes per field, and the split that matters is the last two:
+Five outcomes per field, and the split that matters is wrong and spurious:
 
 - **hit** — expected a value, got it.
 - **miss** — expected a value, got nothing.
 - **wrong** — expected a value, got a different one.
 - **spurious** — expected nothing, got a value.
+- **flagged** — a wrong or spurious value on a field the merge sent to review (the
+  speaker retracted it). Still untrue, but a person is told before trusting it, so it
+  is counted apart from harm.
 
 A miss costs a field the photographer can still fill in at the desk. A wrong or
 spurious value is a lie in the log that looks like data — that is the f/50 class, where
@@ -77,6 +80,27 @@ setting, a push ISO next to settings, a spoken decimal f-number) found:
   tier 2 cannot clear a value tier 1 invented, at any threshold;
 - the first real shape in the sweep: at 0.95 and above, the model's f/11 correction is
   refused and harm rises.
+
+**What changed the same day.** Tier 1 now honours a spoken correction: when a cue
+("actually", "no wait", "I mean", "sorry", "rather", "make that") sits directly after a
+value and a new value for the same field follows, the later one wins; without a cue,
+first-match stays. It also reads "f four", "f two", "f three point five" and "a hundred
+twenty-fifth". A retraction is deliberately *not* interpreted by tier 1. Tier 2 reports
+it in `retracted`, and `mergeParse` never clears the value — it returns the field in
+`retracted` and the server marks the event for review, naming the value still recorded
+(owner decision: no model erases data). `retracted-compensation` is the only known gap
+left.
+
+Re-recording under the new prompt exposed a regression the eval was built to catch:
+on `bulb-on-tripod` the model began choosing the Mamiya 80mm for "Mamiya 7" (3 of 3
+calls, against 0 of 3 under the old prompt). Rewording the lens instruction did not
+move it, so the fix is in code: `lensNamedIn` drops a tier-2 `lensId` unless the note
+names the lens by a token no camera label shares.
+
+23 cases, `claude-haiku-4-5`: tier 1 92% harm 1 (the retraction), tier 2 alone 86%
+harm 0, merged at 0.9 98% harm 0 with 1 flagged. The sweep is flat again — tier 1 now
+agrees with the model on every conflict case — so the corpus needs new cases where the
+tiers disagree before it can say anything more about 0.9.
 
 ## Recordings
 

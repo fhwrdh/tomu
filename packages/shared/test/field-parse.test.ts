@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTranscript } from "../src/field-parse.js";
+import { lensNamedIn, parseTranscript } from "../src/field-parse.js";
 
 const gear = {
   cameras: [
@@ -52,6 +52,84 @@ describe("aperture", () => {
     ["wide open", undefined],
   ])("%s → %s", (text, want) => {
     expect(parseTranscript(text).fields.aperture).toBe(want);
+  });
+});
+
+describe("spoken forms found by the eval's conflict cases", () => {
+  it.each([
+    ["f four", "f/4"],
+    ["f two", "f/2"],
+    ["f three point five", "f/3.5"],
+    // Longer spoken stops must win over their first word.
+    ["f two point eight", "f/2.8"],
+    ["f one point four", "f/1.4"],
+  ])("aperture %s → %s", (text, want) => {
+    expect(parseTranscript(text).fields.aperture).toBe(want);
+  });
+
+  it.each([
+    ["a hundred twenty-fifth", "1/125"],
+    ["one hundred twenty fifth", "1/125"],
+  ])("shutter %s → %s", (text, want) => {
+    expect(parseTranscript(text).fields.shutterSpeed).toBe(want);
+  });
+});
+
+describe("lensNamedIn", () => {
+  const cameras = gear.cameras.map((c) => c.label);
+
+  it("accepts a focal length or a lens model the note actually says", () => {
+    expect(lensNamedIn("the 80 on the Mamiya, two fifty at five six", "Mamiya 80mm f/4", cameras)).toBe(true);
+    expect(lensNamedIn("summicron wide open", "Leica Summicron 35mm", cameras)).toBe(true);
+  });
+
+  it("rejects a brand the lens shares with a camera — the bulb-on-tripod regression", () => {
+    expect(lensNamedIn("bulb, on the tripod, Mamiya 7, spot metered", "Mamiya 80mm f/4", cameras)).toBe(false);
+    expect(lensNamedIn("Leica M6, f/2, 1/125", "Leica Summicron 35mm", cameras)).toBe(false);
+  });
+
+  it("does not count a unit word or a number inside another number", () => {
+    expect(lensNamedIn("800 speed film, mm", "Mamiya 80mm f/4", cameras)).toBe(false);
+  });
+});
+
+describe("spoken corrections", () => {
+  // Dictation corrects itself mid-breath. The value after a correction cue is the one
+  // the photographer means; without a cue, the first value still wins.
+  it.each([
+    ["f eight, actually f eleven, a hundred twenty-fifth", "aperture", "f/11"],
+    ["f eight, no wait, f eleven", "aperture", "f/11"],
+    ["f8 I mean f5.6", "aperture", "f/5.6"],
+    ["two fifty, sorry, five hundred, f eight", "shutterSpeed", "1/500"],
+    ["plus one, make that plus two", "compensation", "+2"],
+    ["frame 3, actually frame 4", "frameNumber", 4],
+    ["spot, actually incident", "meteringMode", "incident"],
+  ])("%s → %s %s", (text, field, want) => {
+    expect(parseTranscript(text).fields[field as "aperture"]).toBe(want);
+  });
+
+  it("follows a chain of corrections to the last one", () => {
+    expect(parseTranscript("f8, actually f11, no wait, f16").fields.aperture).toBe("f/16");
+  });
+
+  it("keeps the first value when two values are not joined by a cue", () => {
+    expect(parseTranscript("f8 for the sky and f4 for the shadows").fields.aperture).toBe("f/8");
+  });
+
+  it("keeps the first value when a cue is followed by a different field", () => {
+    const r = parseTranscript("f eight, actually two fifty");
+    expect(r.fields.aperture).toBe("f/8");
+    expect(r.fields.shutterSpeed).toBe("1/250");
+  });
+
+  it("moves the span to the corrected value", () => {
+    const text = "f eight, actually f eleven";
+    const span = parseTranscript(text).spans.find((s) => s[2] === "aperture")!;
+    expect(text.slice(span[0], span[1])).toBe("f eleven");
+  });
+
+  it("leaves a plain 'no' alone — it is not a correction cue", () => {
+    expect(parseTranscript("f eight, no flash").fields.aperture).toBe("f/8");
   });
 });
 

@@ -67,6 +67,11 @@ export function tier2Of(r: Recording): Observed {
   return out;
 }
 
+/** Fields the merge would send to review for this case (a retraction the model reported). */
+export function mergedFlags(c: EvalCase, r: Recording, threshold: number): Set<string> {
+  return new Set(mergeParse(currentFrom(tier1Of(c)), r.result, [], threshold).retracted);
+}
+
 /** What the event would actually hold: tier 1, with the merge policy applied at `threshold`. */
 export function mergedOf(c: EvalCase, r: Recording, threshold: number): Observed {
   const t1 = tier1Of(c);
