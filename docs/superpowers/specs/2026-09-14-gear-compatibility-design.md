@@ -138,9 +138,12 @@ built-in lens is filled in:
   from pinned events (`field-events.ts` pin path, `routes/rolls.ts`);
 - never over a hand-edited `lensId`, and never on a `none` (pinhole) body.
 
-This is a default, not a lock: the filled lens is an ordinary value the photographer can
-change or clear like any other, and a change marks it hand-edited so it is never
-refilled. It needs no review flag.
+This is a default, not a lock — overridable, though it almost never will be. The filled
+lens is an ordinary value the photographer can change or clear. An override is scoped to
+**that one event or frame**: it marks that record's `lensId` hand-edited, so a re-parse or
+backfill does not refill *that record*. It changes nothing else — the next note from the
+same body gets the built-in lens again, and no override ever alters the camera's default
+or teaches anything (owner, 2026-09-14). It needs no review flag.
 
 ### 4.2 Capture narrows choices
 
@@ -245,6 +248,8 @@ unknown above is left unknown, not guessed.
   An adapter acquired after `at` does not bridge; one with no date always does. A custom
   mount (`"Leica R"`) round-trips and matches an adapter naming it.
 - **Server tests:** fixed-lens fill on create and on pin, never over an edited `lensId`;
+  overriding the lens on one event leaves the next event from the same body filled with
+  the built-in lens;
   an incompatible lens is saved as given and returns a `gearWarning` naming both mounts;
   adding the bridging adapter makes the same event return no warning, with nothing
   rewritten; `lens_note` round-trips; mount aliases and custom mounts on the gear routes;
