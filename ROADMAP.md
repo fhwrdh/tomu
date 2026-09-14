@@ -8,6 +8,8 @@ Running backlog of ideas, follow-ups, and known issues. Not prioritized unless n
 
 **The film camera gets what it gets. Tomu enriches with everything else** (owner, 2026-09-06): the negative holds only light; the moment, the words, the place, the settings, the reference photo, the recipe, the scan are all Tomu's to add. A field capture is a field note — "the sound of the photo as much as the exposure stats" — with exposure as the extractable subset.
 
+**Capture goals** (owner, 2026-09-14): (1) near-zero friction to capture in the field; (2) best-effort capture when I'm not perfect. Most records arrive late, partial, and approximate — "15-ish frames from the window seat, a few more in SF, counter on 20". Tomu keeps that account verbatim, never invents precision it wasn't given, and refines it later from evidence (phone photo timestamps, EXIF, scans). It should nudge toward earlier, more accurate capture over time, but never at the cost of goal 2. Underneath both: the burden of precision moves from the person to the machine — the photographer says what happened, and translating that into structured data is Tomu's job, measured by the eval.
+
 The correct action should be the path of least resistance. Test every feature against this: does it make the right thing happen by default, or does it just record what happened? Concretely:
 
 - **Identity is automatic.** Dev Ids, display ids, session ids — assigned by the app at the moment the real-world event happens (tank time, unload time). The human never hand-tracks a counter again.
