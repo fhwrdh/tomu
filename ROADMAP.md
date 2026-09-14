@@ -75,6 +75,15 @@ Known gaps as of 2026-09-14: tier 1 keeps the first value when a setting is corr
 retracted in the same breath, and `mergeParse` cannot clear a tier-1 value (it skips null
 tier-2 values). Both are listed in `KNOWN_TIER1_GAPS`.
 
+- **Tier-2 model comparison** — Haiku 4.5 was chosen at the start and never compared
+  (owner, 2026-09-14). The eval makes this cheap: set `FIELD_PARSE_MODEL`, run
+  `npm run eval:field-parse -- --live` (recordings are keyed by model, so each model's set
+  sits alongside the others), and compare per model
+  on **harm first**, then hits, latency, and cost per note. Measured baseline for Haiku
+  4.5: ~519 input / ~309 output tokens per note, about $0.002 per note; 3.4 s median
+  latency. Worth doing only once the corpus has more real dictations — on 23 mostly
+  synthetic cases a difference would say more about the cases than the models.
+
 **How the migration was actually run.** Neither drizzle path works for this change:
 the deploy workflow's `migrate` toggle fails the deploy on a DROP by design, and
 `drizzle-kit push --strict` on the droplet blocks on an interactive "created or
