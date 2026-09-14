@@ -65,11 +65,15 @@ Authoritative kit summary. Update when gear changes.
 Tier-1 (deterministic regex, on device and server) + tier-2 (Claude, server-side, optional) parser. Tier-1 extracts: shutter, aperture, compensation, metering mode, frame number / sheet id, camera, lens. Tier-2 adds: subject, location, remarks, scene description. Stream at `field_events` table; MCP tools `tomu_capture` / `tomu_field_events` / `tomu_edit_event` / `tomu_pin_event` / `tomu_roll_level_event` / `tomu_reparse_events` / `tomu_delete_event`. `photos:sync` matches Mac Photos-library images to voice events by time and creates `photo` events (fallback path; the PWA in part 2 uploads directly). Read-only 'Field notes' section on roll detail (transcript first). Uploads live under `UPLOADS_DIR` on the droplet (not in the Postgres dump; back up separately) — point it **outside** the deploy target, since deploys rsync with `--delete` and the default sits inside the app tree.
 
 **Production status:** part 1 shipped 2026-09-07 (PR #23, `bf048fe`). `field_events`
-exists in prod and the empty `captures` table is dropped. Still to do: add
-`ANTHROPIC_API_KEY` + `FIELD_PARSE_MODEL` to the droplet `.env` and
-`pm2 restart tomu-api --update-env` — until then tier-2 is inert and events carry
-`parser: regex` only. Live tier-2 parse has never been exercised anywhere; the first
-`tomu_capture` after the key lands should return `parser: claude:claude-haiku-4-5`.
+exists in prod and the empty `captures` table is dropped. `ANTHROPIC_API_KEY` and
+`FIELD_PARSE_MODEL=claude-haiku-4-5` are in the droplet `.env`, and tier 2 has run live
+since 2026-09-07. Part 2 slices A–C (the PWA `/capture` screen) are live; slice D
+(spoken "scratch that", offline cold start) is not started.
+
+**Measured parser quality** lives in `evals/field-parse` (`npm run eval:field-parse`).
+Known gaps as of 2026-09-14: tier 1 keeps the first value when a setting is corrected or
+retracted in the same breath, and `mergeParse` cannot clear a tier-1 value (it skips null
+tier-2 values). Both are listed in `KNOWN_TIER1_GAPS`.
 
 **How the migration was actually run.** Neither drizzle path works for this change:
 the deploy workflow's `migrate` toggle fails the deploy on a DROP by design, and
@@ -121,7 +125,7 @@ All shipped 2026-07-07:
 
 ## Scanning
 
-- **LF (4x5) scan path** — No working route today. Valoi rig handles 35/120 only. Options: V850 flatbed, or DSLR tile-stitch. Decide before 2026-06-22 LF class.
+- **LF (4x5) scan path** — No working route today. Valoi rig handles 35/120 only. Options: V850 flatbed, or DSLR tile-stitch. Still undecided as of 2026-09-14; the LF class deadline (2026-06-22) passed without it.
 - **Lightroom handoff** — End of pipeline is import to Lightroom Classic (today). Tomu should support: consistent file naming (likely `{dev_id}_{frame:02}.ext`), per-frame metadata sidecar (XMP) with film/ISO/dev/camera/lens/location so it auto-populates LR fields, and ideally a manifest export per dev_session.
 - **Cataloger-agnostic export** — User intends to migrate off Adobe eventually (darktable / digiKam / capture one / other). Keep the handoff layer cataloger-agnostic: rely on standard XMP + filesystem conventions, avoid LR-specific sidecar quirks where possible. Sync-back importers (LR catalog reader, etc.) should be plugin-shaped, not the only path.
 
@@ -138,9 +142,9 @@ owner's own; not tracked here.
 ## Calendar / deadlines
 
 - *(none upcoming — LF class 2026-06-22 and Japan trip 2026-05-25→06-04 have passed)*
-- Current driver instead of a date: **77 rolls in `shot`** awaiting development — dev-pipeline tooling is the priority (2026-07-07).
+- Current driver instead of a date: **78 rolls in `shot`** awaiting development (2026-09-14; 77 on 2026-07-07) — dev-pipeline tooling is the priority. The read-only Dev tab shipped in #46.
 
 ## Bugs / nits
 
 - ~~**Drizzle push** — wrong default URL~~ Fixed 2026-07-07: `drizzle.config.ts` default now `filmlog:filmlog@…/filmlog`; `DATABASE_URL` still wins when set.
-- ~~**`db:push` is interactive**~~ Root cause was schema drift (plain `unique()` vs the DB's partial index) — fixed 2026-07-05 (commit 2d097eb). Push is now prompt-free; `--force` exists for scripted use if a real destructive change ever comes up.
+- **`db:push` is interactive** — Partly fixed. The prompt that fired on *every* push came from schema drift (plain `unique()` vs the DB's partial index), fixed 2026-07-05 (commit 2d097eb). But drizzle-kit still stops on a "created or renamed?" prompt whenever a change adds one table and removes another, which is what blocked the `field_events` migration on 2026-09-07. For those changes use the reviewed-SQL recipe under Field capture above; `--force` does not answer that prompt.
